@@ -10,6 +10,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.*
 import com.alananasss.kittytune.ui.icons.Icon
+import com.alananasss.kittytune.ui.common.KittyOutlinedTextField
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -128,7 +129,7 @@ fun EditPlaylistScreen(
                 item { Spacer(modifier = Modifier.height(8.dp)) }
 
                 item {
-                    OutlinedTextField(
+                    KittyOutlinedTextField(
                         value = title,
                         onValueChange = { title = it },
                         label = { Text("Title *") },
@@ -140,7 +141,7 @@ fun EditPlaylistScreen(
 
                 item {
                     val isValidPermalink = permalink.matches(Regex("^[a-z0-9_-]+$"))
-                    OutlinedTextField(
+                    KittyOutlinedTextField(
                         value = permalink,
                         onValueChange = { permalink = it },
                         label = { Text("Permalink *") },

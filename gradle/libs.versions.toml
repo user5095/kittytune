@@ -1,7 +1,7 @@
 [versions]
 agp = "9.4.1"
 kotlin = "2.4.20"
-coreKtx = "1.19.0"
+coreKtx = "1.19.1"
 junit = "4.13.2"
 junitVersion = "1.3.0"
 espressoCore = "3.7.0"
@@ -9,11 +9,12 @@ lifecycleRuntimeKtx = "2.11.0"
 activityCompose = "1.13.0"
 composeBom = "2026.09.00"
 lottieCompose = "6.7.1"
-navigationCompose = "2.10.1"
+navigationCompose = "2.10.2"
 coil = "2.7.0"
 media3 = "1.11.1"
 retrofit = "3.0.0"
 okhttp = "5.5.0"
+riveAndroid = "11.13.0"
 room = "2.8.5"
 ksp = "2.3.10"
 palette = "1.0.0"
@@ -24,7 +25,7 @@ markdown = "0.3.1"
 newpipe = "v0.26.5"
 rhino = "1.9.1"
 desugar = "2.1.5"
-webkit = "1.17.0"
+webkit = "1.17.1"
 browser = "1.10.0"
 kotlinxSerialization = "1.11.0"
 coroutinesGuava = "1.11.0"
@@ -32,7 +33,7 @@ reorderable = "3.1.0"
 aboutlibraries = "15.2.0"
 ktor = "3.6.0"
 json = "20260814"
-material3 = "1.5.0-alpha28"
+material3 = "1.5.0-alpha29"
 materialKolor = "5.0.1"
 accompanist = "0.37.3"
 camerax = "1.6.2"
@@ -42,6 +43,8 @@ brotli = "0.1.2"
 opencc4j = "1.14.0"
 zxing = "3.5.4"
 material = "1.14.0"
+onnxruntime = "1.30.0"
+smooth-corner-rect = "v1.0.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -63,6 +66,7 @@ androidx-ui-text-google-fonts = { group = "androidx.compose.ui", name = "ui-text
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
 androidx-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
+coil-gif = { group = "io.coil-kt", name = "coil-gif", version.ref = "coil" }
 androidx-media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "media3" }
 androidx-media3-session = { group = "androidx.media3", name = "media3-session", version.ref = "media3" }
 lottie-compose = { module = "com.airbnb.android:lottie-compose", version.ref = "lottieCompose" }
@@ -99,6 +103,7 @@ ktor-client-encoding = { group = "io.ktor", name = "ktor-client-encoding", versi
 json = { group = "org.json", name = "json", version.ref = "json" }
 material-kolor = { group = "com.materialkolor", name = "material-kolor", version.ref = "materialKolor" }
 accompanist-drawablepainter = { group = "com.google.accompanist", name = "accompanist-drawablepainter", version.ref = "accompanist" }
+rive-android = { module = "app.rive:rive-android", version.ref = "riveAndroid" }
 timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "timber" }
 mlkit-language-id = { module = "com.google.mlkit:language-id", version.ref = "mlkit-language-id" }
 brotli = { group = "org.brotli", name = "dec", version.ref = "brotli" }
@@ -110,6 +115,8 @@ camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", versi
 camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "camerax" }
 accompanist-lyrics-ui = { module = "com.mocharealm.accompanist:lyrics-ui", version = "1.0.19" }
 accompanist-lyrics-core = { module = "com.mocharealm.accompanist:lyrics-core", version = "0.4.7" }
+onnxruntime = { module = "com.microsoft.onnxruntime:onnxruntime-android", version.ref = "onnxruntime" }
+smooth-corner-rect = { module = "com.github.racra:smooth-corner-rect-android-compose", version.ref = "smooth-corner-rect" }
 
 
 [plugins]

@@ -24,12 +24,22 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.alananasss.kittytune.R
+import kotlinx.coroutines.delay
 
 // Removed getSettingsShape
 
@@ -95,12 +105,55 @@ fun SettingsItem(
     sliderValue: Float = 0f,
     sliderRange: ClosedFloatingPointRange<Float> = 0f..1f,
     onSliderChange: ((Float) -> Unit)? = null,
-    titleColor: Color = MaterialTheme.colorScheme.onSurface
+    titleColor: Color = MaterialTheme.colorScheme.onSurface,
+    modifier: Modifier = Modifier,
+    /** Sits after the switch, for anything a row needs on its right that is not a value. */
+    trailingContent: (@Composable () -> Unit)? = null,
+    highlightKey: String? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
 
+    val isHighlighted = SettingsHighlightManager.isHighlighted(highlightKey)
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val highlightAlpha = remember { Animatable(0f) }
+
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val baseColor = MaterialTheme.colorScheme.surfaceContainerHigh
+    val highlightOverlay = remember(primaryColor) { primaryColor.copy(alpha = 0.26f) }
+    val highlightedBaseColor = remember(highlightOverlay, baseColor) { highlightOverlay.compositeOver(baseColor) }
+
+    val isScrolling = SettingsHighlightManager.isScrollingToTarget
+
+    LaunchedEffect(isHighlighted, isScrolling) {
+        if (isHighlighted) {
+            if (isScrolling) {
+                delay(900)
+                SettingsHighlightManager.isScrollingToTarget = false
+            }
+            delay(150)
+            try {
+                bringIntoViewRequester.bringIntoView()
+            } catch (_: Exception) {}
+
+            highlightAlpha.animateTo(1f, tween(200, easing = LinearEasing))
+            highlightAlpha.animateTo(0f, tween(200, easing = LinearEasing))
+            highlightAlpha.animateTo(1f, tween(200, easing = LinearEasing))
+            highlightAlpha.animateTo(0f, tween(200, easing = LinearEasing))
+            highlightAlpha.animateTo(1f, tween(200, easing = LinearEasing))
+            delay(1200)
+            highlightAlpha.animateTo(0f, tween(500, easing = FastOutSlowInEasing))
+            SettingsHighlightManager.clearHighlight(highlightKey)
+        }
+    }
+
+    val animatedContainerColor = if (highlightAlpha.value > 0f) {
+        lerp(baseColor, highlightedBaseColor, highlightAlpha.value)
+    } else {
+        baseColor
+    }
+
     val onToggleOrClick = {
-        if (hasSwitch && onSwitchChange != null) {
+        if (hasSwitch && onSwitchChange != null && onClick == null) {
             onSwitchChange(!switchState)
         } else {
             onClick?.invoke()
@@ -110,9 +163,11 @@ fun SettingsItem(
     Card(
         onClick = { onToggleOrClick() },
         enabled = onClick != null || hasSwitch,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        colors = CardDefaults.cardColors(containerColor = animatedContainerColor),
         shape = shape,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .bringIntoViewRequester(bringIntoViewRequester),
         interactionSource = interactionSource
     ) {
         Row(
@@ -182,39 +237,24 @@ fun SettingsItem(
                 Text(
                     text = trailingText,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(0.4f, fill = false)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
 
+            if (trailingContent != null) {
+                Spacer(modifier = Modifier.width(8.dp))
+                trailingContent()
+            }
+
             if (hasSwitch && onSwitchChange != null) {
-                Switch(
+                SettingsSwitch(
                     checked = switchState,
                     onCheckedChange = { onSwitchChange(it) },
-                    interactionSource = interactionSource,
-                    thumbContent = {
-                        if (switchState) {
-                            Icon(
-                                imageVector = Icons.Rounded.Check,
-                                contentDescription = null,
-                                modifier = Modifier.size(SwitchDefaults.IconSize),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Rounded.Close,
-                                contentDescription = null,
-                                modifier = Modifier.size(SwitchDefaults.IconSize),
-                                tint = MaterialTheme.colorScheme.surfaceContainerHighest
-                            )
-                        }
-                    },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                        checkedTrackColor = MaterialTheme.colorScheme.primary,
-                        uncheckedThumbColor = MaterialTheme.colorScheme.outline,
-                        uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-                    )
+                    interactionSource = interactionSource
                 )
             } else if (onClick != null) {
                 Icon(
@@ -228,11 +268,62 @@ fun SettingsItem(
     }
 }
 
+/**
+ * The settings' switch: a check or a cross in the thumb, so its state reads without relying on colour.
+ *
+ * [enabled] is separate from [onCheckedChange] on purpose. A Material `Switch` derives its enabled
+ * state from whether it has a callback, so a switch that is *shown* but whose row owns the click
+ * would render greyed out. Passing `enabled = true` alongside a null callback is how a row keeps a
+ * live-looking switch while the row stays the single click target — which is the Material pattern
+ * for a list item that toggles, and the only arrangement in which a click cannot fire twice.
+ */
+@Composable
+fun SettingsSwitch(
+    checked: Boolean,
+    onCheckedChange: ((Boolean) -> Unit)?,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    interactionSource: MutableInteractionSource? = null,
+) {
+    Switch(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        enabled = enabled,
+        interactionSource = interactionSource,
+        modifier = modifier,
+        thumbContent = {
+            if (checked) {
+                Icon(
+                    imageVector = Icons.Rounded.Check,
+                    contentDescription = null,
+                    modifier = Modifier.size(SwitchDefaults.IconSize),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = null,
+                    modifier = Modifier.size(SwitchDefaults.IconSize),
+                    tint = MaterialTheme.colorScheme.surfaceContainerHighest
+                )
+            }
+        },
+        colors = SwitchDefaults.colors(
+            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+            checkedTrackColor = MaterialTheme.colorScheme.primary,
+            uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+            uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            uncheckedBorderColor = MaterialTheme.colorScheme.outlineVariant
+        )
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SettingsScaffold(
     title: String,
     onBackClick: () -> Unit,
+    subtitle: String? = null,
     actions: @Composable RowScope.() -> Unit = {},
     content: @Composable (PaddingValues) -> Unit
 ) {
@@ -242,10 +333,10 @@ fun SettingsScaffold(
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            LargeTopAppBar(
-                title = {
-                    Text(title, fontWeight = FontWeight.Bold, maxLines = 1)
-                },
+            SettingsTopAppBar(
+                title = title,
+                subtitle = subtitle,
+                scrollBehavior = scrollBehavior,
                 navigationIcon = {
                     FilledTonalIconButton(
                         onClick = onBackClick,
@@ -259,11 +350,6 @@ fun SettingsScaffold(
                     }
                 },
                 actions = actions,
-                scrollBehavior = scrollBehavior,
-                colors = TopAppBarDefaults.largeTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
-                )
             )
         },
         containerColor = MaterialTheme.colorScheme.background
@@ -296,15 +382,57 @@ fun SplitSettingsItem(
     onClick: () -> Unit,
     switchState: Boolean,
     onSwitchChange: (Boolean) -> Unit,
-    titleColor: Color = MaterialTheme.colorScheme.onSurface
+    titleColor: Color = MaterialTheme.colorScheme.onSurface,
+    highlightKey: String? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
 
+    val isHighlighted = SettingsHighlightManager.isHighlighted(highlightKey)
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val highlightAlpha = remember { Animatable(0f) }
+
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val baseColor = MaterialTheme.colorScheme.surfaceContainerHigh
+    val highlightOverlay = remember(primaryColor) { primaryColor.copy(alpha = 0.26f) }
+    val highlightedBaseColor = remember(highlightOverlay, baseColor) { highlightOverlay.compositeOver(baseColor) }
+
+    val isScrolling = SettingsHighlightManager.isScrollingToTarget
+
+    LaunchedEffect(isHighlighted, isScrolling) {
+        if (isHighlighted) {
+            if (isScrolling) {
+                delay(900)
+                SettingsHighlightManager.isScrollingToTarget = false
+            }
+            delay(150)
+            try {
+                bringIntoViewRequester.bringIntoView()
+            } catch (_: Exception) {}
+
+            highlightAlpha.animateTo(1f, tween(200, easing = LinearEasing))
+            highlightAlpha.animateTo(0f, tween(200, easing = LinearEasing))
+            highlightAlpha.animateTo(1f, tween(200, easing = LinearEasing))
+            highlightAlpha.animateTo(0f, tween(200, easing = LinearEasing))
+            highlightAlpha.animateTo(1f, tween(200, easing = LinearEasing))
+            delay(1200)
+            highlightAlpha.animateTo(0f, tween(500, easing = FastOutSlowInEasing))
+            SettingsHighlightManager.clearHighlight(highlightKey)
+        }
+    }
+
+    val animatedContainerColor = if (highlightAlpha.value > 0f) {
+        lerp(baseColor, highlightedBaseColor, highlightAlpha.value)
+    } else {
+        baseColor
+    }
+
     Card(
         onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        colors = CardDefaults.cardColors(containerColor = animatedContainerColor),
         shape = shape,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .bringIntoViewRequester(bringIntoViewRequester)
     ) {
         Row(
             modifier = Modifier

@@ -16,7 +16,10 @@ import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -56,6 +59,7 @@ import com.alananasss.kittytune.data.SessionManager
 import com.alananasss.kittytune.data.TokenManager
 import com.alananasss.kittytune.data.local.PlayerPreferences
 import com.alananasss.kittytune.data.local.StartDestination
+import com.alananasss.kittytune.ui.profile.WrappedHubScreen
 import com.alananasss.kittytune.ui.common.AchievementNotification
 import com.alananasss.kittytune.ui.common.AchievementNotificationManager
 import com.alananasss.kittytune.ui.common.AchievementPopup
@@ -122,6 +126,7 @@ private fun Context.findActivity(): Activity? = when (this) {
 @Composable
 fun MainScreen(
     shouldOpenSearch: Boolean = false,
+    initialSearchQuery: String? = null,
     onSearchHandled: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -258,6 +263,9 @@ fun MainScreen(
                 launchSingleTop = true
             }
             homeViewModel.activateSearch()
+            if (!initialSearchQuery.isNullOrBlank()) {
+                homeViewModel.onSearchQueryChanged(initialSearchQuery)
+            }
             onSearchHandled()
         }
     }
@@ -380,6 +388,7 @@ fun MainScreen(
             playerViewModel.isPlayerExpanded = false
             when {
                 destinationId == "expanded_queue" -> navController.navigate("expanded_queue")
+                destinationId == "your_mix" -> navController.navigate(Screen.Home.route)
                 destinationId.startsWith("spotify_artist:") -> navController.navigate("spotify_artist/${destinationId.removePrefix("spotify_artist:")}")
                 destinationId.startsWith("spotify_radio:") || destinationId.startsWith("station_spotify:") -> navController.navigate("playlist_detail/$destinationId")
                 destinationId.startsWith("profile:") -> {
@@ -450,7 +459,9 @@ fun MainScreen(
                 currentRoute == "discord_login" ||
                 currentRoute == "vk_login" ||
                 currentRoute == "deezer_login" ||
-                currentRoute == "tidal_login"
+                currentRoute == "tidal_login" ||
+                currentRoute.startsWith("yearly_playback") ||
+                currentRoute.startsWith("listening_stats")
 
         val hideNavRail = currentRoute == Screen.Login.route ||
                 currentRoute.startsWith("login") ||
@@ -459,7 +470,9 @@ fun MainScreen(
                 currentRoute == "discord_login" ||
                 currentRoute == "vk_login" ||
                 currentRoute == "deezer_login" ||
-                currentRoute == "tidal_login"
+                currentRoute == "tidal_login" ||
+                currentRoute.startsWith("yearly_playback") ||
+                currentRoute.startsWith("listening_stats")
 
         val isMiniPlayerVisible = playerViewModel.currentTrack != null && !playerViewModel.isPlayerExpanded && !isFullScreenRoute
 
@@ -490,12 +503,22 @@ fun MainScreen(
                 }
             },
             bottomBar = {
-            }
+            },
+            // Disable automatic window-inset injection so full-screen routes (YearlyPlayback,
+            // player, etc.) can draw edge-to-edge without a background bleed at the bottom/sides.
+            contentWindowInsets = WindowInsets(0, 0, 0, 0)
         ) { _ ->
             val allTabKeys = listOf("home", "search", "genres", "library")
-            val bottomNavItemsKeys = prefs.bottomMenuItemsFlow().collectAsState(initial = prefs.getBottomMenuItems()).value
+            val bottomNavItemsKeys by prefs.bottomMenuItemsFlow().collectAsState(initial = prefs.getBottomMenuItems())
+            val bottomNavOrder by prefs.bottomMenuOrderFlow().collectAsState(initial = prefs.getBottomMenuOrder())
 
-            val tabs = allTabKeys.mapNotNull { key ->
+            // The bar follows the persistent user-reordered tab order, while bottomNavItemsKeys decides visibility.
+            val orderedTabKeys = remember(bottomNavOrder) {
+                (bottomNavOrder.filter { it in allTabKeys } +
+                    allTabKeys.filter { it !in bottomNavOrder }).distinct()
+            }
+
+            val tabs = orderedTabKeys.mapNotNull { key ->
                 val screen = when (key) {
                     "home" -> Screen.Home
                     "search" -> Screen.Search
@@ -670,10 +693,16 @@ fun MainScreen(
                         startDestination = startDestination,
                         modifier = Modifier
                             .fillMaxSize()
-                            .progressiveBlur(
-                                blurRadius = 40f,
-                                height = statusBarHeightPx * 1.15f,
-                                direction = BlurDirection.TOP
+                            .then(
+                                if (!isFullScreenRoute) {
+                                    Modifier.progressiveBlur(
+                                        blurRadius = 40f,
+                                        height = statusBarHeightPx * 1.15f,
+                                        direction = BlurDirection.TOP
+                                    )
+                                } else {
+                                    Modifier
+                                }
                             )
                             .then(
                                 if (actualBottomMenuBlurEnabled && !isFullScreenRoute && (windowSizeInfo.showPhoneBottomBar || windowSizeInfo.showTabletDock)) {
@@ -753,6 +782,8 @@ fun MainScreen(
                                 id == "login_required" || id == "my_profile_menu" -> {
                                     showProfileMenu = true
                                 }
+                                id == "yearly_playback" -> navController.navigate("wrapped_hub")
+                                id == "listening_stats" -> navController.navigate("listening_stats")
                                 id == "charts" -> navController.navigate("charts")
                                 id == "genres" -> navController.navigate("genres")
                                 id == "new_releases" -> navController.navigate("new_releases")
@@ -1042,6 +1073,8 @@ fun MainScreen(
                                 when {
                                     id == Screen.Upload.route || id == "upload" -> navController.navigate(Screen.Upload.route)
                                     id == "history" || id == Screen.History.route -> navController.navigate(Screen.History.route)
+                                    id == "notifications" -> navController.navigate("notifications")
+                                    id == "conversations" -> navController.navigate("conversations")
                                     id == "recognition_history" -> navController.navigate("recognition_history")
                                     id == "likes" -> navController.navigate("playlist_detail/likes")
                                     id == "downloads" -> navController.navigate("playlist_detail/downloads")
@@ -1184,13 +1217,15 @@ fun MainScreen(
                     }
 
                     clippedComposable("listening_stats") {
+                        val tokenManager = remember { TokenManager(context) }
+                        val isGuest = tokenManager.isGuestMode()
                         ListeningStatsScreen(
                             onBackClick = { navController.popBackStack() },
                             onTrackClick = { track ->
                                 if (track.source == "soundcloud") {
                                     val stubTrack = com.alananasss.kittytune.domain.Track(
                                         id = track.trackId,
-                                        title = track.trackTitle,
+                                        title = track.title,
                                         user = com.alananasss.kittytune.domain.User(0, track.artistName, null),
                                         artworkUrl = track.artworkUrl,
                                         durationMs = 0L
@@ -1199,9 +1234,90 @@ fun MainScreen(
                                 }
                             },
                             onArtistClick = { artist ->
-                                if (artist.source == "soundcloud") {
-                                    playerViewModel.resolveAndNavigateToArtist(artist.artistName, artist.artistId)
+                                if (artist.source == "spotify" && !artist.permalink.isNullOrBlank()) {
+                                    playerViewModel.navigateToSpotifyArtist(
+                                        artist.permalink.removePrefix("spotify:artist:")
+                                    )
+                                } else {
+                                    playerViewModel.resolveAndNavigateToArtist(artist.name, artist.artistId)
                                 }
+                            },
+                            onNavigateToYearlyPlayback = { navController.navigate("wrapped_hub") },
+                            isGuest = isGuest
+                        )
+                    }
+
+                    clippedComposable(
+                        route = "yearly_playback?year={year}",
+                        arguments = listOf(
+                            navArgument("year") {
+                                type = NavType.IntType
+                                defaultValue = 2025
+                            }
+                        )
+                    ) { backStackEntry ->
+                        val requestedYear = backStackEntry.arguments?.getInt("year") ?: 2025
+                        androidx.compose.runtime.LaunchedEffect(Unit) {
+                            if (playerViewModel.isPlaying) {
+                                playerViewModel.pause()
+                            }
+                        }
+                        com.alananasss.kittytune.ui.yearlyplayback.YearlyPlaybackScreen(
+                            year = requestedYear,
+                            onClose = { navController.popBackStack() },
+                            onOpenStats = {
+                                navController.popBackStack()
+                                navController.navigate("listening_stats")
+                            },
+                            onNavigateToPlaylist = { playlistUrn ->
+                                val target = if (playlistUrn.startsWith("soundcloud:system-playlists:")) {
+                                    "system_playlist:$playlistUrn"
+                                } else {
+                                    playlistUrn.removePrefix("soundcloud:playlists:").removePrefix("spotify:playlist:")
+                                }
+                                navController.navigate("playlist_detail/$target")
+                            }
+                        )
+                    }
+
+                    clippedComposable("wrapped_hub") {
+                        val tokenManager = remember { TokenManager(context) }
+                        val isGuest = tokenManager.isGuestMode()
+                        WrappedHubScreen(
+                            user = homeViewModel.userProfile,
+                            isGuest = isGuest,
+                            onBackClick = { navController.popBackStack() },
+                            onLaunchStory = { year ->
+                                navController.navigate("yearly_playback?year=$year")
+                            },
+                            onOpenPlaylist = { playlistUrn ->
+                                val target = if (playlistUrn.startsWith("soundcloud:system-playlists:")) {
+                                    "system_playlist:$playlistUrn"
+                                } else {
+                                    playlistUrn.removePrefix("soundcloud:playlists:").removePrefix("spotify:playlist:")
+                                }
+                                navController.navigate("playlist_detail/$target")
+                            }
+                        )
+                    }
+
+                    clippedComposable("yearly_playback") {
+                        val tokenManager = remember { TokenManager(context) }
+                        val isGuest = tokenManager.isGuestMode()
+                        WrappedHubScreen(
+                            user = homeViewModel.userProfile,
+                            isGuest = isGuest,
+                            onBackClick = { navController.popBackStack() },
+                            onLaunchStory = { year ->
+                                navController.navigate("yearly_playback?year=$year")
+                            },
+                            onOpenPlaylist = { playlistUrn ->
+                                val target = if (playlistUrn.startsWith("soundcloud:system-playlists:")) {
+                                    "system_playlist:$playlistUrn"
+                                } else {
+                                    playlistUrn.removePrefix("soundcloud:playlists:").removePrefix("spotify:playlist:")
+                                }
+                                navController.navigate("playlist_detail/$target")
                             }
                         )
                     }
@@ -1259,6 +1375,14 @@ fun MainScreen(
 
                     clippedComposable("settings") {
                         SettingsScreen(navController, { navController.popBackStack() }, playerViewModel)
+                    }
+
+                    clippedComposable("settings_search") {
+                        SettingsSearchScreen(
+                            navController = navController,
+                            onBackClick = { navController.popBackStack() },
+                            playerViewModel = playerViewModel
+                        )
                     }
 
                     clippedComposable(Screen.Upload.route) {
@@ -1325,6 +1449,12 @@ fun MainScreen(
                         )
                     }
 
+                    clippedComposable("content_filter_settings") {
+                        com.alananasss.kittytune.ui.profile.BlockedContentSettingsScreen(
+                            onBackClick = { navController.popBackStack() }
+                        )
+                    }
+
                     clippedComposable("drm_explanation") {
                         DrmExplanationScreen(
                             onBackClick = { navController.popBackStack() }
@@ -1344,6 +1474,7 @@ fun MainScreen(
                             onNavigateToColors = { navController.navigate("color_palette") },
                             onNavigateToBottomBarSettings = { navController.navigate("bottom_bar_settings") },
                             onNavigateToAppIconSettings = { navController.navigate("app_icon_settings") },
+                            onNavigateToPlayerCustomization = { navController.navigate("player_design_settings") },
                             onBackClick = { navController.popBackStack() }
                         )
                     }
@@ -1416,6 +1547,26 @@ fun MainScreen(
 
                     clippedComposable("proxy_settings") {
                         ProxySettingsScreen(
+                            onBackClick = { navController.popBackStack() }
+                        )
+                    }
+
+                    clippedComposable("interface_settings") {
+                        InterfaceSettingsScreen(
+                            navController = navController,
+                            onBackClick = { navController.popBackStack() }
+                        )
+                    }
+
+                    clippedComposable("player_design_settings") {
+                        PlayerCustomizationScreen(
+                            onBackClick = { navController.popBackStack() }
+                        )
+                    }
+
+                    clippedComposable("misc_settings") {
+                        MiscSettingsScreen(
+                            navController = navController,
                             onBackClick = { navController.popBackStack() }
                         )
                     }
@@ -1504,19 +1655,35 @@ fun MainScreen(
                 }
 
                 Column(
-                    modifier = Modifier.align(Alignment.BottomCenter),
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .semantics { }
+                        .pointerInput(Unit) {
+                            detectTapGestures(onTap = {})
+                        },
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     androidx.compose.animation.AnimatedVisibility(
-                        visible = playerViewModel.showDismissUndoBar && showBottomUi && !isFullScreenRoute,
+                        visible = (playerViewModel.showDismissUndoBar || playerViewModel.showAiSkipUndoBar) && showBottomUi && !isFullScreenRoute,
                         enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
                         exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
                         modifier = Modifier.padding(bottom = 8.dp)
                     ) {
-                        com.alananasss.kittytune.ui.player.pixel.DismissUndoBar(
-                            onUndo = { playerViewModel.undoDismissMiniPlayer() },
-                            onClose = { playerViewModel.hideDismissUndoBar() }
-                        )
+                        if (playerViewModel.showAiSkipUndoBar) {
+                            val trackTitle = playerViewModel.aiSkippedTrack?.title
+                            val baseMsg = stringResource(R.string.ai_skip_undo_message)
+                            val displayText = if (!trackTitle.isNullOrBlank()) "$baseMsg • $trackTitle" else baseMsg
+                            com.alananasss.kittytune.ui.player.pixel.DismissUndoBar(
+                                text = displayText,
+                                onUndo = { playerViewModel.undoAiSkip() },
+                                onClose = { playerViewModel.hideAiSkipUndoBar() }
+                            )
+                        } else {
+                            com.alananasss.kittytune.ui.player.pixel.DismissUndoBar(
+                                onUndo = { playerViewModel.undoDismissMiniPlayer() },
+                                onClose = { playerViewModel.hideDismissUndoBar() }
+                            )
+                        }
                     }
 
                     androidx.compose.animation.AnimatedVisibility(
@@ -1652,6 +1819,29 @@ fun MainScreen(
             }
         }
 
+        if (playerViewModel.showAiDetectionSheet) {
+            com.alananasss.kittytune.ui.player.ai.AiDetectionBottomSheet(
+                viewModel = playerViewModel,
+                onDismissRequest = { playerViewModel.showAiDetectionSheet = false },
+                onOpenSettings = {
+                    playerViewModel.showAiDetectionSheet = false
+                    navController.navigate("content_filter_settings")
+                }
+            )
+        }
+
+        playerViewModel.shareCardTrack?.let { cardTrack ->
+            com.alananasss.kittytune.ui.share.ShareCardSheet(
+                artwork = playerViewModel.shareCardArtwork,
+                title = cardTrack.title ?: stringResource(R.string.untitled_track),
+                artist = cardTrack.displayArtist.ifBlank { stringResource(R.string.unknown_artist) },
+                trackId = cardTrack.id,
+                trackUrl = cardTrack.permalinkUrl,
+                lyrics = playerViewModel.shareCardLyrics,
+                onDismiss = { playerViewModel.dismissShareCard() },
+            )
+        }
+
         if (playerViewModel.showAddToPlaylistSheet) {
             com.alananasss.kittytune.ui.common.KittyModalBottomSheet(
                 onDismissRequest = { playerViewModel.showAddToPlaylistSheet = false },
@@ -1709,11 +1899,11 @@ fun MainScreen(
                             navController.navigate("profile/$it")
                         }
                     },
-                    onNotificationsClick = { navController.navigate("notifications") },
-                    onMessagesClick = { navController.navigate("conversations") },
                     onAchievementsClick = { navController.navigate("achievements") },
                     onListeningStatsClick = { navController.navigate("listening_stats") },
+                    onYearlyPlaybackClick = { navController.navigate("wrapped_hub") },
                     onSettingsClick = { navController.navigate("settings") },
+                    onAboutClick = { navController.navigate("about") },
                     onLogoutClick = {
                         if (isGuest) {
                             navController.navigate(Screen.Login.route)
@@ -1729,6 +1919,8 @@ fun MainScreen(
                 Spacer(Modifier.height(32.dp))
             }
         }
+
+
 
         if (showCompletionScreen) {
             UltimateCompletionOverlay(onDismiss = { showCompletionScreen = false })

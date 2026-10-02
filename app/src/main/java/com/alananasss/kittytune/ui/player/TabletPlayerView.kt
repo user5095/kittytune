@@ -1393,6 +1393,21 @@ fun TabletFullScreenPlayerView(
                                 modifier = Modifier.size(28.dp)
                             )
                         }
+
+                        if (viewModel.isYourMixActive) {
+                            Spacer(Modifier.width(4.dp))
+                            IconButton(
+                                onClick = { viewModel.dislikeCurrentTrackInMix() },
+                                shapes = IconButtonDefaults.shapes()
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.ThumbDown,
+                                    contentDescription = stringResource(R.string.mix_dislike),
+                                    tint = iconTint,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -1447,12 +1462,12 @@ fun TabletFullScreenPlayerView(
                         }
 
                         IconButton(
-                            onClick = { viewModel.shareTrack(track) },
+                            onClick = { viewModel.openShareCard(track) },
                             shapes = IconButtonDefaults.shapes()
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Share,
-                                contentDescription = stringResource(R.string.btn_share),
+                                contentDescription = stringResource(R.string.share_card_title),
                                 tint = iconTint.copy(alpha = 0.75f),
                                 modifier = Modifier.size(22.dp)
                             )
@@ -1532,7 +1547,13 @@ private fun TabletQueueList(
             lastScrolledTrackId = trackId
             val index = queue.indexOfFirst { it.id == trackId }
             if (index >= 0) {
-                listState.animateScrollToItem(kotlin.math.max(0, index - 2))
+                // Only when the row is not already on screen. lastScrolledTrackId deduplicated the
+                // same track coming back, but not a tap on a different row, so the panel still
+                // scrolled on every tap and put the row third from the top.
+                val alreadyVisible = listState.layoutInfo.visibleItemsInfo.any { it.index == index }
+                if (!alreadyVisible) {
+                    listState.animateScrollToItem(kotlin.math.max(0, index - 2))
+                }
             }
         }
     }
@@ -1553,7 +1574,7 @@ private fun TabletQueueList(
                 )
                 if (queue.isNotEmpty()) {
                     val totalDuration = remember(queue) {
-                        val sumMs = queue.sumOf { it.durationMs ?: 0L }
+                        val sumMs = queue.sumOf { it.actualDurationMs }
                         if (sumMs > 0) makeTimeString(sumMs) else null
                     }
                     totalDuration?.let { dur ->
@@ -1653,7 +1674,13 @@ private fun TabletQueueList(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
-                                .clickable { viewModel.skipToQueueItem(index) }
+                                .combinedClickable(
+                                    onClick = { viewModel.skipToQueueItem(index) },
+                                    onLongClick = {
+                                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                        viewModel.showTrackOptions(trackItem, fromPlayer = true)
+                                    }
+                                )
                         ) {
                             Row(
                                 modifier = Modifier
@@ -1725,15 +1752,13 @@ private fun TabletQueueList(
                                     }
                                 }
 
-                                trackItem.durationMs?.let { durMs ->
-                                    if (durMs > 0) {
-                                        Text(
-                                            text = makeTimeString(durMs),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                            modifier = Modifier.padding(horizontal = 4.dp)
-                                        )
-                                    }
+                                trackItem.actualDurationMs.takeIf { it > 0 }?.let { durMs ->
+                                    Text(
+                                        text = makeTimeString(durMs),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                        modifier = Modifier.padding(horizontal = 4.dp)
+                                    )
                                 }
 
                                 IconButton(

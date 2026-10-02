@@ -106,7 +106,7 @@ fun LyricsEnhancedView(
         "${viewModel.currentTrack?.id ?: 0L}_${rawLines.size}"
     }
 
-    val isDuetEnabled = viewModel.isDuetViewEnabled
+    val isDuetEnabled = viewModel.isDuetActiveForTrack(viewModel.currentTrack)
     val syncedLyrics = remember(
         viewModel.lyricsRevision,
         rawLines.size,
@@ -599,7 +599,9 @@ private fun buildSyncedLyrics(
 
             val cleanLineText = LyricsUtils.decodeHtmlEntities(line.text)
             val cleanTranslation = line.translation?.let(LyricsUtils::decodeHtmlEntities)
+                ?.takeIf { !it.trim().equals(cleanLineText.trim(), ignoreCase = true) }
             val cleanRomanization = line.romanization?.let(LyricsUtils::decodeHtmlEntities)
+                ?.takeIf { !it.trim().equals(cleanLineText.trim(), ignoreCase = true) }
 
             if (cleanRomanization != null) {
                 val syllables = buildWrappingKaraokeSyllables(

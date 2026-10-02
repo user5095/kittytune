@@ -3,9 +3,13 @@ package com.alananasss.kittytune.ui.history
 import androidx.compose.animation.*
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import android.view.HapticFeedbackConstants
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -18,6 +22,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import com.alananasss.kittytune.ui.icons.Icon
+import com.alananasss.kittytune.ui.common.KittyOutlinedTextField
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -221,7 +226,7 @@ fun HistoryScreen(
                 .padding(top = innerPadding.calculateTopPadding())
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            OutlinedTextField(
+            KittyOutlinedTextField(
                 value = historyViewModel.searchQuery,
                 onValueChange = { historyViewModel.searchQuery = it },
                 placeholder = {
@@ -463,6 +468,7 @@ fun HistoryScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HistoryTrackRow(
     item: HistoryTrackItem,
@@ -470,7 +476,12 @@ fun HistoryTrackRow(
     onClick: () -> Unit,
     onMoreClick: () -> Unit
 ) {
+    val view = LocalView.current
     val track = item.track
+    val blockedTrackIds by com.alananasss.kittytune.data.BlockManager.blockedTrackIdsFlow.collectAsState()
+    val blockedArtistIds by com.alananasss.kittytune.data.BlockManager.blockedArtistIdsFlow.collectAsState()
+    if (track.id in blockedTrackIds || (track.user?.id != null && track.user.id in blockedArtistIds)) return
+
     val timeStr = remember(item.playedAt) {
         val millis = if (item.playedAt in 1..99_999_999_999L) item.playedAt * 1000L else item.playedAt
         SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(millis))
@@ -489,9 +500,16 @@ fun HistoryTrackRow(
     }
 
     Surface(
-        onClick = onClick,
         color = if (isPlaying) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f) else Color.Transparent,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = {
+                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                    onMoreClick()
+                }
+            )
     ) {
         Row(
             modifier = Modifier

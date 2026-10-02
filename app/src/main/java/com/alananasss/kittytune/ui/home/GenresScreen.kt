@@ -11,6 +11,8 @@
     import androidx.compose.foundation.lazy.grid.items
     import androidx.compose.material.icons.Icons
     import androidx.compose.material.icons.automirrored.filled.ArrowBack
+    import androidx.compose.material.icons.automirrored.filled.ViewList
+    import androidx.compose.material.icons.filled.GridView
     import androidx.compose.material3.*
 import com.alananasss.kittytune.ui.icons.Icon
     import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -20,7 +22,6 @@ import com.alananasss.kittytune.ui.icons.Icon
     import androidx.compose.ui.res.stringResource
     import androidx.compose.ui.text.font.FontWeight
     import androidx.compose.ui.unit.dp
-    import androidx.compose.foundation.lazy.grid.itemsIndexed
     import androidx.lifecycle.viewmodel.compose.viewModel
     import com.alananasss.kittytune.R
 
@@ -32,6 +33,7 @@ import com.alananasss.kittytune.ui.icons.Icon
         viewModel: GenresViewModel = viewModel()
     ) {
         val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+        val columns = if (viewModel.isGridLayout) GridCells.Fixed(2) else GridCells.Fixed(1)
 
         Scaffold(
             modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -50,8 +52,23 @@ import com.alananasss.kittytune.ui.icons.Icon
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.btn_back))
                         }
                     },
+                    actions = {
+                        FilledTonalIconButton(
+                            onClick = { viewModel.toggleLayout() },
+                            shapes = IconButtonDefaults.shapes(),
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        ) {
+                            Icon(
+                                imageVector = if (viewModel.isGridLayout) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
+                                contentDescription = stringResource(R.string.btn_options)
+                            )
+                        }
+                    },
                     scrollBehavior = scrollBehavior,
-                    colors = TopAppBarDefaults.largeTopAppBarColors(
+                    colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.background,
                         scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
                     )
@@ -60,7 +77,7 @@ import com.alananasss.kittytune.ui.icons.Icon
             containerColor = MaterialTheme.colorScheme.background
         ) { innerPadding ->
             LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 160.dp),
+                columns = columns,
                 modifier = Modifier
                     .padding(innerPadding)
                     .fillMaxSize(),
@@ -79,7 +96,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                 }
 
                 items(viewModel.moodCategories) { category ->
-                    SearchCategoryCard(category) {
+                    SearchCategoryCard(category = category, isSquare = viewModel.isGridLayout) {
                         val encodedTitle = Uri.encode(category.title)
                         val encodedQuery = Uri.encode(category.query)
                         onNavigate("genre_playlists/$encodedTitle/$encodedQuery")
@@ -97,7 +114,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                 }
 
                 items(viewModel.genreCategories) { category ->
-                    SearchCategoryCard(category) {
+                    SearchCategoryCard(category = category, isSquare = viewModel.isGridLayout) {
                         val encodedTitle = Uri.encode(category.title)
                         val encodedQuery = Uri.encode(category.query)
                         onNavigate("genre_detail/$encodedTitle/$encodedQuery")

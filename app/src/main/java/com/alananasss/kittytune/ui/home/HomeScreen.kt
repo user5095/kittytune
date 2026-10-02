@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -45,6 +46,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,6 +63,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -75,6 +78,7 @@ import com.alananasss.kittytune.data.DownloadManager
 import com.alananasss.kittytune.data.LikeRepository
 import com.alananasss.kittytune.data.SearchCategory
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.distinctUntilChanged
 import com.alananasss.kittytune.data.local.HistoryItem
 import com.alananasss.kittytune.domain.Playlist
 import com.alananasss.kittytune.domain.Track
@@ -83,6 +87,7 @@ import com.alananasss.kittytune.ui.common.ArtistCircleShimmer
 import com.alananasss.kittytune.ui.common.ExpressiveConnectedButtonGroup
 import com.alananasss.kittytune.ui.common.ShimmerLine
 import com.alananasss.kittytune.ui.common.SquareCardShimmer
+import com.alananasss.kittytune.ui.common.moveCaretWithArrowKeys
 import com.alananasss.kittytune.ui.library.DynamicPlaylistCard
 import com.alananasss.kittytune.ui.library.TrackListItem
 import com.alananasss.kittytune.ui.player.PlayerViewModel
@@ -107,6 +112,7 @@ import androidx.compose.ui.layout.boundsInParent
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.drawBehind
 import android.net.ConnectivityManager
@@ -126,6 +132,9 @@ fun HomeScreen(
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusRequester = remember { FocusRequester() }
+    val searchFieldState = remember { TextFieldState() }
+    val searchFieldInteractions = remember { MutableInteractionSource() }
+    val isSearchFieldFocused by searchFieldInteractions.collectIsFocusedAsState()
 
     val isKeyboardOpen = WindowInsets.isImeVisible
 
@@ -156,6 +165,22 @@ fun HomeScreen(
             }
         } else {
             focusManager.clearFocus()
+        }
+    }
+
+    LaunchedEffect(searchFieldState) {
+        snapshotFlow { searchFieldState.text.toString() }
+            .distinctUntilChanged()
+            .collect { homeViewModel.onSearchQueryChanged(it) }
+    }
+
+    LaunchedEffect(homeViewModel.searchQuery) {
+        val query = homeViewModel.searchQuery
+        if (searchFieldState.text.toString() != query) {
+            searchFieldState.edit {
+                replace(0, length, query)
+                selection = TextRange(length)
+            }
         }
     }
 
@@ -268,8 +293,7 @@ fun HomeScreen(
                     SearchBar(
                         inputField = {
                             SearchBarDefaults.InputField(
-                                query = homeViewModel.searchQuery,
-                                onQueryChange = homeViewModel::onSearchQueryChanged,
+                                state = searchFieldState,
                                 onSearch = { focusManager.clearFocus() },
                                 expanded = isSearching,
                                 onExpandedChange = {
@@ -286,6 +310,7 @@ fun HomeScreen(
                                     )
                                 },
                                 modifier = Modifier.focusRequester(focusRequester),
+                                interactionSource = searchFieldInteractions,
                                 leadingIcon = {
                                     if (isSearching) {
                                         IconButton(
@@ -362,6 +387,7 @@ fun HomeScreen(
                         },
                         modifier = Modifier
                             .fillMaxWidth()
+                            .moveCaretWithArrowKeys(searchFieldState, isSearchFieldFocused)
                             .padding(horizontal = searchBarPadding)
                             .padding(bottom = 8.dp),
                         shape = if (com.alananasss.kittytune.ui.theme.LocalPixelTheme.current) {
@@ -557,6 +583,8 @@ fun HomeContent(
     val historyCount = remember { history.count { it.type == "TRACK" } }
     val isBannerEligible = remember { prefs.shouldShowSupportBanner(historyCount) }
     var isSupportBannerVisible by remember { mutableStateOf(isBannerEligible) }
+    val showHomeYourMix by prefs.getShowHomeYourMixFlow().collectAsState(initial = prefs.getShowHomeYourMix())
+    val showHomeListeningStats by prefs.getShowHomeListeningStatsFlow().collectAsState(initial = prefs.getShowHomeListeningStats())
 
     val scrollState = rememberLazyListState()
     val allSections = homeViewModel.homeSections
@@ -667,6 +695,10 @@ fun HomeContent(
                                 when {
                                     historyItem.id == "likes" -> onNavigate("likes")
                                     historyItem.id == "downloads" -> onNavigate("downloads")
+                                    historyItem.id.startsWith("system_playlist:") -> onNavigate(historyItem.id)
+                                    historyItem.id.startsWith("soundcloud:system-playlists:") -> onNavigate("system_playlist:${historyItem.id}")
+                                    historyItem.originalUrl?.startsWith("system_playlist:") == true -> onNavigate(historyItem.originalUrl)
+                                    historyItem.originalUrl?.startsWith("soundcloud:system-playlists:") == true -> onNavigate("system_playlist:${historyItem.originalUrl}")
                                     historyItem.id.startsWith("yt_radio:") -> onNavigate(historyItem.id)
                                     historyItem.id.startsWith("spotify_artist:") -> onNavigate(historyItem.id)
                                     historyItem.id.startsWith("spotify_radio:") -> onNavigate(historyItem.id)
@@ -690,12 +722,29 @@ fun HomeContent(
                                         }
                                     }
                                     historyItem.type == "STATION" -> onNavigate(historyItem.id)
-                                    historyItem.type == "PLAYLIST" -> onNavigate(
-                                        historyItem.id.replace(
-                                            "playlist:",
-                                            ""
-                                        )
-                                    )
+                                    historyItem.type == "PLAYLIST" -> {
+                                        val clean = historyItem.id.removePrefix("playlist:")
+                                        if (clean.startsWith("system_playlist:") || clean.startsWith("soundcloud:system-playlists:")) {
+                                            val target = if (clean.startsWith("system_playlist:")) clean else "system_playlist:$clean"
+                                            onNavigate(target)
+                                        } else if (historyItem.originalUrl?.contains("system-playlists") == true || historyItem.originalUrl?.contains("your-playback") == true) {
+                                            val url = historyItem.originalUrl
+                                            val target = if (url.startsWith("system_playlist:")) url else "system_playlist:$url"
+                                            onNavigate(target)
+                                        } else if (historyItem.title.contains("Playback", ignoreCase = true) || historyItem.title.contains("Wrapped", ignoreCase = true)) {
+                                            val yr = Regex("\\b(20\\d\\d)\\b").find(historyItem.title)?.value ?: "2025"
+                                            val cachedUserId = com.alananasss.kittytune.data.local.PlayerPreferences(context).getCachedUserId().takeIf { it != 0L }
+                                                ?: playerViewModel.currentUserId.takeIf { it != 0L }
+                                                ?: 0L
+                                            if (cachedUserId != 0L) {
+                                                onNavigate("system_playlist:soundcloud:system-playlists:your-playback:$cachedUserId:$yr")
+                                            } else {
+                                                onNavigate(clean)
+                                            }
+                                        } else {
+                                            onNavigate(clean)
+                                        }
+                                    }
 
                                     historyItem.type == "TRACK" -> {
                                         val trackToPlay = Track(
@@ -714,6 +763,25 @@ fun HomeContent(
                         )
                     }
                 }
+            }
+        }
+
+        if (showHomeYourMix) {
+            item {
+                StartMixingCard(
+                    playerViewModel = playerViewModel,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                )
+            }
+        }
+
+        if (showHomeListeningStats) {
+            item {
+                ListeningStatsCard(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                    onNavigateToStats = { onNavigate("listening_stats") },
+                    onNavigateToYearlyPlayback = { onNavigate("yearly_playback") }
+                )
             }
         }
 
@@ -830,6 +898,10 @@ fun LazyListScope.RenderHomeSection(
 
 @Composable
 fun HighlightTrackCard(track: Track, onClick: () -> Unit) {
+    val blockedTrackIds by com.alananasss.kittytune.data.BlockManager.blockedTrackIdsFlow.collectAsState()
+    val blockedArtistIds by com.alananasss.kittytune.data.BlockManager.blockedArtistIdsFlow.collectAsState()
+    if (track.id in blockedTrackIds || (track.user?.id != null && track.user.id in blockedArtistIds)) return
+
     Card(
         onClick = onClick,
         modifier = Modifier
@@ -889,7 +961,7 @@ fun HighlightTrackCard(track: Track, onClick: () -> Unit) {
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = track.user?.username ?: stringResource(R.string.unknown_user),
+                    text = track.displayArtist.ifBlank { track.user?.username ?: stringResource(R.string.unknown_user) },
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                     color = Color.White,
                     maxLines = 1,
@@ -1047,8 +1119,16 @@ fun QuickHistorySection(
     history: List<HistoryItem>,
     onItemClick: (HistoryItem) -> Unit
 ) {
-    val cleanList = remember(history) {
-        history.filter { it.id != "playlist:0" && !it.title.equals("history", ignoreCase = true) }
+    val blockedTrackIds by com.alananasss.kittytune.data.BlockManager.blockedTrackIdsFlow.collectAsState()
+    val blockedArtistIds by com.alananasss.kittytune.data.BlockManager.blockedArtistIdsFlow.collectAsState()
+    val cleanList = remember(history, blockedTrackIds, blockedArtistIds) {
+        history.filter {
+            it.id != "playlist:0" &&
+            !it.title.equals("history", ignoreCase = true) &&
+            !(it.type == "track" && it.numericId in blockedTrackIds) &&
+            !(it.type == "artist" && it.numericId in blockedArtistIds) &&
+            !(it.numericId in blockedTrackIds)
+        }
     }
     if (cleanList.isEmpty()) return
 
@@ -1084,6 +1164,10 @@ fun QuickHistorySection(
 
 @Composable
 fun QuickHistoryTile(item: HistoryItem, onClick: () -> Unit) {
+    val blockedTrackIds by com.alananasss.kittytune.data.BlockManager.blockedTrackIdsFlow.collectAsState()
+    val blockedArtistIds by com.alananasss.kittytune.data.BlockManager.blockedArtistIdsFlow.collectAsState()
+    if (item.numericId in blockedTrackIds || (item.type == "artist" && item.numericId in blockedArtistIds)) return
+
     Column(
         modifier = Modifier
             .width(110.dp)
@@ -1220,7 +1304,14 @@ fun DiscoverySectionCarousel(
     tracks: List<Track>,
     onTrackClick: (Track) -> Unit
 ) {
-    val pagerState = rememberPagerState(pageCount = { minOf(tracks.size, 8) })
+    val blockedTrackIds by com.alananasss.kittytune.data.BlockManager.blockedTrackIdsFlow.collectAsState()
+    val blockedArtistIds by com.alananasss.kittytune.data.BlockManager.blockedArtistIdsFlow.collectAsState()
+    val cleanTracks = remember(tracks, blockedTrackIds, blockedArtistIds) {
+        tracks.filter { it.id !in blockedTrackIds && (it.user?.id == null || it.user.id !in blockedArtistIds) }
+    }
+    if (cleanTracks.isEmpty()) return
+
+    val pagerState = rememberPagerState(pageCount = { minOf(cleanTracks.size, 8) })
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -1259,7 +1350,7 @@ fun DiscoverySectionCarousel(
                 .fillMaxWidth()
                 .height(320.dp)
         ) { page ->
-            val track = tracks[page]
+            val track = cleanTracks[page]
 
             val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
             val scaleFactor = lerp(
@@ -1290,6 +1381,10 @@ fun DiscoveryBigCard(
     alpha: Float,
     onClick: () -> Unit
 ) {
+    val blockedTrackIds by com.alananasss.kittytune.data.BlockManager.blockedTrackIdsFlow.collectAsState()
+    val blockedArtistIds by com.alananasss.kittytune.data.BlockManager.blockedArtistIdsFlow.collectAsState()
+    if (track.id in blockedTrackIds || (track.user?.id != null && track.user.id in blockedArtistIds)) return
+
     Card(
         shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -1347,10 +1442,11 @@ fun DiscoveryBigCard(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = track.user?.username ?: stringResource(R.string.unknown_artist),
+                        text = track.displayArtist.ifBlank { track.user?.username ?: stringResource(R.string.unknown_artist) },
                         style = MaterialTheme.typography.titleMedium,
                         color = Color.White.copy(alpha = 0.9f),
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     if (track.user?.verified == true) {
                         Spacer(Modifier.width(6.dp))
@@ -1371,7 +1467,7 @@ fun DiscoveryBigCard(
                 val contextText = if (!track.genre.isNullOrBlank()) {
                     stringResource(R.string.home_discovery_context_genre, track.genre)
                 } else {
-                    stringResource(R.string.home_section_similar, track.user?.username ?: "Music")
+                    stringResource(R.string.home_section_similar, track.displayArtist.ifBlank { track.user?.username ?: "Music" })
                 }
 
                 Text(
@@ -1416,7 +1512,7 @@ fun StationCardLarge(playlist: Playlist, onClick: () -> Unit) {
                     .fillMaxWidth()
             ) {
                 AsyncImage(
-                    model = playlist.fullResArtwork,
+                    model = playlist.thumbnailUrl,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
@@ -1457,6 +1553,10 @@ fun StationCardLarge(playlist: Playlist, onClick: () -> Unit) {
 
 @Composable
 fun TrackCardModern(track: Track, onClick: () -> Unit) {
+    val blockedTrackIds by com.alananasss.kittytune.data.BlockManager.blockedTrackIdsFlow.collectAsState()
+    val blockedArtistIds by com.alananasss.kittytune.data.BlockManager.blockedArtistIdsFlow.collectAsState()
+    if (track.id in blockedTrackIds || (track.user?.id != null && track.user.id in blockedArtistIds)) return
+
     Column(
         modifier = Modifier
             .width(160.dp)
@@ -1467,7 +1567,7 @@ fun TrackCardModern(track: Track, onClick: () -> Unit) {
             elevation = CardDefaults.cardElevation(4.dp)
         ) {
             AsyncImage(
-                model = track.fullResArtwork,
+                model = track.thumbnailUrl,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.size(160.dp)
@@ -1481,10 +1581,11 @@ fun TrackCardModern(track: Track, onClick: () -> Unit) {
             overflow = TextOverflow.Ellipsis
         )
         Text(
-            text = track.user?.username ?: stringResource(R.string.unknown_artist),
+            text = track.displayArtist.ifBlank { track.user?.username ?: stringResource(R.string.unknown_artist) },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -1508,7 +1609,7 @@ fun SearchSourceSelector(
         ) {
             val iconRes = when (selectedSource) {
                 SearchSource.SOUNDCLOUD -> R.drawable.ic_soundcloud
-                SearchSource.YOUTUBE -> R.drawable.ic_logo_youtube
+                SearchSource.YOUTUBE -> R.drawable.ic_logo_youtube_music
                 SearchSource.SPOTIFY -> R.drawable.ic_logo_spotify
                 SearchSource.VK -> R.drawable.ic_vk
                 SearchSource.DEEZER -> R.drawable.ic_logo_deezer
@@ -1545,7 +1646,7 @@ fun SearchSourceSelector(
                 text = { Text(stringResource(R.string.search_source_youtube)) },
                 leadingIcon = {
                     Icon(
-                        painter = androidx.compose.ui.res.painterResource(R.drawable.ic_logo_youtube),
+                        painter = androidx.compose.ui.res.painterResource(R.drawable.ic_logo_youtube_music),
                         contentDescription = null,
                         modifier = Modifier.size(20.dp)
                     )
@@ -1641,7 +1742,10 @@ fun getStationNavId(playlist: Playlist): String {
     val isTrackStation = playlist.permalinkUrl == "track_station_marker"
     val isYoutubeRadio = playlist.permalinkUrl?.startsWith("yt_radio:") == true
     val isSpotifyRadio = playlist.permalinkUrl?.startsWith("spotify_radio:") == true || playlist.permalinkUrl?.startsWith("spotify:") == true
-    val isSystemPlaylist = playlist.urn?.startsWith("soundcloud:system-playlists:") == true
+    val isSystemPlaylist = playlist.urn?.startsWith("soundcloud:system-playlists:") == true ||
+            playlist.permalinkUrl?.contains("discover/sets/") == true ||
+            playlist.permalinkUrl?.contains("system-playlists") == true ||
+            playlist.permalinkUrl?.contains("your-playback") == true
 
     return when {
         playlist.urn?.startsWith("deezer:") == true -> playlist.urn!!
@@ -1650,7 +1754,13 @@ fun getStationNavId(playlist: Playlist): String {
         playlist.permalinkUrl?.startsWith("deezer:") == true -> playlist.permalinkUrl!!
         playlist.permalinkUrl?.startsWith("tidal:") == true -> playlist.permalinkUrl!!
         playlist.permalinkUrl?.startsWith("qobuz:") == true -> playlist.permalinkUrl!!
-        isSystemPlaylist -> "system_playlist:${playlist.urn}"
+        isSystemPlaylist -> {
+            if (playlist.urn?.startsWith("soundcloud:system-playlists:") == true) {
+                "system_playlist:${playlist.urn}"
+            } else {
+                "system_playlist:${android.net.Uri.encode(playlist.permalinkUrl ?: playlist.id.toString())}"
+            }
+        }
         isLikedBy -> "liked_by:${playlist.id}"
         isArtistStation -> "station_artist:${playlist.id}"
         isYoutubeRadio -> playlist.permalinkUrl ?: playlist.id.toString()
@@ -1704,10 +1814,21 @@ fun SearchCategoriesGrid(
 @Composable
 fun SearchCategoryCard(
     category: SearchCategory,
+    isSquare: Boolean = false,
     onClick: () -> Unit
 ) {
     val containerColor = MaterialTheme.colorScheme.secondaryContainer
     val contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+
+    val cardModifier = if (isSquare) {
+        Modifier
+            .fillMaxWidth()
+            .aspectRatio(1f)
+    } else {
+        Modifier
+            .fillMaxWidth()
+            .height(110.dp)
+    }
 
     Card(
         onClick = onClick,
@@ -1716,9 +1837,7 @@ fun SearchCategoryCard(
             containerColor = containerColor,
             contentColor = contentColor
         ),
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(110.dp)
+        modifier = cardModifier
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             Icon(
@@ -2733,6 +2852,9 @@ fun getCategoryGradient(seedColor: Color): Brush {
 
 @Composable
 fun ArtistCircle(user: User, onClick: () -> Unit) {
+    val blockedArtistIds by com.alananasss.kittytune.data.BlockManager.blockedArtistIdsFlow.collectAsState()
+    if (user.id in blockedArtistIds) return
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier
             .width(120.dp)
@@ -2812,6 +2934,10 @@ fun HistoryCard(
     item: HistoryItem,
     onClick: () -> Unit
 ) {
+    val blockedTrackIds by com.alananasss.kittytune.data.BlockManager.blockedTrackIdsFlow.collectAsState()
+    val blockedArtistIds by com.alananasss.kittytune.data.BlockManager.blockedArtistIdsFlow.collectAsState()
+    if (item.numericId in blockedTrackIds || (item.type == "artist" && item.numericId in blockedArtistIds)) return
+
     Card(
         onClick = onClick,
         shape = RoundedCornerShape(16.dp),

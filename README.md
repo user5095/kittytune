@@ -17,6 +17,9 @@
   <a href="https://ko-fi.com/alan7383">
     <img src="https://img.shields.io/badge/Ko--fi-Support-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-fi">
   </a>
+  <a href="https://discord.gg/thyHQH9jV9">
+    <img src="https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord">
+  </a>
   <img src="https://img.shields.io/badge/status-beta-yellow?style=for-the-badge" alt="Status: Beta">
   <img src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android Badge">
   <a href="https://github.com/alan7383/KittyTuneDesktop">
@@ -251,16 +254,25 @@ If you enjoy using **KittyTune** and want to support its ongoing development, co
 
 thanks to everyone who helps make KittyTune better:
 
-<a href="https://github.com/wynriu" title="wynriu">
+<a href="https://github.com/jason-fastner007" title="jason-fastner007 — 🇩🇪 German translation">
+  <img src="https://images.weserv.nl/?url=github.com/jason-fastner007.png&mask=circle&w=64&h=64" width="64" height="64" alt="jason-fastner007" />
+</a>
+<a href="https://github.com/wynriu" title="wynriu — 🇻🇳 Vietnamese translation">
   <img src="https://images.weserv.nl/?url=github.com/wynriu.png&mask=circle&w=64&h=64" width="64" height="64" alt="wynriu" />
 </a>
-<a href="https://github.com/sneoww98" title="sneoww98">
+<a href="https://crowdin.com/profile/kivoyoso" title="kivoyoso — 🇷🇺 Russian translation">
+  <img src="https://images.weserv.nl/?url=github.com/kivoyoso.png&mask=circle&w=64&h=64" width="64" height="64" alt="kivoyoso" />
+</a>
+<a href="https://github.com/meowsite" title="meowsite — 🌐 QA & Feedback">
+  <img src="https://images.weserv.nl/?url=github.com/meowsite.png&mask=circle&w=64&h=64" width="64" height="64" alt="meowsite" />
+</a>
+<a href="https://github.com/sneoww98" title="sneoww98 — Contributor">
   <img src="https://images.weserv.nl/?url=github.com/sneoww98.png&mask=circle&w=64&h=64" width="64" height="64" alt="sneoww98" />
 </a>
-<a href="https://github.com/quntqunt" title="quntqunt">
+<a href="https://github.com/quntqunt" title="quntqunt — Contributor">
   <img src="https://images.weserv.nl/?url=github.com/quntqunt.png&mask=circle&w=64&h=64" width="64" height="64" alt="quntqunt" />
 </a>
-<a href="https://github.com/tankist939-afk" title="tankist939-afk">
+<a href="https://github.com/tankist939-afk" title="tankist939-afk — Contributor">
   <img src="https://images.weserv.nl/?url=github.com/tankist939-afk.png&mask=circle&w=64&h=64" width="64" height="64" alt="tankist939-afk" />
 </a>
 
@@ -276,6 +288,20 @@ Big thanks to the projects that help power KittyTune:
 * [Kizzy RPC](https://github.com/dead8309/Kizzy)
 
 KittyTune is licensed under **GNU GPL v3.0**. See the [LICENSE](LICENSE) file for details.
+
+---
+
+### ★ star history
+
+<p align="center">
+  <a href="https://star-history.com/#alan7383/kittytune&Date">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=alan7383/kittytune&type=Date&theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=alan7383/kittytune&type=Date" />
+      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=alan7383/kittytune&type=Date" />
+    </picture>
+  </a>
+</p>
 
 ---
 

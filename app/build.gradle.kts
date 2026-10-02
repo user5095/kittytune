@@ -25,13 +25,22 @@ extensions.configure<ApplicationExtension> {
         applicationId = "com.alananasss.kittytune"
         minSdk = 26
         targetSdk = 37
-        versionCode = 53
-        versionName = "2.67.0"
+        versionCode = 54
+        versionName = "2.68.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+        }
+    }
+
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64")
+            isUniversalApk = true
         }
     }
 
@@ -102,6 +111,7 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.coil.compose)
+    implementation(libs.coil.gif)
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.session)
     implementation(libs.androidx.media3.exoplayer.hls)
@@ -141,9 +151,9 @@ dependencies {
     implementation(project(":shazamkit"))
     implementation(libs.mlkit.language.id)
     testImplementation(libs.junit)
+    testImplementation(kotlin("test"))
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
@@ -151,6 +161,9 @@ dependencies {
     implementation(libs.accompanist.drawablepainter)
     implementation(libs.lottie.compose)
     implementation(libs.zxing.core)
+
+    // AI music detector — on-device ONNX inference (ArtifactNet, ~17.2 MB on-demand)
+    implementation(libs.onnxruntime)
 
     // Scanning the desktop's pairing QR. zxing above already does the decoding; these are only
     // the camera frames to hand it (issue #33).
@@ -160,9 +173,10 @@ dependencies {
     implementation(libs.camera.view)
     implementation(libs.accompanist.lyrics.ui)
     implementation(libs.accompanist.lyrics.core)
-    implementation("com.github.racra:smooth-corner-rect-android-compose:v1.0.0")
+    implementation(libs.smooth.corner.rect)
     implementation(libs.material)
     implementation(libs.androidx.ui.text.google.fonts)
+    implementation(libs.rive.android)
 }
 
 kotlin {

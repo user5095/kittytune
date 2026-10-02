@@ -17,6 +17,7 @@
     import com.alananasss.kittytune.utils.Config
     import com.zionhuang.innertube.YouTube as InnerTubeYouTube
     import kotlinx.coroutines.CoroutineScope
+    import com.alananasss.kittytune.utils.NetworkUtils
     import kotlinx.coroutines.Dispatchers
     import kotlinx.coroutines.SupervisorJob
     import kotlinx.coroutines.async
@@ -172,6 +173,7 @@
         fun isRestricted(track: Track): Boolean {
             return track.policy == "SNIP" ||
                     track.policy == "BLOCK" ||
+                    track.isSnipped ||
                     track.monetizationModel == "SUB_HIGH_TIER"
         }
 
@@ -186,7 +188,7 @@
          * account's own tier.
          */
         fun isBlockedForAccount(track: Track): Boolean =
-            track.policy == "SNIP" || track.policy == "BLOCK"
+            track.policy == "SNIP" || track.policy == "BLOCK" || track.isSnipped
 
         /**
          * Ids of tracks the API told us, on the full payload, that this account may not stream.
@@ -236,7 +238,7 @@
                 val prefs = PlayerPreferences(context)
                 if (prefs.getYouTubeFallbackEnabled()) {
                     Log.d(TAG, "[BeatAnalysis] Trying YouTube NewPipe fallback for '${track.title}'")
-                    val ytUrl = try { resolveViaNewPipe(track) } catch (_: Exception) { null }
+                    val ytUrl = try { resolveViaNewPipe(context, track) } catch (_: Exception) { null }
                     if (ytUrl != null) {
                         Log.d(TAG, "[BeatAnalysis] Got YouTube stream for '${track.title}'")
                         return@withContext ResolvedStream(ytUrl)
@@ -286,7 +288,7 @@
                     }
                     if (track.source == "youtube") {
                         Log.d(TAG, "Resolving YouTube track: ${track.title}")
-                        val url = resolveFromYoutubeDirect(track)
+                        val url = resolveFromYoutubeDirect(context, track)
                         return@run url?.let { ResolvedStream(it) }
                     }
 
@@ -300,7 +302,7 @@
                         // playing a different recording is worse than reporting the failure.
                         if (PlayerPreferences(context).getYouTubeFallbackEnabled()) {
                             Log.w(TAG, "VK reload failed, trying the YouTube fallback for: ${track.title}")
-                            val fallbackUrl = resolveViaNewPipe(track)
+                            val fallbackUrl = resolveViaNewPipe(context, track)
                             if (fallbackUrl != null) {
                                 return@run ResolvedStream(fallbackUrl)
                             }
@@ -315,7 +317,7 @@
                         if (providerStream != null) {
                             return@run providerStream
                         }
-                        val streamUrl = resolveViaNewPipe(track)
+                        val streamUrl = resolveViaNewPipe(context, track)
                         if (streamUrl != null) {
                             return@run ResolvedStream(streamUrl)
                         }
@@ -347,7 +349,7 @@
                         val allowYoutubeFallback = PlayerPreferences(context).getYouTubeFallbackEnabled()
                         if (allowYoutubeFallback) {
                             Log.w(TAG, "Provider track (${track.source}) resolution failed, trying YouTube fallback for: ${track.title}")
-                            val ytFallback = resolveViaNewPipe(track)
+                            val ytFallback = resolveViaNewPipe(context, track)
                             if (ytFallback != null) {
                                 return@run ResolvedStream(ytFallback)
                             }
@@ -372,7 +374,7 @@
                             return@run providerStream
                         }
                         if (allowYoutube) {
-                            val streamUrl = resolveViaNewPipe(track)
+                            val streamUrl = resolveViaNewPipe(context, track)
                             if (streamUrl != null) {
                                 return@run ResolvedStream(streamUrl)
                             }
@@ -390,7 +392,7 @@
                             // Last resort: YouTube fallback when both SoundCloud and all
                             // providers have failed (issue #33).
                             Log.w(TAG, "All sources failed for '${track.title}', trying final YouTube fallback")
-                            val ytUrl = resolveViaNewPipe(track)
+                            val ytUrl = resolveViaNewPipe(context, track)
                             ytUrl?.let { ResolvedStream(it) }
                         } else {
                             null
@@ -430,7 +432,8 @@
                     AudioProviderOrderItem.QOBUZ -> {
                         val country = prefs.getQobuzCountry()
                         val customInstances = prefs.getQobuzCustomInstances()
-                        val quality = prefs.getQobuzQuality()
+                        val quality = DataSaver.effectiveQobuzQuality(context)
+                        if (DataSaver.isActive(context)) Log.d(TAG, "Data saver: pinning Qobuz quality to MP3 320")
                         val query = QobuzAudioProvider.Query(
                             mediaId = mediaId,
                             title = title,
@@ -449,7 +452,8 @@
                         } else null
                     }
                     AudioProviderOrderItem.TIDAL -> {
-                        val quality = prefs.getTidalAudioQuality()
+                        val quality = DataSaver.effectiveTidalQuality(context)
+                        if (DataSaver.isActive(context)) Log.d(TAG, "Data saver: pinning TIDAL quality to AAC 320")
                         val endpoints = prefs.getTidalResolverEndpoints()
                         val query = TidalAudioProvider.Query(
                             mediaId = mediaId,
@@ -474,7 +478,8 @@
                     }
                     AudioProviderOrderItem.DEEZER -> {
                         val resolverUrl = prefs.getDeezerResolverUrl()
-                        val quality = prefs.getDeezerAudioQuality()
+                        val quality = DataSaver.effectiveDeezerQuality(context)
+                        if (DataSaver.isActive(context)) Log.d(TAG, "Data saver: pinning Deezer quality to MP3 128")
                         val fastMode = prefs.getDeezerFastMode()
                         val configuredProxyUrl = prefs.getDeezerProxyUrl()
                         val proxyMode = prefs.getDeezerProxyMode()
@@ -508,7 +513,7 @@
                         } else null
                     }
                     AudioProviderOrderItem.YOUTUBE_MUSIC -> {
-                        val ytUrl = resolveViaNewPipe(track)
+                        val ytUrl = resolveViaNewPipe(context, track)
                         if (ytUrl != null) {
                             Log.i(TAG, "Using YouTube stream for '${track.title}'")
                             ResolvedStream(ytUrl)
@@ -547,6 +552,25 @@
         ): ResolvedStream? {
             val prefs = PlayerPreferences(context)
             val configuredOrder = prefs.getAudioProviderOrder()
+
+            // Traffic saver: providers switched off by the user are never queried. When the
+            // metered-network mode is on, the Hi-Res providers (Qobuz / TIDAL / Deezer) are
+            // skipped on top of that while the device is on mobile data, and come back on Wi-Fi.
+            val disabledProviders = prefs.getDisabledAudioProviders()
+            val meteredSaverActive = prefs.getDisableProvidersOnMetered() && NetworkUtils.isMobileData(context)
+            // The master data saver pins every provider to the bottom of its quality ladder;
+            // the per-provider metered switch above just silences them on mobile data.
+            val dataSaverActive = DataSaver.isActive(context)
+            val effectiveDisabled = if (meteredSaverActive) {
+                disabledProviders + com.alananasss.kittytune.audio.providers.AudioProviderOrder.Disableable
+            } else {
+                disabledProviders
+            }
+            if (effectiveDisabled.isNotEmpty()) {
+                Log.d(TAG, "Skipping audio providers: ${effectiveDisabled.joinToString(", ") { it.name }}" +
+                        if (meteredSaverActive) " (mobile data saver)" else "")
+            }
+
             val order = when {
                 track.source == "deezer" || track.permalink?.startsWith("deezer:") == true -> {
                     listOf(AudioProviderOrderItem.DEEZER) + (configuredOrder - AudioProviderOrderItem.DEEZER)
@@ -563,7 +587,7 @@
             val title = track.title?.trim().orEmpty()
             val artist = (track.displayArtist.ifBlank { track.user?.username.orEmpty() }).trim()
             val album = (track.publisherMetadata?.albumTitle ?: track.publisherMetadata?.releaseTitle).orEmpty()
-            val durationMs = track.durationMs ?: 0L
+            val durationMs = track.actualDurationMs
 
             var isrc = ProviderIsrc.normalize(track.publisherMetadata?.isrc)
             if (isrc == null && title.isNotBlank() && artist.isNotBlank()) {
@@ -593,7 +617,9 @@
             // there's no suspension point inside them for a timeout to cancel at - wrapping the
             // call only finds out it overran *after* it already finished. Wrapping the await lets
             // us simply stop waiting on time, even though the abandoned call keeps running unseen.
-            val distinctOrder = order.distinct()
+            val distinctOrder = order.distinct().filter { provider ->
+                (provider !in effectiveDisabled).also { if (!it) Log.d(TAG, "Provider $provider is disabled, skipping for '${track.title}'") }
+            }
             val deferredByProvider = distinctOrder.associateWith { provider ->
                 providerRaceScope.async {
                     resolveOneProvider(provider, context, prefs, track, mediaId, title, artist, album, durationMs, isrc, artists, forDownload)
@@ -681,7 +707,7 @@
             }
         }
 
-        private suspend fun resolveViaNewPipe(track: Track): String? {
+        private suspend fun resolveViaNewPipe(context: Context, track: Track): String? {
             return try {
                 val cleanTitle = track.title?.replace(Regex("(?i)(\\[.*?\\]|\\(.*?\\))"), "")?.trim() ?: ""
                 val artistName = track.displayArtist.ifBlank { track.user?.username ?: "" }
@@ -702,7 +728,7 @@
                 // for a three-minute song: YouTube's top result for a track name is frequently a snippet, a
                 // teaser or a "sped up" edit. A substitute has to be the same length as the thing it
                 // replaces (issue #33).
-                val wantedSec = (track.durationMs ?: 0L) / 1000
+                val wantedSec = track.actualDurationMs / 1000
                 val firstResultUrl = if (wantedSec <= 0) {
                     videoResults.first().url
                 } else {
@@ -744,15 +770,21 @@
                     emptyList()
                 }
 
+                // Data saver: pick the smallest audio stream (~64 kbps Opus) instead of the
+                // largest (~160–256 kbps). Same preference order, walked from the other end.
+                val eco = DataSaver.prefersSmallestStream(context)
+                fun List<org.schabi.newpipe.extractor.stream.AudioStream>.byBitrate() =
+                    if (eco) minByOrNull { it.averageBitrate } else maxByOrNull { it.averageBitrate }
+
                 val bestAudioStream = audioStreams
                     .filter { it.deliveryMethod == org.schabi.newpipe.extractor.stream.DeliveryMethod.PROGRESSIVE_HTTP && it.format == org.schabi.newpipe.extractor.MediaFormat.M4A && it.url != null }
-                    .maxByOrNull { it.averageBitrate }
+                    .byBitrate()
                     ?: audioStreams
                         .filter { it.deliveryMethod == org.schabi.newpipe.extractor.stream.DeliveryMethod.PROGRESSIVE_HTTP && it.url != null }
-                        .maxByOrNull { it.averageBitrate }
+                        .byBitrate()
                     ?: audioStreams
                         .filter { it.url != null }
-                        .maxByOrNull { it.averageBitrate }
+                        .byBitrate()
 
                 if (bestAudioStream != null) {
                     Log.d(TAG, "[NewPipe] Audio stream found: ${bestAudioStream.averageBitrate}kbps")
@@ -786,7 +818,7 @@
             }
         }
 
-        private suspend fun resolveFromYoutubeDirect(track: Track): String? {
+        private suspend fun resolveFromYoutubeDirect(context: Context, track: Track): String? {
             val url = track.permalinkUrl ?: return null
             extractYoutubeVideoId(url)?.let { videoId ->
                 resolveViaInnerTubePlayer(videoId)?.let {
@@ -798,12 +830,17 @@
                 val service = ServiceList.YouTube
                 val extractor = service.getStreamExtractor(url)
                 extractor.fetchPage()
+                // Data saver: smallest audio stream instead of the largest (~64 kbps Opus
+                // instead of ~256 kbps). Same ladder, just walked from the other end.
+                val eco = DataSaver.prefersSmallestStream(context)
+                fun List<org.schabi.newpipe.extractor.stream.AudioStream>.byBitrate() =
+                    if (eco) minByOrNull { it.averageBitrate } else maxByOrNull { it.averageBitrate }
                 val best = extractor.audioStreams
                     .filter { it.deliveryMethod == org.schabi.newpipe.extractor.stream.DeliveryMethod.PROGRESSIVE_HTTP && it.url != null }
-                    .maxByOrNull { it.averageBitrate }
+                    .byBitrate()
                     ?: extractor.audioStreams
                         .filter { it.url != null }
-                        .maxByOrNull { it.averageBitrate }
+                        .byBitrate()
                 if (best != null) return best.url
 
                 val muxed = extractor.videoStreams
@@ -839,11 +876,11 @@
             // on. Now that it has been fetched in full, re-read the per-account verdict: when
             // SoundCloud refuses this account outright, no transcoding here will play, and
             // working through them all only delays the fallback the caller is about to reach.
-            if (!isBlockedForAccount(track) && isBlockedForAccount(trackToUse)) {
+            if (isBlockedForAccount(track) || isBlockedForAccount(trackToUse)) {
                 Log.d(
                     TAG,
-                    "Track ${track.id} - restricted on the full payload " +
-                        "(policy=${trackToUse.policy}, monetization=${trackToUse.monetizationModel}), going to the fallbacks"
+                    "Track ${track.id} - restricted on payload " +
+                        "(policy=${trackToUse.policy}, isSnipped=${trackToUse.isSnipped}, monetization=${trackToUse.monetizationModel}), going to the fallbacks"
                 )
                 restrictedTrackIds.add(track.id)
                 // Nothing to add here: the caller already falls through to the providers and then
@@ -853,7 +890,9 @@
             }
 
             val transcodings = trackToUse.media?.transcodings ?: return null
-            val qualityPref = prefs.getAudioQuality()
+            // The data saver overrides the user's quality choice: when it is active every
+            // SoundCloud track goes through the eco ladder below, whatever the settings say.
+            val qualityPref = DataSaver.effectiveSoundCloudQuality(context)
 
             Log.d(TAG, "Track ${track.id} — ${transcodings.size} transcodings available:")
             transcodings.forEachIndexed { i, t ->
@@ -867,7 +906,7 @@
             if (candidates.isEmpty()) {
                 Log.w(TAG, "Track ${track.id} — no matching transcoding found!")
                 if (forDownload && prefs.getYouTubeFallbackEnabled()) {
-                    val url = resolveViaNewPipe(track)
+                    val url = resolveViaNewPipe(context, track)
                     return url?.let { ResolvedStream(it) }
                 }
                 return null
@@ -963,7 +1002,7 @@
             Log.e(TAG, "Track ${track.id} — all ${candidates.size} transcoding candidates failed!")
             if (forDownload && prefs.getYouTubeFallbackEnabled()) {
                 Log.w(TAG, "Falling back to NewPipe after transcoding failures")
-                val url = resolveViaNewPipe(track)
+                val url = resolveViaNewPipe(context, track)
                 return url?.let { ResolvedStream(it) }
             }
             return null
@@ -975,22 +1014,34 @@
             allowDrm: Boolean
         ): List<com.alananasss.kittytune.domain.Transcoding> {
             val candidates = mutableListOf<com.alananasss.kittytune.domain.Transcoding>()
-            transcodings.find { it.format?.protocol == "progressive" }?.let { candidates.add(it) }
-            if (qualityPref != "HIGH") {
-                transcodings.find { it.format?.protocol == "hls" && it.format.mimeType?.contains("mpeg") == true }?.let { candidates.add(it) }
-            }
-            transcodings.find { it.format?.protocol == "hls" }?.let {
-                if (!candidates.contains(it)) candidates.add(it)
+            // Exclude snipped transcodings so preview teasers (~30s) are never played as full tracks
+            val playableTranscodings = transcodings.filter { !it.snipped }
+
+            if (qualityPref == "LOW") {
+                // Real eco: the smallest transcoding wins, not just "anything but progressive".
+                // Opus 64k ≈ 64 kbps, AAC 64k/96k next, the HLS MP3 after that; the progressive
+                // MP3 (128 kbps) comes last, only when nothing lighter exists at all.
+                for (preset in listOf("opus_64k", "aac_64k", "aac_96k")) {
+                    playableTranscodings.find { it.preset == preset && it.format?.protocol == "hls" }?.let { candidates.add(it) }
+                }
+                playableTranscodings.find { it.format?.protocol == "hls" && it.format.mimeType?.contains("mpeg") == true }?.let { if (it !in candidates) candidates.add(it) }
+                playableTranscodings.find { it.format?.protocol == "hls" }?.let { if (it !in candidates) candidates.add(it) }
+                playableTranscodings.find { it.format?.protocol == "progressive" }?.let { if (it !in candidates) candidates.add(it) }
+            } else {
+                // High: prefer progressive (direct MP3/AAC), then any HLS rendition.
+                playableTranscodings.find { it.format?.protocol == "progressive" }?.let { candidates.add(it) }
+                playableTranscodings.find { it.format?.protocol == "hls" }?.let { if (it !in candidates) candidates.add(it) }
             }
 
             if (allowDrm) {
-                val cencPresets = listOf("aac_160k", "aac_96k", "abr_sq")
+                // Encrypted Go+ streams walk the same ladder — eco just starts lower.
+                val cencPresets = if (qualityPref == "LOW") listOf("aac_96k", "aac_160k", "abr_sq") else listOf("aac_160k", "aac_96k", "abr_sq")
                 for (preset in cencPresets) {
-                    transcodings.find { it.preset == preset && it.format?.protocol == "ctr-encrypted-hls" }?.let { candidates.add(it) }
-                    transcodings.find { it.preset == preset && it.format?.protocol == "cbc-encrypted-hls" }?.let { candidates.add(it) }
+                    playableTranscodings.find { it.preset == preset && it.format?.protocol == "ctr-encrypted-hls" }?.let { candidates.add(it) }
+                    playableTranscodings.find { it.preset == preset && it.format?.protocol == "cbc-encrypted-hls" }?.let { candidates.add(it) }
                 }
-                transcodings.filter { it.format?.protocol?.contains("encrypted") == true }.forEach {
-                    if (!candidates.contains(it)) candidates.add(it)
+                playableTranscodings.filter { it.format?.protocol?.contains("encrypted") == true }.forEach {
+                    if (it !in candidates) candidates.add(it)
                 }
             }
 

@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.foundation.shape.CircleShape
@@ -22,8 +23,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -34,9 +38,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.alananasss.kittytune.R
+import com.alananasss.kittytune.data.local.MiniPlayerSwipeAction
+import com.alananasss.kittytune.data.local.PlayerPreferences
 import com.alananasss.kittytune.ui.player.PlayerViewModel
 import com.alananasss.kittytune.ui.player.pixel.miniPlayerDismissHorizontalGesture
 import com.alananasss.kittytune.ui.player.pixel.rememberMiniPlayerDismissGestureHandler
+import androidx.compose.ui.platform.LocalContext
 import kotlin.math.abs
 
 data class KittyTab(
@@ -72,33 +79,54 @@ fun KittyUnifiedBottomBar(
     }
     val offsetAnimatable = remember { Animatable(0f) }
 
+    val context = LocalContext.current
+    val playerPrefs = remember { PlayerPreferences(context) }
+    val swipeAction by playerPrefs.miniPlayerSwipeActionFlow().collectAsState(initial = playerPrefs.getMiniPlayerSwipeAction())
+
     val miniDismissGestureHandler = rememberMiniPlayerDismissGestureHandler(
         scope = coroutineScope,
         density = density,
         hapticFeedback = hapticFeedback,
         offsetAnimatable = offsetAnimatable,
         screenWidthPx = screenWidthPx,
+        swipeAction = swipeAction,
         onDismiss = {
             playerViewModel.dismissMiniPlayerAndShowUndo()
         },
         onDismissStarted = {
             playerViewModel.isMiniPlayerDismissing = true
+        },
+        onSwipeNext = {
+            playerViewModel.requestSkipNext()
+        },
+        onSwipePrevious = {
+            playerViewModel.smartPrevious()
         }
     )
 
     if (style == "classic") {
         Column(
-            modifier = modifier.fillMaxWidth()
+            modifier = modifier
+                .fillMaxWidth()
+                .semantics { }
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = {})
+                }
         ) {
             if (track != null) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(64.dp)
+                        .clipToBounds()
                         .systemGestureExclusion()
                         .graphicsLayer {
                             translationX = offsetAnimatable.value
-                            alpha = (1f - (abs(offsetAnimatable.value) / (screenWidthPx * 0.85f))).coerceIn(0f, 1f)
+                            alpha = if (swipeAction == MiniPlayerSwipeAction.DISMISS) {
+                                (1f - (abs(offsetAnimatable.value) / (screenWidthPx * 0.85f))).coerceIn(0f, 1f)
+                            } else {
+                                (1f - (abs(offsetAnimatable.value) / screenWidthPx) * 0.35f).coerceIn(0.65f, 1f)
+                            }
                         }
                         .miniPlayerDismissHorizontalGesture(
                             enabled = true,
@@ -115,7 +143,7 @@ fun KittyUnifiedBottomBar(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         AsyncImage(
-                            model = track.fullResArtwork,
+                            model = track.thumbnailUrl,
                             contentDescription = null,
                             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                             modifier = Modifier
@@ -156,7 +184,7 @@ fun KittyUnifiedBottomBar(
                             )
                         }
 
-                        IconButton(onClick = { playerViewModel.playNext() }) {
+                        IconButton(onClick = { playerViewModel.requestSkipNext() }) {
                             Icon(
                                 imageVector = Icons.Rounded.SkipNext,
                                 contentDescription = null,
@@ -165,12 +193,10 @@ fun KittyUnifiedBottomBar(
                         }
                     }
 
-                    val progress = if (playerViewModel.duration > 0) {
-                        playerViewModel.currentPosition.toFloat() / playerViewModel.duration.toFloat()
-                    } else 0f
+                    val progress = rememberDockProgress(playerViewModel)
 
                     LinearProgressIndicator(
-                        progress = { progress },
+                        progress = { progress.value },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(2.dp)
@@ -208,6 +234,10 @@ fun KittyUnifiedBottomBar(
             modifier = modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
+                .semantics { }
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = {})
+                }
                 .padding(horizontal = 12.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -217,10 +247,15 @@ fun KittyUnifiedBottomBar(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(64.dp)
+                        .clipToBounds()
                         .systemGestureExclusion()
                         .graphicsLayer {
                             translationX = offsetAnimatable.value
-                            alpha = (1f - (abs(offsetAnimatable.value) / (screenWidthPx * 0.85f))).coerceIn(0f, 1f)
+                            alpha = if (swipeAction == MiniPlayerSwipeAction.DISMISS) {
+                                (1f - (abs(offsetAnimatable.value) / (screenWidthPx * 0.85f))).coerceIn(0f, 1f)
+                            } else {
+                                (1f - (abs(offsetAnimatable.value) / screenWidthPx) * 0.35f).coerceIn(0.65f, 1f)
+                            }
                         }
                         .miniPlayerDismissHorizontalGesture(
                             enabled = true,
@@ -237,7 +272,7 @@ fun KittyUnifiedBottomBar(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         AsyncImage(
-                            model = track.fullResArtwork,
+                            model = track.thumbnailUrl,
                             contentDescription = null,
                             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                             modifier = Modifier
@@ -273,7 +308,7 @@ fun KittyUnifiedBottomBar(
                             )
                         }
 
-                        IconButton(onClick = { playerViewModel.playNext() }) {
+                        IconButton(onClick = { playerViewModel.requestSkipNext() }) {
                             Icon(
                                 imageVector = Icons.Rounded.SkipNext,
                                 contentDescription = null,
@@ -282,12 +317,10 @@ fun KittyUnifiedBottomBar(
                         }
                     }
 
-                    val progress = if (playerViewModel.duration > 0) {
-                        playerViewModel.currentPosition.toFloat() / playerViewModel.duration.toFloat()
-                    } else 0f
+                    val progress = rememberDockProgress(playerViewModel)
 
                     LinearProgressIndicator(
-                        progress = { progress },
+                        progress = { progress.value },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(2.dp)
@@ -400,4 +433,43 @@ fun KittyUnifiedBottomBar(
             }
         }
     }
+}
+
+/**
+ * Playback progress for the docks, kept out of the caller's recomposition scope.
+ *
+ * Reading `currentPosition` in a composable body makes that whole body recompose on every position
+ * tick, and the docks are large - the mini player, the navigation bar and every navigation item, in
+ * both style branches. The tick runs at 500 ms normally, 200 ms near the end of a track, and 25 Hz
+ * while DJ Flow has the player open, so the whole bar was being rebuilt up to 25 times a second to
+ * move a 2 dp line.
+ *
+ * Collecting inside [snapshotFlow] reads the position in a snapshot observer instead, so only the
+ * progress value changes. Same approach as the mini player's own bar.
+ */
+@Composable
+internal fun rememberDockProgress(viewModel: com.alananasss.kittytune.ui.player.PlayerViewModel): Animatable<Float, androidx.compose.animation.core.AnimationVector1D> {
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(viewModel) {
+        snapshotFlow {
+            if (viewModel.duration > 0) {
+                (viewModel.currentPosition.toFloat() / viewModel.duration.toFloat()).coerceIn(0f, 1f)
+            } else 0f
+        }.collect { target ->
+            // Snap on a track change or a seek, glide in between, so the line does not stutter at
+            // the tick rate.
+            val delta = target - progress.value
+            val spec: androidx.compose.animation.core.TweenSpec<Float> =
+                if (kotlin.math.abs(delta) > 0.05f) {
+                    androidx.compose.animation.core.tween(150)
+                } else {
+                    androidx.compose.animation.core.tween(
+                        durationMillis = 1000,
+                        easing = androidx.compose.animation.core.LinearEasing
+                    )
+                }
+            progress.animateTo(target, animationSpec = spec)
+        }
+    }
+    return progress
 }

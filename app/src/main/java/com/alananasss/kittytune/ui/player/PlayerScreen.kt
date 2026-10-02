@@ -9,6 +9,8 @@ import android.view.HapticFeedbackConstants
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
+import android.os.Build
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -49,6 +51,7 @@ import androidx.compose.ui.text.font.*
 import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.*
 import androidx.compose.ui.unit.*
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
@@ -60,6 +63,7 @@ import com.alananasss.kittytune.ui.player.cover.CanvasVideo
 import com.alananasss.kittytune.ui.common.WindowSizeInfo
 import com.alananasss.kittytune.ui.common.WindowHeightSizeClass
 import com.alananasss.kittytune.ui.common.viewableCover
+import com.alananasss.kittytune.ui.common.KittyOutlinedTextField
 import com.alananasss.kittytune.ui.common.rememberWindowSizeInfo
 import com.alananasss.kittytune.ui.common.ExpressiveConnectedButtonGroup
 import com.alananasss.kittytune.R
@@ -71,6 +75,7 @@ import com.alananasss.kittytune.data.local.PlayerBackgroundStyle
 import com.alananasss.kittytune.data.local.PlayerPreferences
 import com.alananasss.kittytune.data.local.PlayerProgressMode
 import com.alananasss.kittytune.data.local.PlayerSliderStyle
+import com.alananasss.kittytune.data.local.WaveformColorMode
 import com.alananasss.kittytune.data.local.LyricsUnderCoverPlacement
 import com.alananasss.kittytune.ui.player.lyrics.PlayerInlineLyrics
 import com.alananasss.kittytune.ui.player.lyrics.LyricsUtils
@@ -301,7 +306,12 @@ fun SyncedLyricsView(viewModel: PlayerViewModel, showControls: Boolean = true) {
     val currentPosition = viewModel.currentPosition
     val adjustedPosition = currentPosition + viewModel.lyricsOffset
     val lyrics = viewModel.lyricsLines
-    val listState = rememberLazyListState()
+    // Opened on the line being sung, not on line one. Two minutes into a track the first frame
+    // used to be the top of the song, which read as a jolt on every open before the follow logic
+    // caught up.
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = LyricsUtils.activeLineIndex(lyrics, adjustedPosition).coerceAtLeast(0)
+    )
     val fontSize = viewModel.lyricsFontSize
     val lyricsFontFamily = com.alananasss.kittytune.ui.theme.rememberLyricsFontFamily(viewModel.lyricsFont)
     val alignment = when (viewModel.lyricsAlignment) {
@@ -761,20 +771,74 @@ fun PlayerScreen(
         chosenPlayerDesign
     }
 
-    when (playerDesign) {
-        com.alananasss.kittytune.data.local.PlayerDesign.PIXEL_PLAYER -> {
-            com.alananasss.kittytune.ui.player.pixel.PixelPlayerScreen(viewModel, onClose)
+    // The DJ panel is attached here, at the one point where every layout is dispatched from,
+    // rather than inside the four player screens. None of them has to know the feature exists,
+    // and taking it out again is a single block. It only appears while DJ Flow is on, so the
+    // normal player is untouched for everyone who never enables it.
+    val djState by viewModel.djFlowController.flowState.collectAsState()
+
+    // Tells the position ticker that the live beat grid is actually on screen. Composition
+    // scope is exactly the right signal: it ends when the player is closed or the process is
+    // backgrounded, which is precisely when the 25 Hz animation rate stops being worth a core.
+    DisposableEffect(Unit) {
+        viewModel.isDjBeatUiVisible = true
+        onDispose { viewModel.isDjBeatUiVisible = false }
+    }
+
+    androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
+        when (playerDesign) {
+            com.alananasss.kittytune.data.local.PlayerDesign.PIXEL_PLAYER -> {
+                com.alananasss.kittytune.ui.player.pixel.PixelPlayerScreen(viewModel, onClose)
+            }
+            com.alananasss.kittytune.data.local.PlayerDesign.SOUNDCLOUD -> {
+                NewPlayerScreen(viewModel, onClose, forceSoundCloud = true)
+            }
+            com.alananasss.kittytune.data.local.PlayerDesign.MODERN -> {
+                NewPlayerScreen(viewModel, onClose, forceSoundCloud = false)
+            }
+            com.alananasss.kittytune.data.local.PlayerDesign.CLASSIC -> {
+                OldPlayerScreen(viewModel, onClose)
+            }
         }
-        com.alananasss.kittytune.data.local.PlayerDesign.SOUNDCLOUD -> {
-            NewPlayerScreen(viewModel, onClose, forceSoundCloud = true)
+
+        androidx.compose.animation.AnimatedVisibility(
+            visible = djState.isActive,
+            modifier = Modifier
+                .align(androidx.compose.ui.Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            enter = androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut(),
+        ) {
+            com.alananasss.kittytune.ui.player.dj.DjFlowPanel(
+                state = djState,
+                onToggleDj = viewModel.djFlowController::enableDjMode,
+                onEnergyMode = viewModel.djFlowController::setEnergyMode,
+                onMixNow = { viewModel.djFlowController.triggerTransition() },
+            )
         }
-        com.alananasss.kittytune.data.local.PlayerDesign.MODERN -> {
-            NewPlayerScreen(viewModel, onClose, forceSoundCloud = false)
-        }
-        com.alananasss.kittytune.data.local.PlayerDesign.CLASSIC -> {
-            OldPlayerScreen(viewModel, onClose)
+
+        androidx.compose.animation.AnimatedVisibility(
+            visible = viewModel.showAiSkipUndoBar,
+            modifier = Modifier
+                .align(androidx.compose.ui.Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(horizontal = 14.dp, vertical = 16.dp)
+                .zIndex(20f),
+            enter = androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut(),
+        ) {
+            val trackTitle = viewModel.aiSkippedTrack?.title
+            val baseMsg = stringResource(R.string.ai_skip_undo_message)
+            val displayText = if (!trackTitle.isNullOrBlank()) "$baseMsg • $trackTitle" else baseMsg
+            com.alananasss.kittytune.ui.player.pixel.DismissUndoBar(
+                text = displayText,
+                onUndo = { viewModel.undoAiSkip() },
+                onClose = { viewModel.hideAiSkipUndoBar() }
+            )
         }
     }
+
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -785,7 +849,56 @@ fun NewPlayerScreen(
     forceSoundCloud: Boolean? = null
 ) {
     val track = viewModel.currentTrack ?: return
-    BackHandler(enabled = !viewModel.showLyricsSheet, onBack = onClose)
+
+    val scope = rememberCoroutineScope()
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val screenHeightPx = remember(configuration, density) {
+        with(density) { configuration.screenHeightDp.dp.toPx() }
+    }
+    val dismissTargetY = remember(screenHeightPx) {
+        screenHeightPx * 0.88f
+    }
+    val dismissProgress = remember { Animatable(0f) }
+
+    LaunchedEffect(viewModel.isPlayerExpanded) {
+        if (viewModel.isPlayerExpanded) {
+            dismissProgress.snapTo(0f)
+        }
+    }
+
+    val handleClose: () -> Unit = {
+        scope.launch {
+            dismissProgress.animateTo(
+                1f,
+                animationSpec = tween(150, easing = LinearEasing)
+            )
+            onClose()
+        }
+    }
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        PredictiveBackHandler(enabled = !viewModel.showLyricsSheet) { progressFlow ->
+            try {
+                progressFlow.collect { backEvent ->
+                    dismissProgress.snapTo(backEvent.progress)
+                }
+                handleClose()
+            } catch (e: Exception) {
+                scope.launch {
+                    dismissProgress.animateTo(
+                        0f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioLowBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    )
+                }
+            }
+        }
+    } else {
+        BackHandler(enabled = !viewModel.showLyricsSheet, onBack = handleClose)
+    }
 
     val context = LocalContext.current
     val prefs = remember { PlayerPreferences(context) }
@@ -805,13 +918,13 @@ fun NewPlayerScreen(
     } else null
     var showLyricsButtonEnabled by remember { mutableStateOf(prefs.getShowLyricsButtonEnabled()) }
     var waveformCommentsEnabled by remember { mutableStateOf(prefs.getWaveformCommentsEnabled()) }
-    var playerProgressMode by remember { mutableStateOf(prefs.getPlayerProgressMode()) }
+    var playerProgressMode by remember(forceSoundCloud) { mutableStateOf(prefs.getPlayerProgressMode()) }
     DisposableEffect(Unit) {
         val sharedPrefs = context.getSharedPreferences("player_state", Context.MODE_PRIVATE)
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             if (key == "show_lyrics_button_enabled") {
                 showLyricsButtonEnabled = prefs.getShowLyricsButtonEnabled()
-            } else if (key == "waveform_comments_enabled" || key == PlayerPreferences.KEY_PLAYER_PROGRESS_MODE) {
+            } else if (key == "waveform_comments_enabled" || key == PlayerPreferences.KEY_PLAYER_PROGRESS_MODE || key == PlayerPreferences.KEY_PLAYER_DESIGN) {
                 waveformCommentsEnabled = prefs.getWaveformCommentsEnabled()
                 playerProgressMode = prefs.getPlayerProgressMode()
             } else if (key == PlayerPreferences.KEY_PLAYER_STYLE) {
@@ -843,7 +956,6 @@ fun NewPlayerScreen(
     )
     var showEffectsSheet by remember { mutableStateOf(false) }
     var showQueueSheet by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
 
     val animatedColor by animateColorAsState(
         targetValue = viewModel.backgroundColor,
@@ -851,13 +963,68 @@ fun NewPlayerScreen(
         label = "backgroundColor"
     )
 
+    val pProgress = dismissProgress.value
+    val clampedProgress = if (pProgress.isFinite()) pProgress.coerceIn(0f, 1f) else 0f
+    val predictiveScaleX = if (pProgress.isFinite()) (1f - (clampedProgress * 0.06f)).coerceIn(0.8f, 1f) else 1f
+    val predictiveScaleY = if (pProgress.isFinite()) (1f - (clampedProgress * 0.04f)).coerceIn(0.8f, 1f) else 1f
+    val predictiveTranslationY = if (pProgress.isFinite()) (pProgress.coerceAtLeast(0f) * dismissTargetY) else 0f
+    val predictiveCorner = (clampedProgress * 32.dp.value).coerceAtLeast(0f).dp
+
+    val verticalDragModifier = Modifier.pointerInput(dismissTargetY) {
+        detectVerticalDragGestures(
+            onDragEnd = {
+                if (dismissProgress.value > 0.18f) {
+                    handleClose()
+                } else {
+                    scope.launch {
+                        dismissProgress.animateTo(
+                            0f,
+                            spring(
+                                dampingRatio = Spring.DampingRatioLowBouncy,
+                                stiffness = Spring.StiffnessMediumLow
+                            )
+                        )
+                    }
+                }
+            },
+            onDragCancel = {
+                scope.launch {
+                    dismissProgress.animateTo(
+                        0f,
+                        spring(
+                            dampingRatio = Spring.DampingRatioLowBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    )
+                }
+            },
+            onVerticalDrag = { change, dragAmount ->
+                if (dragAmount > 0 || dismissProgress.value > 0f) {
+                    change.consume()
+                    val delta = dragAmount / dismissTargetY
+                    scope.launch {
+                        dismissProgress.snapTo(
+                            (dismissProgress.value + delta).coerceIn(0f, 1f)
+                        )
+                    }
+                }
+            }
+        )
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(if (isBlurMode) Color.Black else MaterialTheme.colorScheme.background)
-            .pointerInput(Unit) {
-                detectTapGestures(onTap = {})
+            .graphicsLayer {
+                scaleX = predictiveScaleX
+                scaleY = predictiveScaleY
+                translationY = predictiveTranslationY
+                transformOrigin = TransformOrigin(0.5f, 1.0f)
+                shape = RoundedCornerShape(predictiveCorner)
+                clip = clampedProgress > 0.001f
+                alpha = (1f - (clampedProgress * 0.15f)).coerceIn(0f, 1f)
             }
+            .background(if (isBlurMode) Color.Black else MaterialTheme.colorScheme.background)
     ) {
         when (backgroundStyle) {
             PlayerBackgroundStyle.BLUR -> {
@@ -946,22 +1113,20 @@ fun NewPlayerScreen(
             if (isPhoneLandscape) {
                 PhoneLandscapePlayerView(
                     viewModel = viewModel,
-                    onClose = onClose,
+                    onClose = handleClose,
                     onEffectsClick = { showEffectsSheet = true },
                     onQueueClick = { showQueueSheet = true },
                     mainContentColor = mainContentColor,
                     subContentColor = subContentColor,
                     iconTint = iconTint,
                     animatedColor = animatedColor,
-                    isBlurMode = isBlurMode
+                    isBlurMode = isBlurMode,
+                    verticalDragModifier = verticalDragModifier
                 )
             } else if (windowSizeInfo.isTablet) {
                 TabletFullScreenPlayerView(
                     viewModel = viewModel,
-                    onClose = {
-                        viewModel.isPlayerExpanded = false
-                        viewModel.isSidePlayerOpen = false
-                    },
+                    onClose = handleClose,
                     onToggleSplitMode = {
                         viewModel.isPlayerExpanded = false
                         viewModel.isSidePlayerOpen = true
@@ -970,24 +1135,30 @@ fun NewPlayerScreen(
                     subContentColor = subContentColor,
                     iconTint = iconTint,
                     animatedColor = animatedColor,
-                    isBlurMode = isBlurMode
+                    isBlurMode = isBlurMode,
+                    modifier = verticalDragModifier
                 )
             } else if (forceSoundCloud == true || (forceSoundCloud == null && playerProgressMode == PlayerProgressMode.SOUNDCLOUD)) {
                 SoundCloudPlayerView(
                     viewModel = viewModel,
-                    onClose = onClose,
+                    onClose = handleClose,
                     onEffectsClick = { showEffectsSheet = true },
                     onQueueClick = { showQueueSheet = true },
-                    animatedColor = animatedColor
+                    animatedColor = animatedColor,
+                    verticalDragModifier = verticalDragModifier
                 )
             } else {
                 Column(
                     modifier = Modifier.fillMaxSize().systemBarsPadding(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Box(modifier = Modifier.padding(horizontal = 24.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = 24.dp)
+                            .then(verticalDragModifier)
+                    ) {
                         PlayerHeader(
-                            onClose = onClose,
+                            onClose = handleClose,
                             viewModel = viewModel,
                             contentColor = mainContentColor,
                             subContentColor = subContentColor,
@@ -1000,7 +1171,12 @@ fun NewPlayerScreen(
                             } else null
                         )
                     }
-                    Spacer(modifier = Modifier.weight(1f))
+                    Spacer(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .then(verticalDragModifier)
+                    )
 
                     val pagerState = androidx.compose.foundation.pager.rememberPagerState(
                         initialPage = viewModel.currentQueueIndex.coerceAtLeast(0),
@@ -1038,7 +1214,9 @@ fun NewPlayerScreen(
                     )
 
                     Box(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(if (!showLyrics) verticalDragModifier else Modifier),
                         contentAlignment = Alignment.Center
                     ) {
                         Box(modifier = Modifier.fillMaxWidth().alpha(coverAlpha).zIndex(if (showLyrics) 0f else 1f)) {
@@ -1061,7 +1239,7 @@ fun NewPlayerScreen(
                                             )
                                             .clip(RoundedCornerShape(20.dp))
                                             .background(MaterialTheme.colorScheme.surfaceVariant)
-                                    ) {
+                                     ) {
                                         AnimatedArtwork(
                                             artworkUrl = pageTrack.fullResArtwork,
                                             animatedCoverUrl = if (pageTrack.id == track.id) viewModel.currentAnimatedCoverUrl else null,
@@ -1166,30 +1344,45 @@ fun NewPlayerScreen(
 
                                             Row(
                                                 verticalAlignment = Alignment.CenterVertically,
-                                                modifier = Modifier.clickable {
-                                                    viewModel.navigateToTrackArtist(track)
-                                                }
+                                                modifier = Modifier.fillMaxWidth()
                                             ) {
-                                                PremiumMarqueeText(
-                                                    text = track.displayArtist.ifBlank {
-                                                        stringResource(R.string.unknown_artist)
-                                                    },
-                                                    style = MaterialTheme.typography.titleMedium,
-                                                    color = subContentColor,
-                                                    edgeGradientWidth = 16.dp,
-                                                    modifier = Modifier.weight(1f, fill = false)
-                                                )
-
-                                                val isAnyVerified = track.user?.verified == true || track.artists?.any { it.verified } == true
-                                                if (isAnyVerified) {
-                                                    Spacer(Modifier.width(4.dp))
-                                                    Icon(
-                                                        imageVector = Icons.Rounded.Verified,
-                                                        contentDescription = null,
-                                                        tint = MaterialTheme.colorScheme.primary,
-                                                        modifier = Modifier.size(16.dp)
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier
+                                                        .weight(1f, fill = false)
+                                                        .clickable {
+                                                            viewModel.navigateToTrackArtist(track)
+                                                        }
+                                                ) {
+                                                    PremiumMarqueeText(
+                                                        text = track.displayArtist.ifBlank {
+                                                            stringResource(R.string.unknown_artist)
+                                                        },
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        color = subContentColor,
+                                                        edgeGradientWidth = 16.dp,
+                                                        modifier = Modifier.weight(1f, fill = false)
                                                     )
+
+                                                    val isAnyVerified = track.user?.verified == true || track.artists?.any { it.verified } == true
+                                                    if (isAnyVerified) {
+                                                        Spacer(Modifier.width(4.dp))
+                                                        Icon(
+                                                            imageVector = Icons.Rounded.Verified,
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.primary,
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                    }
                                                 }
+
+                                                val aiResult by com.alananasss.kittytune.audio.ai.AiDetectionManager.result.collectAsState()
+                                                com.alananasss.kittytune.ui.player.ai.AiDetectionBadge(
+                                                    result = aiResult,
+                                                    textColor = mainContentColor,
+                                                    onClick = { viewModel.showAiDetectionSheet = true },
+                                                    modifier = Modifier.padding(start = 8.dp)
+                                                )
                                             }
                                         }
                                     }
@@ -1280,6 +1473,24 @@ fun NewPlayerScreen(
                                         )
                                     }
                                 }
+
+                                if (viewModel.isYourMixActive) {
+                                    Spacer(Modifier.width(4.dp))
+                                    IconButton(
+                                        onClick = {
+                                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                            viewModel.dislikeCurrentTrackInMix()
+                                        },
+                                        modifier = Modifier.size(44.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.ThumbDown,
+                                            contentDescription = stringResource(R.string.mix_dislike),
+                                            tint = iconTint.copy(alpha = 0.8f),
+                                            modifier = Modifier.size(26.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -1296,7 +1507,7 @@ fun NewPlayerScreen(
                         if (playerProgressMode == PlayerProgressMode.HYBRID_WAVEFORM) {
                             WaveformPlayerProgress(viewModel = viewModel, textColor = mainContentColor)
                         } else {
-                            PlayerProgress(viewModel, mainContentColor)
+                            ClassicPlayerProgress(viewModel = viewModel, textColor = mainContentColor)
                         }
                     }
 
@@ -1348,6 +1559,7 @@ fun NewPlayerScreen(
 
         SleepTimerDialog(viewModel)
         TrackTrimDialog(viewModel)
+        DjDevDebugSheet(viewModel)
     }
 }
 
@@ -1425,7 +1637,7 @@ fun PlayerHeader(
     }
 }
 
-data class DockOptionItem(val icon: ImageVector, val text: String, val onClick: () -> Unit)
+data class DockOptionItem(val icon: ImageVector, val text: String, val id: String = "", val onClick: () -> Unit)
 
 @Composable
 fun SelectArtistDialog(viewModel: PlayerViewModel) {
@@ -1824,6 +2036,7 @@ fun SocialProofBanner(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MenuSheetContent(viewModel: PlayerViewModel) {
     val track = viewModel.trackForMenu ?: viewModel.currentTrack ?: return
@@ -1913,7 +2126,8 @@ fun MenuSheetContent(viewModel: PlayerViewModel) {
             add(
                 DockOptionItem(
                     if (isTrackLiked) Icons.Rounded.Favorite else Icons.Outlined.FavoriteBorder,
-                    if (isTrackLiked) stringResource(R.string.action_unlike) else stringResource(R.string.player_like_action)
+                    if (isTrackLiked) stringResource(R.string.action_unlike) else stringResource(R.string.player_like_action),
+                    id = "like"
                 ) {
                     viewModel.toggleTrackLike(track)
                 }
@@ -1923,31 +2137,36 @@ fun MenuSheetContent(viewModel: PlayerViewModel) {
             add(
                 DockOptionItem(
                     Icons.Rounded.Shuffle,
-                    stringResource(R.string.menu_shuffle)
+                    stringResource(R.string.menu_shuffle),
+                    id = "shuffle"
                 ) { viewModel.toggleShuffle() })
             add(
                 DockOptionItem(
                     Icons.Rounded.Repeat,
-                    stringResource(R.string.menu_repeat)
+                    stringResource(R.string.menu_repeat),
+                    id = "repeat"
                 ) { viewModel.toggleRepeatMode() })
         }
         if (!viewModel.isMenuContextFromPlayer) {
             add(
                 DockOptionItem(
                     Icons.AutoMirrored.Rounded.PlaylistPlay,
-                    stringResource(R.string.menu_play_next)
+                    stringResource(R.string.menu_play_next),
+                    id = "play_next"
                 ) { viewModel.insertNext(listOf(track)); viewModel.showMenuSheet = false })
             add(
                 DockOptionItem(
                     Icons.AutoMirrored.Rounded.QueueMusic,
-                    stringResource(R.string.menu_add_queue)
+                    stringResource(R.string.menu_add_queue),
+                    id = "add_queue"
                 ) { viewModel.addToQueue(listOf(track)); viewModel.showMenuSheet = false })
         }
         if (!isOfflineMode && track.source != "youtube" && !isSpotify) {
             add(
                 DockOptionItem(
                     Icons.AutoMirrored.Rounded.Comment,
-                    stringResource(R.string.menu_comments)
+                    stringResource(R.string.menu_comments),
+                    id = "comments"
                 ) { viewModel.openComments(track) })
         }
         if (!isOfflineMode && track.source != "youtube" && !isSpotify) {
@@ -1955,16 +2174,17 @@ fun MenuSheetContent(viewModel: PlayerViewModel) {
                 add(
                     DockOptionItem(
                         Icons.Rounded.Repeat,
-                        stringResource(R.string.menu_reposted)
+                        stringResource(R.string.menu_reposted),
+                        id = "repost"
                     ) { showDeleteRepostConfirm = true })
             } else {
-                add(DockOptionItem(Icons.Rounded.Repeat, stringResource(R.string.menu_repost)) {
+                add(DockOptionItem(Icons.Rounded.Repeat, stringResource(R.string.menu_repost), id = "repost") {
                     showRepostDialog = true
                 })
             }
         }
         if (!isOfflineMode && track.source != "youtube") {
-            add(DockOptionItem(Icons.Rounded.Info, stringResource(R.string.menu_details)) {
+            add(DockOptionItem(Icons.Rounded.Info, stringResource(R.string.menu_details), id = "details") {
                 viewModel.openTrackDetails(
                     track
                 )
@@ -1979,19 +2199,30 @@ fun MenuSheetContent(viewModel: PlayerViewModel) {
             add(
                 DockOptionItem(
                     Icons.Rounded.Edit,
-                    stringResource(R.string.menu_edit_track)
+                    stringResource(R.string.menu_edit_track),
+                    id = "edit_track"
                 ) {
                     viewModel.navigateToEditTrack(track)
                 }
             )
         }
-        add(DockOptionItem(Icons.Rounded.Description, stringResource(R.string.player_lyrics)) {
+        add(DockOptionItem(Icons.Rounded.Description, stringResource(R.string.player_lyrics), id = "lyrics") {
             viewModel.openLyrics(
                 track,
                 forceSheet = true
             )
         })
-        add(DockOptionItem(Icons.Default.Add, stringResource(R.string.menu_add_playlist)) {
+        val isDuetBlacklisted = viewModel.isTrackDuetBlacklisted(track.id)
+        add(
+            DockOptionItem(
+                if (isDuetBlacklisted) Icons.Rounded.MicOff else Icons.Rounded.RecordVoiceOver,
+                if (isDuetBlacklisted) stringResource(R.string.menu_enable_duet_lyrics) else stringResource(R.string.menu_disable_duet_lyrics),
+                id = "duet_lyrics_blacklist"
+            ) {
+                viewModel.toggleTrackDuetBlacklist(track.id)
+            }
+        )
+        add(DockOptionItem(Icons.Default.Add, stringResource(R.string.menu_add_playlist), id = "add_playlist") {
             viewModel.showMenuSheet = false; viewModel.showAddToPlaylistSheet = true
         })
 
@@ -2000,7 +2231,8 @@ fun MenuSheetContent(viewModel: PlayerViewModel) {
             add(
                 DockOptionItem(
                     Icons.Rounded.Album,
-                    stringResource(R.string.menu_go_album)
+                    stringResource(R.string.menu_go_album),
+                    id = "go_album"
                 ) {
                     viewModel.showMenuSheet = false
                     viewModel.navigateToAlbum(albumId)
@@ -2012,7 +2244,8 @@ fun MenuSheetContent(viewModel: PlayerViewModel) {
             add(
                 DockOptionItem(
                     Icons.Default.Person,
-                    stringResource(R.string.menu_go_artist)
+                    stringResource(R.string.menu_go_artist),
+                    id = "go_artist"
                 ) {
                     viewModel.showMenuSheet = false
                     viewModel.navigateToTrackArtist(track)
@@ -2020,7 +2253,7 @@ fun MenuSheetContent(viewModel: PlayerViewModel) {
             )
         }
         if (!isOfflineMode) {
-            add(DockOptionItem(Icons.Rounded.Radio, stringResource(R.string.menu_track_radio)) {
+            add(DockOptionItem(Icons.Rounded.Radio, stringResource(R.string.menu_track_radio), id = "track_radio") {
                 if (track.source == "youtube") {
                     viewModel.startYoutubeRadio(track)
                 } else {
@@ -2032,33 +2265,129 @@ fun MenuSheetContent(viewModel: PlayerViewModel) {
             add(
                 DockOptionItem(
                     Icons.Outlined.Share,
-                    stringResource(R.string.btn_share)
+                    stringResource(R.string.btn_share),
+                    id = "share"
                 ) { viewModel.shareTrack(track) })
+            add(
+                DockOptionItem(
+                    Icons.Outlined.PhotoLibrary,
+                    stringResource(R.string.share_card_title),
+                    id = "share_card"
+                ) { viewModel.openShareCard(track) })
         }
         if (viewModel.menuContextPlaylistId != null && viewModel.menuContextPlaylistId != -2L) {
             add(
                 DockOptionItem(
                     Icons.Outlined.Delete,
-                    stringResource(R.string.menu_remove)
+                    stringResource(R.string.menu_remove),
+                    id = "remove_from_playlist"
                 ) { viewModel.removeFromContextPlaylist(viewModel.menuContextPlaylistId!!, track) })
         }
         if (viewModel.isMenuContextFromPlayer) {
             add(
                 DockOptionItem(
                     Icons.Rounded.Bedtime,
-                    stringResource(R.string.sleep_timer_title)
+                    stringResource(R.string.sleep_timer_title),
+                    id = "sleep_timer"
                 ) { viewModel.showSleepTimerDialog = true })
             // Only for the track that is playing: the editor's whole method is "listen, mark here", so it
             // needs a playhead to mark from (issue #33).
             add(
                 DockOptionItem(
                     Icons.Rounded.ContentCut,
-                    stringResource(R.string.trim_title)
+                    stringResource(R.string.trim_title),
+                    id = "trim"
                 ) {
                     viewModel.showMenuSheet = false
                     viewModel.showTrimDialog = true
                 })
+            if (com.alananasss.kittytune.BuildConfig.DEBUG) {
+                add(
+                    DockOptionItem(
+                        Icons.Rounded.GraphicEq,
+                        stringResource(R.string.dj_flow_title),
+                        id = "dj_flow"
+                    ) {
+                        viewModel.showMenuSheet = false
+                        viewModel.showDjDebugSheet = true
+                    })
+            }
         }
+        if (!isLocalFile) {
+            val trackId = track.id
+            val blockedTrackIds by com.alananasss.kittytune.data.BlockManager.blockedTrackIdsFlow.collectAsState()
+            val isTrackBlocked = track.id in blockedTrackIds
+            val artistId = track.user?.id
+            val blockedArtistIds by com.alananasss.kittytune.data.BlockManager.blockedArtistIdsFlow.collectAsState()
+            val isArtistBlocked = artistId?.let { it in blockedArtistIds } ?: false
+            val context = LocalContext.current
+            add(
+                DockOptionItem(
+                    if (isTrackBlocked) Icons.Rounded.VisibilityOff else Icons.Rounded.Block,
+                    if (isTrackBlocked) stringResource(R.string.menu_unblock_track) else stringResource(R.string.menu_block_track),
+                    id = "block_track"
+                ) {
+                    if (isTrackBlocked) {
+                        com.alananasss.kittytune.data.BlockManager.unblockTrack(track.id)
+                        Toast.makeText(context, context.getString(R.string.track_unhidden_toast), Toast.LENGTH_SHORT).show()
+                    } else {
+                        com.alananasss.kittytune.data.BlockManager.blockTrack(
+                            track,
+                            currentlyPlayingId = viewModel.currentTrack?.id
+                        )
+                        Toast.makeText(context, context.getString(R.string.track_hidden_toast), Toast.LENGTH_SHORT).show()
+                    }
+                    viewModel.showMenuSheet = false
+                }
+            )
+            if (artistId != null && track.user?.username != null) {
+                add(
+                    DockOptionItem(
+                        if (isArtistBlocked) Icons.Rounded.PersonAdd else Icons.Rounded.PersonOff,
+                        if (isArtistBlocked) stringResource(R.string.menu_unblock_artist) else stringResource(R.string.menu_block_artist),
+                        id = "block_artist"
+                    ) {
+                        if (isArtistBlocked) {
+                            com.alananasss.kittytune.data.BlockManager.unblockArtist(artistId)
+                            Toast.makeText(context, context.getString(R.string.artist_unblocked_toast), Toast.LENGTH_SHORT).show()
+                        } else {
+                            com.alananasss.kittytune.data.BlockManager.blockArtist(
+                                artistId = artistId,
+                                artistName = track.user!!.username ?: "",
+                                avatarUrl = track.user.avatarUrl,
+                                source = track.source ?: "soundcloud",
+                                currentlyPlayingTrack = viewModel.currentTrack
+                            )
+                            Toast.makeText(context, context.getString(R.string.artist_blocked_toast), Toast.LENGTH_SHORT).show()
+                        }
+                        viewModel.showMenuSheet = false
+                    }
+                )
+            }
+            val isDownloading = DownloadManager.isTrackDownloading(trackId)
+            add(
+                DockOptionItem(
+                    if (isDownloaded) Icons.Default.Delete else if (isDownloading) Icons.Outlined.Cancel else Icons.Rounded.Download,
+                    if (isDownloaded) stringResource(R.string.btn_delete) else if (isDownloading) stringResource(R.string.btn_cancel) else stringResource(R.string.btn_download),
+                    id = "download"
+                ) {
+                    if (isDownloaded) {
+                        showDeleteDialog = true
+                    } else if (isDownloading) {
+                        DownloadManager.cancelDownload(trackId)
+                    } else {
+                        viewModel.downloadTrack(track)
+                    }
+                }
+            )
+        }
+    }
+
+    val menuPrefs = remember { com.alananasss.kittytune.data.local.PlayerPreferences(context) }
+    val hiddenMenuTiles = remember(viewModel.showMenuSheet) { menuPrefs.getHiddenMenuTiles(com.alananasss.kittytune.data.local.PlayerPreferences.MENU_TRACK) }
+    val menuOrder = remember(viewModel.showMenuSheet) { menuPrefs.getMenuTileOrder(com.alananasss.kittytune.data.local.PlayerPreferences.MENU_TRACK) }
+    val arrangedGridItems = remember(gridItems, hiddenMenuTiles, menuOrder) {
+        com.alananasss.kittytune.ui.player.MenuTiles.arrange(gridItems, menuOrder, hiddenMenuTiles) { it.id }
     }
 
     LazyVerticalGrid(
@@ -2121,7 +2450,7 @@ fun MenuSheetContent(viewModel: PlayerViewModel) {
                 }
             }
         }
-        items(gridItems) { item ->
+        items(arrangedGridItems) { item ->
             val activeColor = MaterialTheme.colorScheme.primary
             val inactiveColor = MaterialTheme.colorScheme.onSurface
             var tint = inactiveColor
@@ -2130,6 +2459,7 @@ fun MenuSheetContent(viewModel: PlayerViewModel) {
             if (item.text == stringResource(R.string.action_unlike)) tint = activeColor
             if (item.text == stringResource(R.string.menu_shuffle) && viewModel.shuffleEnabled) tint = activeColor
             if (item.text == stringResource(R.string.menu_reposted)) tint = activeColor
+            if (item.text == stringResource(R.string.menu_enable_duet_lyrics)) tint = activeColor
             if (item.text == stringResource(R.string.menu_repeat)) {
                 if (viewModel.repeatMode != com.alananasss.kittytune.ui.player.RepeatMode.NONE) tint = activeColor
                 text = when (viewModel.repeatMode) {
@@ -2142,10 +2472,38 @@ fun MenuSheetContent(viewModel: PlayerViewModel) {
                 tint = activeColor
                 text = viewModel.formatSleepTimerRemaining()
             }
+            if (item.id == "download" && isDownloaded) {
+                tint = MaterialTheme.colorScheme.error
+            }
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.clickable { item.onClick() }) {
-                Icon(item.icon, null, modifier = Modifier.size(32.dp), tint = tint)
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { item.onClick() }
+                    .padding(vertical = 4.dp, horizontal = 2.dp)
+            ) {
+                if (item.id == "download") {
+                    val trackId = track.id
+                    val isDownloading = DownloadManager.isTrackDownloading(trackId)
+                    val downloadProgressVal = downloadProgress[trackId]
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(32.dp)) {
+                        if (isDownloading) {
+                            val animatedProgress by animateFloatAsState(
+                                targetValue = (downloadProgressVal ?: 0) / 100f,
+                                label = "downloadProgress"
+                            )
+                            CircularWavyProgressIndicator(
+                                progress = { animatedProgress },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            Icon(Icons.Outlined.Cancel, null, modifier = Modifier.size(18.dp))
+                        } else {
+                            Icon(item.icon, null, modifier = Modifier.fillMaxSize(), tint = tint)
+                        }
+                    }
+                } else {
+                    Icon(item.icon, null, modifier = Modifier.size(32.dp), tint = tint)
+                }
                 Spacer(Modifier.height(8.dp))
                 Text(
                     text = text,
@@ -2155,50 +2513,7 @@ fun MenuSheetContent(viewModel: PlayerViewModel) {
                 )
             }
         }
-        if (!isLocalFile) {
-            item {
-                val trackId = track.id
-                val isDownloading = DownloadManager.isTrackDownloading(trackId)
-                val downloadProgressVal = downloadProgress[trackId]
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable {
-                    if (isDownloaded) showDeleteDialog = true else if (isDownloading) DownloadManager.cancelDownload(
-                        trackId
-                    ) else viewModel.downloadTrack(track)
-                }) {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(32.dp)) {
-                        if (isDownloading) {
-                            val animatedProgress by animateFloatAsState(
-                                targetValue = (downloadProgressVal ?: 0) / 100f,
-                                label = "progress"
-                            )
-                            CircularWavyProgressIndicator(
-                                progress = { animatedProgress },
-                                modifier = Modifier.fillMaxSize()
-                            )
-                            Icon(Icons.Outlined.Cancel, null, modifier = Modifier.size(18.dp))
-                        } else {
-                            val icon = if (isDownloaded) Icons.Default.Delete else Icons.Rounded.Download
-                            val tint =
-                                if (isDownloaded) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
-                            Icon(icon, null, modifier = Modifier.fillMaxSize(), tint = tint)
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    val textLabel =
-                        if (isDownloaded) stringResource(R.string.btn_delete) else if (isDownloading) stringResource(R.string.btn_cancel) else stringResource(
-                            R.string.btn_download
-                        )
-                    val textColor =
-                        if (isDownloaded) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
-                    Text(
-                        textLabel,
-                        style = MaterialTheme.typography.labelMedium,
-                        textAlign = TextAlign.Center,
-                        color = textColor
-                    )
-                }
-            }
-        }
+
     }
 }
 
@@ -2516,7 +2831,7 @@ fun TrackSelectionContent(
                             }
 
                             AnimatedVisibility(visible = isSearchExpanded) {
-                                OutlinedTextField(
+                                KittyOutlinedTextField(
                                     value = searchQuery,
                                     onValueChange = { searchQuery = it },
                                     placeholder = { Text(stringResource(R.string.search_hint)) },
@@ -2674,7 +2989,7 @@ fun TrackSelectionContent(
                                     )
                                 }
 
-                                val trackDuration = track.durationMs ?: track.fullDuration ?: 0L
+                                val trackDuration = track.actualDurationMs
                                 if (trackDuration > 0) {
                                     Spacer(Modifier.width(8.dp))
                                     Text(
@@ -2748,7 +3063,7 @@ fun TrackSelectionContent(
         }
 
         AnimatedVisibility(visible = isSearchExpanded) {
-            OutlinedTextField(
+            KittyOutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 placeholder = { Text(stringResource(R.string.search_hint)) },
@@ -2870,7 +3185,7 @@ fun TrackSelectionContent(
                         )
                     }
 
-                    val trackDuration = track.durationMs ?: track.fullDuration ?: 0L
+                    val trackDuration = track.actualDurationMs
                     if (trackDuration > 0) {
                         Spacer(Modifier.width(8.dp))
                         Text(
@@ -3272,7 +3587,13 @@ fun QueueContent(
                             .height(72.dp)
                             .shadow(elevation)
                             .background(backgroundColor)
-                            .clickable { viewModel.skipToQueueItem(index) }
+                            .combinedClickable(
+                                onClick = { viewModel.skipToQueueItem(index) },
+                                onLongClick = {
+                                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                    viewModel.showTrackOptions(track, fromPlayer = true)
+                                }
+                            )
                             .padding(horizontal = 24.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -3292,14 +3613,16 @@ fun QueueContent(
                                 style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
                                 color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = track.user?.username ?: stringResource(R.string.generic_artist),
+                                    text = track.displayArtist.ifBlank { track.user?.username ?: stringResource(R.string.generic_artist) },
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 if (track.user?.verified == true) {
                                     Spacer(Modifier.width(4.dp))
@@ -3342,13 +3665,13 @@ fun PlayerProgress(viewModel: PlayerViewModel, textColor: Color) {
     val context = LocalContext.current
     val prefs = remember { PlayerPreferences(context) }
 
-    var waveformCommentsEnabled by remember { mutableStateOf(prefs.getWaveformCommentsEnabled()) }
+    var progressMode by remember { mutableStateOf(prefs.getPlayerProgressMode()) }
 
     DisposableEffect(Unit) {
         val sharedPrefs = context.getSharedPreferences("player_state", Context.MODE_PRIVATE)
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == "waveform_comments_enabled") {
-                waveformCommentsEnabled = prefs.getWaveformCommentsEnabled()
+            if (key == PlayerPreferences.KEY_PLAYER_PROGRESS_MODE || key == "waveform_comments_enabled" || key == PlayerPreferences.KEY_PLAYER_DESIGN) {
+                progressMode = prefs.getPlayerProgressMode()
             }
         }
         sharedPrefs.registerOnSharedPreferenceChangeListener(listener)
@@ -3356,7 +3679,7 @@ fun PlayerProgress(viewModel: PlayerViewModel, textColor: Color) {
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        if (waveformCommentsEnabled) {
+        if (progressMode == PlayerProgressMode.HYBRID_WAVEFORM) {
             WaveformPlayerProgress(viewModel = viewModel, textColor = textColor)
             Box(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), contentAlignment = Alignment.Center) {
                 com.alananasss.kittytune.ui.player.automix.AutomixBadge(textColor = textColor)
@@ -3568,11 +3891,18 @@ private fun ClassicPlayerProgress(viewModel: PlayerViewModel, textColor: Color) 
                 style = MaterialTheme.typography.labelSmall,
                 color = textColor.copy(alpha = 0.7f)
             )
-            com.alananasss.kittytune.ui.player.automix.AutomixBadge(textColor = textColor)
+            val showRemaining by prefs.getShowRemainingTimeFlow().collectAsState(initial = prefs.getShowRemainingTime())
+            val curPos = if (isDragging) dragPosition.toLong() else progressState.value.toLong()
             Text(
-                text = makeTimeString(totalDuration.toLong()),
+                text = if (showRemaining) com.alananasss.kittytune.utils.makeRemainingTimeString(curPos, totalDuration.toLong()) else makeTimeString(totalDuration.toLong()),
                 style = MaterialTheme.typography.labelSmall,
-                color = textColor.copy(alpha = 0.7f)
+                color = textColor.copy(alpha = 0.7f),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable {
+                        prefs.setShowRemainingTime(!showRemaining)
+                    }
+                    .padding(horizontal = 8.dp, vertical = 8.dp)
             )
         }
     }
@@ -3674,7 +4004,38 @@ fun WaveformPlayerProgress(
         }
     }
 
-    val accentColor = Color(0xFFFF5500)
+    var waveformColorMode by remember { mutableStateOf(prefs.getWaveformColorMode()) }
+    var customWaveformColor by remember { mutableIntStateOf(prefs.getWaveformCustomColor()) }
+
+    DisposableEffect(context) {
+        val sharedPrefs = context.getSharedPreferences("player_state", Context.MODE_PRIVATE)
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == PlayerPreferences.KEY_WAVEFORM_COLOR_MODE) {
+                waveformColorMode = prefs.getWaveformColorMode()
+            } else if (key == PlayerPreferences.KEY_WAVEFORM_CUSTOM_COLOR) {
+                customWaveformColor = prefs.getWaveformCustomColor()
+            }
+        }
+        sharedPrefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose {
+            sharedPrefs.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
+
+    val themePrimary = MaterialTheme.colorScheme.primary
+    val targetAccentColor = remember(waveformColorMode, customWaveformColor, viewModel.backgroundColor, themePrimary) {
+        when (waveformColorMode) {
+            WaveformColorMode.SOUNDCLOUD -> Color(0xFFFF5500)
+            WaveformColorMode.COVER_ART -> viewModel.backgroundColor
+            WaveformColorMode.APP_THEME -> themePrimary
+            WaveformColorMode.CUSTOM -> Color(customWaveformColor)
+        }
+    }
+    val accentColor by animateColorAsState(
+        targetValue = targetAccentColor,
+        animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
+        label = "waveformAccentColor"
+    )
     val inactiveBarColor = Color(0xCCFFFFFF)
 
     val fallbackBars = remember {
@@ -3984,6 +4345,12 @@ fun WaveformPlayerProgress(
             }
             if (!isDragging) {
                 val badgeOffsetY = with(density) { (134.dp.toPx() * 0.60f - 11.dp.toPx()).toDp() }
+                val showRemaining by prefs.getShowRemainingTimeFlow().collectAsState(initial = prefs.getShowRemainingTime())
+                val durStr = if (showRemaining) {
+                    com.alananasss.kittytune.utils.makeRemainingTimeString(currentPositionMs.toLong(), totalDuration.toLong())
+                } else {
+                    makeTimeString(totalDuration.toLong())
+                }
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
@@ -3992,10 +4359,14 @@ fun WaveformPlayerProgress(
                             color = Color(0xDD000000),
                             shape = RoundedCornerShape(3.dp)
                         )
+                        .clip(RoundedCornerShape(3.dp))
+                        .clickable {
+                            prefs.setShowRemainingTime(!showRemaining)
+                        }
                         .padding(horizontal = 7.dp, vertical = 2.dp)
                 ) {
                     Text(
-                        text = "${makeTimeString(currentPositionMs.toLong())}  |  ${makeTimeString(totalDuration.toLong())}",
+                        text = "${makeTimeString(currentPositionMs.toLong())}  |  $durStr",
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold
@@ -4248,7 +4619,7 @@ fun PlayerControls(
                     .clickable(
                         interactionSource = nextInteractionSource,
                         indication = ripple()
-                    ) { viewModel.playNext() },
+                    ) { viewModel.requestSkipNext() },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(Icons.Rounded.SkipNext, null, tint = sideButtonContentColor, modifier = Modifier.size(32.dp))
@@ -4405,16 +4776,13 @@ private fun PlayerSlotButton(
     }
 
     if (iconVector != null) {
-        val containerColor by animateColorAsState(
-            targetValue = if (isSlotActive) animatedMainColor else pillContainerColor,
-            animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
-            label = "slotContainerColor"
+        val activeFraction by animateFloatAsState(
+            targetValue = if (isSlotActive) 1f else 0f,
+            animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
+            label = "slotActiveFraction"
         )
-        val contentColor by animateColorAsState(
-            targetValue = if (isSlotActive) playIconColor else pillContentColor,
-            animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
-            label = "slotContentColor"
-        )
+        val containerColor = androidx.compose.ui.graphics.lerp(pillContainerColor, animatedMainColor, activeFraction)
+        val contentColor = androidx.compose.ui.graphics.lerp(pillContentColor, playIconColor, activeFraction)
 
         val clickModifier = if (effectiveSlot == PlayerActionButtonSlot.LYRICS) {
             Modifier.combinedClickable(
@@ -4433,7 +4801,10 @@ private fun PlayerSlotButton(
                         viewModel.showCommentsSheet = true
                     }
                     PlayerActionButtonSlot.SHARE -> {
-                        viewModel.currentTrack?.let { viewModel.shareTrack(it) }
+                        // The card sheet still carries the link, so nothing is lost for someone
+                        // who only wanted to send one - and it is reachable from the player now
+                        // rather than two taps deep in the overflow menu.
+                        viewModel.currentTrack?.let { viewModel.openShareCard(it) }
                     }
                     PlayerActionButtonSlot.QUEUE -> onQueueClick()
                     PlayerActionButtonSlot.AUDIO_FX -> onEffectsClick()
@@ -4510,8 +4881,10 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
     var showAsmrVocalDialog by remember { mutableStateOf(false) }
     var showNightDriveDialog by remember { mutableStateOf(false) }
     var showStudioEditSheet by remember { mutableStateOf(false) }
+    var showEqualizerSheet by remember { mutableStateOf(false) }
 
     val allEffects = getAudioFxDefinitions(
+        onOpenEqualizerSheet = { showEqualizerSheet = true },
         onOpenBassBoostDialog = { showBassBoostDialog = true },
         onOpenEarrapeDialog = { showEarrapeDialog = true },
         onOpenEightDDialog = { showEightDDialog = true },
@@ -7703,6 +8076,13 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
             )
         }
 
+        if (showEqualizerSheet) {
+            com.alananasss.kittytune.ui.player.audio.EqualizerSheet(
+                viewModel = viewModel,
+                onDismiss = { showEqualizerSheet = false }
+            )
+        }
+
         if (showStudioEditSheet) {
             com.alananasss.kittytune.ui.common.KittyModalBottomSheet(
                 onDismissRequest = { showStudioEditSheet = false },
@@ -7712,6 +8092,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                 AudioFxStudioSheet(
                     viewModel = viewModel,
                     allEffects = allEffects,
+                    onOpenEqualizerSheet = { showEqualizerSheet = true },
                     onOpenBassBoostDialog = { showBassBoostDialog = true },
                     onOpenEarrapeDialog = { showEarrapeDialog = true },
                     onOpenEightDDialog = { showEightDDialog = true },
@@ -7862,6 +8243,7 @@ data class AudioFxDefinition(
 
 @Composable
 fun getAudioFxDefinitions(
+    onOpenEqualizerSheet: () -> Unit,
     onOpenBassBoostDialog: () -> Unit,
     onOpenEarrapeDialog: () -> Unit,
     onOpenEightDDialog: () -> Unit,
@@ -7897,6 +8279,17 @@ fun getAudioFxDefinitions(
     onOpenNightDriveDialog: () -> Unit,
     onShowEarrapeWarning: () -> Unit
 ): List<AudioFxDefinition> = listOf(
+    AudioFxDefinition(
+        id = "equalizer",
+        titleRes = R.string.equalizer_title,
+        icon = Icons.Rounded.Equalizer,
+        categoryRes = R.string.category_power_eq,
+        isActive = { it.isEqualizerEnabled },
+        onToggle = { vm, _ -> vm.toggleEqualizer() },
+        onOpenDialog = onOpenEqualizerSheet,
+        activeColor = { MaterialTheme.colorScheme.primary },
+        activeContentColor = { MaterialTheme.colorScheme.onPrimary }
+    ),
     AudioFxDefinition(
         id = "bass_boost",
         titleRes = R.string.effect_bass_boost,
@@ -8283,6 +8676,7 @@ fun getAudioFxDefinitions(
 fun AudioFxStudioSheet(
     viewModel: PlayerViewModel,
     allEffects: List<AudioFxDefinition>,
+    onOpenEqualizerSheet: () -> Unit = {},
     onOpenBassBoostDialog: () -> Unit,
     onOpenEarrapeDialog: () -> Unit,
     onOpenEightDDialog: () -> Unit,
@@ -9356,7 +9750,7 @@ fun CommentsSheetContent(viewModel: PlayerViewModel, onClose: () -> Unit) {
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = track.user?.username ?: "",
+                                    text = track.displayArtist.ifBlank { track.user?.username ?: "" },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
@@ -9901,7 +10295,7 @@ fun DetailsSheetContent(track: Track, onClose: () -> Unit, onOpenComments: () ->
                 val formatText = if (bitrateStr.isNotEmpty()) "$fileFormatStr • $bitrateStr" else fileFormatStr
                 DetailInfoRow(stringResource(R.string.detail_format), formatText)
                 if (fileSizeStr.isNotEmpty()) DetailInfoRow(stringResource(R.string.detail_size), fileSizeStr)
-                DetailInfoRow(stringResource(R.string.detail_duration), makeTimeString(track.durationMs ?: 0L))
+                DetailInfoRow(stringResource(R.string.detail_duration), makeTimeString(track.actualDurationMs))
                 Spacer(Modifier.height(16.dp))
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 Spacer(Modifier.height(16.dp))
@@ -10210,12 +10604,12 @@ fun DetailsSheetContent(track: Track, onClose: () -> Unit, onOpenComments: () ->
                 if (!track.publisherMetadata?.albumTitle.isNullOrBlank()) {
                     DetailInfoRow(stringResource(R.string.profile_tab_albums), track.publisherMetadata!!.albumTitle!!)
                 }
-                DetailInfoRow(stringResource(R.string.detail_duration), makeTimeString(track.durationMs ?: 0L))
+                DetailInfoRow(stringResource(R.string.detail_duration), makeTimeString(track.actualDurationMs))
                 Spacer(Modifier.height(32.dp))
             }
         } else if (isVkTrack) {
             item {
-                DetailInfoRow(stringResource(R.string.detail_duration), makeTimeString(track.durationMs ?: 0L))
+                DetailInfoRow(stringResource(R.string.detail_duration), makeTimeString(track.actualDurationMs))
                 if (!track.publisherMetadata?.albumTitle.isNullOrBlank()) {
                     DetailInfoRow(
                         stringResource(R.string.profile_tab_albums),
@@ -10450,8 +10844,8 @@ fun formatNumber(count: Int): String {
     val k = count / 1000.0;
     val m = count / 1000000.0
     return when {
-        m >= 1.0 -> String.format(Locale.US, "%.1fM", m); k >= 1.0 -> String.format(
-            Locale.US,
+        m >= 1.0 -> String.format(Locale.getDefault(), "%.1fM", m); k >= 1.0 -> String.format(
+            Locale.getDefault(),
             "%.1fk",
             k
         ); else -> count.toString()
@@ -10509,7 +10903,57 @@ fun OldPlayerScreen(
     onClose: () -> Unit
 ) {
     val track = viewModel.currentTrack ?: return
-    BackHandler(enabled = !viewModel.showLyricsSheet, onBack = onClose)
+
+    val configuration = LocalConfiguration.current
+    val density = LocalDensity.current
+    val screenHeightPx = remember(configuration, density) {
+        with(density) { configuration.screenHeightDp.dp.toPx() }
+    }
+    val dismissTargetY = remember(screenHeightPx) {
+        screenHeightPx * 0.88f
+    }
+    val dismissProgress = remember { Animatable(0f) }
+
+    LaunchedEffect(viewModel.isPlayerExpanded) {
+        if (viewModel.isPlayerExpanded) {
+            dismissProgress.snapTo(0f)
+        }
+    }
+
+    val scope = rememberCoroutineScope()
+
+    val handleClose: () -> Unit = {
+        scope.launch {
+            dismissProgress.animateTo(
+                1f,
+                animationSpec = tween(150, easing = LinearEasing)
+            )
+            onClose()
+        }
+    }
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        PredictiveBackHandler(enabled = !viewModel.showLyricsSheet) { progressFlow ->
+            try {
+                progressFlow.collect { backEvent ->
+                    dismissProgress.snapTo(backEvent.progress)
+                }
+                handleClose()
+            } catch (e: Exception) {
+                scope.launch {
+                    dismissProgress.animateTo(
+                        0f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioLowBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    )
+                }
+            }
+        }
+    } else {
+        BackHandler(enabled = !viewModel.showLyricsSheet, onBack = handleClose)
+    }
 
     val context = LocalContext.current
     val prefs = remember { PlayerPreferences(context) }
@@ -10563,7 +11007,6 @@ fun OldPlayerScreen(
     )
     var showEffectsSheet by remember { mutableStateOf(false) }
     var showQueueSheet by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
 
     val animatedColor by animateColorAsState(
         targetValue = viewModel.backgroundColor,
@@ -10571,13 +11014,73 @@ fun OldPlayerScreen(
         label = "backgroundColor"
     )
 
+    val pProgress = dismissProgress.value
+    val clampedProgress = if (pProgress.isFinite()) pProgress.coerceIn(0f, 1f) else 0f
+    val predictiveScaleX = if (pProgress.isFinite()) (1f - (clampedProgress * 0.06f)).coerceIn(0.8f, 1f) else 1f
+    val predictiveScaleY = if (pProgress.isFinite()) (1f - (clampedProgress * 0.04f)).coerceIn(0.8f, 1f) else 1f
+    val predictiveTranslationY = if (pProgress.isFinite()) (pProgress.coerceAtLeast(0f) * dismissTargetY) else 0f
+    val predictiveCorner = (clampedProgress * 32.dp.value).coerceAtLeast(0f).dp
+
+    val verticalDragModifier = Modifier.pointerInput(dismissTargetY) {
+        detectVerticalDragGestures(
+            onDragEnd = {
+                if (dismissProgress.value > 0.18f) {
+                    handleClose()
+                } else {
+                    scope.launch {
+                        dismissProgress.animateTo(
+                            0f,
+                            spring(
+                                dampingRatio = Spring.DampingRatioLowBouncy,
+                                stiffness = Spring.StiffnessMediumLow
+                            )
+                        )
+                    }
+                }
+            },
+            onDragCancel = {
+                scope.launch {
+                    dismissProgress.animateTo(
+                        0f,
+                        spring(
+                            dampingRatio = Spring.DampingRatioLowBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    )
+                }
+            },
+            onVerticalDrag = { change, dragAmount ->
+                if (dragAmount > 0 || dismissProgress.value > 0f) {
+                    change.consume()
+                    val delta = dragAmount / dismissTargetY
+                    scope.launch {
+                        dismissProgress.snapTo(
+                            (dismissProgress.value + delta).coerceIn(0f, 1f)
+                        )
+                    }
+                }
+            }
+        )
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .then(
+                if (clampedProgress > 0f) {
+                    Modifier
+                        .graphicsLayer {
+                            scaleX = predictiveScaleX
+                            scaleY = predictiveScaleY
+                            translationY = predictiveTranslationY
+                            transformOrigin = TransformOrigin(0.5f, 1.0f)
+                            shape = RoundedCornerShape(predictiveCorner)
+                            clip = true
+                            alpha = (1f - (clampedProgress * 0.15f)).coerceIn(0f, 1f)
+                        }
+                } else Modifier
+            )
             .background(if (isBlurMode) Color.Black else MaterialTheme.colorScheme.background)
-            .pointerInput(Unit) {
-                detectTapGestures(onTap = {})
-            }
     ) {
         when (backgroundStyle) {
             PlayerBackgroundStyle.BLUR -> {
@@ -10664,9 +11167,13 @@ fun OldPlayerScreen(
                 modifier = Modifier.fillMaxSize().systemBarsPadding(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Box(modifier = Modifier.padding(horizontal = 24.dp)) {
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 24.dp)
+                        .then(verticalDragModifier)
+                ) {
                     PlayerHeader(
-                        onClose = onClose,
+                        onClose = handleClose,
                         viewModel = viewModel,
                         contentColor = mainContentColor,
                         subContentColor = subContentColor,
@@ -10679,7 +11186,12 @@ fun OldPlayerScreen(
                         } else null
                     )
                 }
-                Spacer(modifier = Modifier.weight(1f))
+                Spacer(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .then(verticalDragModifier)
+                )
 
                 val pagerState = androidx.compose.foundation.pager.rememberPagerState(
                     initialPage = viewModel.currentQueueIndex.coerceAtLeast(0),
@@ -10716,7 +11228,9 @@ fun OldPlayerScreen(
                 )
 
                 Box(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(if (!showLyrics) verticalDragModifier else Modifier),
                     contentAlignment = Alignment.Center
                 ) {
                     Box(modifier = Modifier.fillMaxWidth().alpha(coverAlpha).zIndex(if (showLyrics) 0f else 1f)) {
@@ -10946,6 +11460,24 @@ fun OldPlayerScreen(
                                     )
                                 }
                             }
+
+                            if (viewModel.isYourMixActive) {
+                                Spacer(Modifier.width(4.dp))
+                                IconButton(
+                                    onClick = {
+                                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                        viewModel.dislikeCurrentTrackInMix()
+                                    },
+                                    modifier = Modifier.size(44.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.ThumbDown,
+                                        contentDescription = stringResource(R.string.mix_dislike),
+                                        tint = iconTint,
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -11009,6 +11541,7 @@ fun OldPlayerScreen(
 
         SleepTimerDialog(viewModel)
         TrackTrimDialog(viewModel)
+        DjDevDebugSheet(viewModel)
     }
 }
 
@@ -11216,11 +11749,18 @@ fun OldPlayerProgress(viewModel: PlayerViewModel, textColor: Color) {
                 style = MaterialTheme.typography.labelSmall,
                 color = textColor.copy(alpha = 0.7f)
             )
-            com.alananasss.kittytune.ui.player.automix.AutomixBadge(textColor = textColor)
+            val showRemaining by prefs.getShowRemainingTimeFlow().collectAsState(initial = prefs.getShowRemainingTime())
+            val curPos = if (isDragging) dragPosition.toLong() else progressState.value.toLong()
             Text(
-                text = makeTimeString(totalDuration.toLong()),
+                text = if (showRemaining) com.alananasss.kittytune.utils.makeRemainingTimeString(curPos, totalDuration.toLong()) else makeTimeString(totalDuration.toLong()),
                 style = MaterialTheme.typography.labelSmall,
-                color = textColor.copy(alpha = 0.7f)
+                color = textColor.copy(alpha = 0.7f),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable {
+                        prefs.setShowRemainingTime(!showRemaining)
+                    }
+                    .padding(horizontal = 8.dp, vertical = 8.dp)
             )
         }
     }
@@ -11288,7 +11828,7 @@ fun OldPlayerControls(
                     }
                 }
             }
-            IconButton(onClick = { viewModel.playNext() }, modifier = Modifier.size(48.dp)) {
+            IconButton(onClick = { viewModel.requestSkipNext() }, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.Rounded.SkipNext, null, tint = contentColorOverride, modifier = Modifier.size(36.dp))
             }
         }
@@ -11383,13 +11923,27 @@ fun LandscapePlayerView(
                     edgeGradientWidth = 16.dp,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Text(
-                    text = track.displayArtist.ifBlank { track.user?.username ?: stringResource(R.string.unknown_artist) },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = subContentColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                ) {
+                    Text(
+                        text = track.displayArtist.ifBlank { track.user?.username ?: stringResource(R.string.unknown_artist) },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = subContentColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    val aiResult by com.alananasss.kittytune.audio.ai.AiDetectionManager.result.collectAsState()
+                    com.alananasss.kittytune.ui.player.ai.AiDetectionBadge(
+                        result = aiResult,
+                        textColor = mainContentColor,
+                        onClick = { viewModel.showAiDetectionSheet = true },
+                        modifier = Modifier.padding(start = 6.dp)
+                    )
+                }
             }
 
             Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
@@ -11432,7 +11986,7 @@ fun LandscapePlayerView(
                         )
                     }
                 }
-                IconButton(onClick = { viewModel.playNext() }) {
+                IconButton(onClick = { viewModel.requestSkipNext() }) {
                     Icon(
                         imageVector = Icons.Rounded.SkipNext,
                         contentDescription = "Next",
@@ -11600,7 +12154,7 @@ fun PlayerTrackDetailsSideContent(viewModel: PlayerViewModel, track: Track) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        track.user?.username ?: "-",
+                        track.displayArtist.ifBlank { track.user?.username ?: "-" },
                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
                     )
                 }
@@ -11612,7 +12166,7 @@ fun PlayerTrackDetailsSideContent(viewModel: PlayerViewModel, track: Track) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        makeTimeString(track.durationMs ?: 0L),
+                        makeTimeString(track.actualDurationMs),
                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
                     )
                 }
@@ -11662,7 +12216,8 @@ fun PhoneLandscapePlayerView(
     subContentColor: Color,
     iconTint: Color,
     animatedColor: Color,
-    isBlurMode: Boolean
+    isBlurMode: Boolean,
+    verticalDragModifier: Modifier = Modifier
 ) {
     val track = viewModel.currentTrack ?: return
 
@@ -11675,7 +12230,7 @@ fun PhoneLandscapePlayerView(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(
-            modifier = Modifier.weight(0.45f).fillMaxHeight(),
+            modifier = Modifier.weight(0.45f).fillMaxHeight().then(verticalDragModifier),
             horizontalAlignment = Alignment.Start,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
@@ -11810,7 +12365,7 @@ private fun StaticWaveformPlaceholder(track: Track, viewModel: PlayerViewModel? 
         }
     }
     val inactiveBarColor = Color(0xCCFFFFFF)
-    val totalDuration = if ((track.durationMs ?: 0L) > 1000) (track.durationMs ?: 0L).toFloat() else 180000f
+    val totalDuration = if (track.actualDurationMs > 1000) track.actualDurationMs.toFloat() else 180000f
 
     var cachedSamples by remember(track.id) {
         mutableStateOf(com.alananasss.kittytune.data.WaveformRepository.getCachedWaveform(track.id))
@@ -11915,7 +12470,8 @@ fun SoundCloudPlayerView(
     onClose: () -> Unit,
     onEffectsClick: () -> Unit,
     onQueueClick: () -> Unit,
-    animatedColor: Color
+    animatedColor: Color,
+    verticalDragModifier: Modifier = Modifier
 ) {
     val track = viewModel.currentTrack ?: return
     val context = LocalContext.current
@@ -11925,6 +12481,39 @@ fun SoundCloudPlayerView(
     val showReactionsBar = prefs.getSoundCloudReactionsBarEnabled()
     val enableParallax = prefs.getSoundCloudParallaxEnabled()
     val slots = remember { List(5) { i -> prefs.getSoundCloudSlot(i) } }
+
+    var scWaveformColorMode by remember { mutableStateOf(prefs.getWaveformColorMode()) }
+    var scCustomWaveformColor by remember { mutableIntStateOf(prefs.getWaveformCustomColor()) }
+
+    DisposableEffect(context) {
+        val sharedPrefs = context.getSharedPreferences("player_state", Context.MODE_PRIVATE)
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == PlayerPreferences.KEY_WAVEFORM_COLOR_MODE) {
+                scWaveformColorMode = prefs.getWaveformColorMode()
+            } else if (key == PlayerPreferences.KEY_WAVEFORM_CUSTOM_COLOR) {
+                scCustomWaveformColor = prefs.getWaveformCustomColor()
+            }
+        }
+        sharedPrefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose {
+            sharedPrefs.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
+
+    val scThemePrimary = MaterialTheme.colorScheme.primary
+    val scTargetAccentColor = remember(scWaveformColorMode, scCustomWaveformColor, animatedColor, scThemePrimary) {
+        when (scWaveformColorMode) {
+            WaveformColorMode.SOUNDCLOUD -> Color(0xFFFF5500)
+            WaveformColorMode.COVER_ART -> animatedColor
+            WaveformColorMode.APP_THEME -> scThemePrimary
+            WaveformColorMode.CUSTOM -> Color(scCustomWaveformColor)
+        }
+    }
+    val scAccentColor by animateColorAsState(
+        targetValue = scTargetAccentColor,
+        animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
+        label = "scAccentColor"
+    )
 
     var scrubbedMs by remember { mutableFloatStateOf(0f) }
     var isScrubbing by remember { mutableStateOf(false) }
@@ -12022,6 +12611,7 @@ fun SoundCloudPlayerView(
                     modifier = Modifier
                         .fillMaxSize()
                         .clipToBounds()
+                        .then(verticalDragModifier)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
@@ -12062,6 +12652,7 @@ fun SoundCloudPlayerView(
                         .fillMaxWidth()
                         .height(200.dp)
                         .align(Alignment.TopCenter)
+                        .then(verticalDragModifier)
                         .background(
                             Brush.verticalGradient(
                                 colors = listOf(Color.Black.copy(alpha = 0.65f), Color.Transparent)
@@ -12246,14 +12837,18 @@ fun SoundCloudPlayerView(
                                 ),
                                 color = Color.White.copy(alpha = 0.65f)
                             )
+                            val showRemaining by prefs.getShowRemainingTimeFlow().collectAsState(initial = prefs.getShowRemainingTime())
                             Text(
-                                text = makeTimeString(totalDuration.toLong()),
+                                text = if (showRemaining) com.alananasss.kittytune.utils.makeRemainingTimeString(currentPosition.toLong(), totalDuration.toLong()) else makeTimeString(totalDuration.toLong()),
                                 style = MaterialTheme.typography.displayMedium.copy(
                                     fontSize = 38.sp,
                                     fontWeight = FontWeight.Normal,
                                     letterSpacing = (-0.5).sp
                                 ),
-                                color = Color.White
+                                color = Color.White,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { prefs.setShowRemainingTime(!showRemaining) }
                             )
                         }
                     }
@@ -12330,7 +12925,7 @@ fun SoundCloudPlayerView(
                                 .clickable {
                                     view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                                     if (isCurrentPage) {
-                                        viewModel.playNext()
+                                        viewModel.requestSkipNext()
                                     } else {
                                         viewModel.skipToQueueItem((page + 1).coerceAtMost(viewModel.queueState.lastIndex))
                                     }
@@ -12466,7 +13061,7 @@ fun SoundCloudPlayerView(
                                 Icon(
                                     imageVector = if (isTrackLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                                     contentDescription = null,
-                                    tint = if (isTrackLiked) Color(0xFFFF5500) else Color.White,
+                                    tint = if (isTrackLiked) scAccentColor else Color.White,
                                     modifier = Modifier.size(24.dp)
                                 )
                                 if (!isSpotifyTrack && displayLikes > 0) {
@@ -12515,17 +13110,7 @@ fun SoundCloudPlayerView(
 
                         PlayerActionButtonSlot.SHARE -> {
                             IconButton(
-                                onClick = {
-                                    val url = pageTrack.permalinkUrl
-                                    if (!url.isNullOrBlank()) {
-                                        val sendIntent =
-                                            android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                                putExtra(android.content.Intent.EXTRA_TEXT, url)
-                                                type = "text/plain"
-                                            }
-                                        context.startActivity(android.content.Intent.createChooser(sendIntent, null))
-                                    }
-                                },
+                                onClick = { viewModel.openShareCard(pageTrack) },
                                 modifier = Modifier.size(40.dp)
                             ) {
                                 Icon(
@@ -12573,7 +13158,7 @@ fun SoundCloudPlayerView(
                                 Icon(
                                     imageVector = Icons.Rounded.Shuffle,
                                     contentDescription = null,
-                                    tint = if (viewModel.shuffleEnabled) Color(0xFFFF5500) else Color.White.copy(alpha = 0.65f),
+                                    tint = if (viewModel.shuffleEnabled) scAccentColor else Color.White.copy(alpha = 0.65f),
                                     modifier = Modifier.size(22.dp)
                                 )
                             }
@@ -12587,7 +13172,7 @@ fun SoundCloudPlayerView(
                                 Icon(
                                     imageVector = if (viewModel.repeatMode == RepeatMode.ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
                                     contentDescription = null,
-                                    tint = if (viewModel.repeatMode != RepeatMode.NONE) Color(0xFFFF5500) else Color.White.copy(
+                                    tint = if (viewModel.repeatMode != RepeatMode.NONE) scAccentColor else Color.White.copy(
                                         alpha = 0.65f
                                     ),
                                     modifier = Modifier.size(22.dp)

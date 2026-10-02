@@ -1,8 +1,12 @@
     package com.alananasss.kittytune.ui.home
 
     import android.net.Uri
+    import android.view.HapticFeedbackConstants
+    import androidx.compose.foundation.ExperimentalFoundationApi
     import androidx.compose.foundation.background
     import androidx.compose.foundation.clickable
+    import androidx.compose.foundation.combinedClickable
+    import androidx.compose.ui.platform.LocalView
     import androidx.compose.foundation.layout.*
     import androidx.compose.foundation.lazy.LazyColumn
     import androidx.compose.foundation.lazy.LazyRow
@@ -251,6 +255,7 @@ import com.alananasss.kittytune.ui.icons.Icon
         }
     }
 
+    @OptIn(ExperimentalFoundationApi::class)
     @Composable
     fun PopularTrackListItem(
         track: Track,
@@ -258,6 +263,13 @@ import com.alananasss.kittytune.ui.icons.Icon
         onClick: () -> Unit,
         onOptionClick: () -> Unit
     ) {
+        val view = LocalView.current
+        val blockedTrackIds by com.alananasss.kittytune.data.BlockManager.blockedTrackIdsFlow.collectAsState()
+        val blockedArtistIds by com.alananasss.kittytune.data.BlockManager.blockedArtistIdsFlow.collectAsState()
+        if (track.id in blockedTrackIds || (track.user?.id != null && track.user.id in blockedArtistIds)) {
+            return
+        }
+
         val isCurrent = currentlyPlayingTrack?.id == track.id
         val titleColor = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
 
@@ -277,7 +289,13 @@ import com.alananasss.kittytune.ui.icons.Icon
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
-                .clickable(onClick = onClick)
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = {
+                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        onOptionClick()
+                    }
+                )
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -322,7 +340,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "${track.user?.username ?: stringResource(R.string.unknown_artist)} • ${formatNumber(track.playbackCount)} ${stringResource(R.string.playback_count_formatted)}",
+                        text = "${track.displayArtist.ifBlank { track.user?.username ?: stringResource(R.string.unknown_artist) }} • ${formatNumber(track.playbackCount)} ${stringResource(R.string.playback_count_formatted)}",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.bodyMedium,

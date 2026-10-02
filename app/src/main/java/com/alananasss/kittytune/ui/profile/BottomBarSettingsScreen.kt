@@ -5,12 +5,15 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,15 +21,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.alananasss.kittytune.R
 import com.alananasss.kittytune.data.local.PlayerPreferences
+import com.alananasss.kittytune.ui.common.AutoScrollToHighlightedItem
 import com.alananasss.kittytune.ui.common.SettingsGroupTitle
 import com.alananasss.kittytune.ui.common.SettingsItem
 import com.alananasss.kittytune.ui.common.SettingsScaffold
+import com.alananasss.kittytune.ui.common.SettingsSwitch
 import com.alananasss.kittytune.ui.common.getSettingsShape
-import com.alananasss.kittytune.ui.navigation.KittyTab
-import com.alananasss.kittytune.ui.navigation.KittyUnifiedBottomBar
+import android.view.HapticFeedbackConstants
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.zIndex
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.alananasss.kittytune.ui.navigation.Screen
 import com.alananasss.kittytune.ui.player.PlayerViewModel
 
@@ -43,26 +58,51 @@ fun BottomBarSettingsScreen(
     val blur by prefs.bottomMenuBlurFlow().collectAsState(initial = prefs.getBottomMenuBlurEnabled())
     val items by prefs.bottomMenuItemsFlow().collectAsState(initial = prefs.getBottomMenuItems())
     val fab by prefs.bottomMenuFabFlow().collectAsState(initial = prefs.getBottomMenuFab())
+    val storedOrder by prefs.bottomMenuOrderFlow().collectAsState(initial = prefs.getBottomMenuOrder())
 
     var showStyleDialog by remember { mutableStateOf(false) }
+    val miniPlayerSwipeAction by prefs.miniPlayerSwipeActionFlow().collectAsState(initial = prefs.getMiniPlayerSwipeAction())
+    var showSwipeActionDialog by remember { mutableStateOf(false) }
 
-    val availableTabs = listOf("home", "search", "genres", "library")
+    val view = LocalView.current
+    val listState = rememberLazyListState()
 
-    val previewTabs = availableTabs.mapNotNull { key ->
-        val screen = when (key) {
-            "home" -> Screen.Home
-            "search" -> Screen.Search
-            "genres" -> Screen.Explore
-            "library" -> Screen.Library
-            else -> null
-        } ?: return@mapNotNull null
-        KittyTab(
-            title = stringResource(screen.titleResId),
-            icon = screen.icon ?: Icons.Rounded.Home,
-            route = screen.route,
-            visible = items.contains(key)
+    AutoScrollToHighlightedItem(
+        listState = listState,
+        keyToIndex = mapOf(
+            "mini_player_swipe_action" to 1
         )
+    )
+
+    val currentOrder = remember { mutableStateListOf<String>() }
+    LaunchedEffect(storedOrder) {
+        if (currentOrder.isEmpty() || currentOrder.toSet() != storedOrder.toSet()) {
+            currentOrder.clear()
+            currentOrder.addAll(storedOrder)
+        }
     }
+
+    fun persistOrder() {
+        val list = currentOrder.toList()
+        prefs.setBottomMenuOrder(list)
+        prefs.setBottomMenuItems(list.filter { it in items })
+    }
+
+    val reorderState = rememberReorderableLazyListState(
+        lazyListState = listState,
+        onMove = { from, to ->
+            val fromKey = from.key as? String ?: return@rememberReorderableLazyListState
+            val toKey = to.key as? String ?: return@rememberReorderableLazyListState
+            val fromIndex = currentOrder.indexOf(fromKey)
+            val toIndex = currentOrder.indexOf(toKey)
+            if (fromIndex != -1 && toIndex != -1 && fromIndex != toIndex) {
+                val moved = currentOrder.removeAt(fromIndex)
+                currentOrder.add(toIndex, moved)
+                persistOrder()
+                view.performHapticFeedback(HapticFeedbackConstants.SEGMENT_FREQUENT_TICK)
+            }
+        }
+    )
 
     if (showStyleDialog) {
         AlertDialog(
@@ -98,12 +138,87 @@ fun BottomBarSettingsScreen(
         )
     }
 
+    if (showSwipeActionDialog) {
+        AlertDialog(
+            onDismissRequest = { showSwipeActionDialog = false },
+            title = { Text(stringResource(R.string.pref_mini_player_swipe_action_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable {
+                                prefs.setMiniPlayerSwipeAction(com.alananasss.kittytune.data.local.MiniPlayerSwipeAction.CHANGE_TRACK)
+                                showSwipeActionDialog = false
+                            }
+                            .padding(vertical = 10.dp, horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = miniPlayerSwipeAction == com.alananasss.kittytune.data.local.MiniPlayerSwipeAction.CHANGE_TRACK,
+                            onClick = null
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = stringResource(R.string.pref_mini_player_swipe_action_change_track),
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = stringResource(R.string.pref_mini_player_swipe_action_change_track_desc),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable {
+                                prefs.setMiniPlayerSwipeAction(com.alananasss.kittytune.data.local.MiniPlayerSwipeAction.DISMISS)
+                                showSwipeActionDialog = false
+                            }
+                            .padding(vertical = 10.dp, horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = miniPlayerSwipeAction == com.alananasss.kittytune.data.local.MiniPlayerSwipeAction.DISMISS,
+                            onClick = null
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = stringResource(R.string.pref_mini_player_swipe_action_dismiss),
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = stringResource(R.string.pref_mini_player_swipe_action_dismiss_desc),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showSwipeActionDialog = false }) {
+                    Text(stringResource(R.string.btn_cancel))
+                }
+            }
+        )
+    }
+
     SettingsScaffold(
         title = stringResource(R.string.pref_bottom_menu_title),
         onBackClick = onBackClick
     ) { padding ->
         val miniPlayerHeight = if (playerViewModel.currentTrack != null) 64.dp else 0.dp
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(top = padding.calculateTopPadding()),
@@ -112,10 +227,13 @@ fun BottomBarSettingsScreen(
                 top = 8.dp
             )
         ) {
-            item {
+            item(key = "general_section") {
                 Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                     SettingsGroupTitle(stringResource(R.string.settings_cat_general))
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Column(
+                        modifier = Modifier.clip(RoundedCornerShape(24.dp)),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
                         val totalItems = if (style == "modern") 3 else 1
 
                         SettingsItem(
@@ -162,38 +280,139 @@ fun BottomBarSettingsScreen(
                     }
                 }
             }
-            item {
-                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp)) {
+            item(key = "mini_player_section") {
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                    SettingsGroupTitle(stringResource(R.string.pref_mini_player_title))
+                    Column(
+                        modifier = Modifier.clip(RoundedCornerShape(24.dp)),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        SettingsItem(
+                            shape = RoundedCornerShape(24.dp),
+                            title = stringResource(R.string.pref_mini_player_swipe_action_title),
+                            subtitle = when (miniPlayerSwipeAction) {
+                                com.alananasss.kittytune.data.local.MiniPlayerSwipeAction.CHANGE_TRACK ->
+                                    stringResource(R.string.pref_mini_player_swipe_action_change_track)
+                                com.alananasss.kittytune.data.local.MiniPlayerSwipeAction.DISMISS ->
+                                    stringResource(R.string.pref_mini_player_swipe_action_dismiss)
+                            },
+                            onClick = { showSwipeActionDialog = true },
+                            highlightKey = "mini_player_swipe_action"
+                        )
+                    }
+                }
+            }
+            item(key = "tabs_header") {
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                     SettingsGroupTitle(stringResource(R.string.pref_bottom_menu_tabs))
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        availableTabs.forEachIndexed { index, tabKey ->
-                            val isChecked = items.contains(tabKey)
-                            SettingsItem(
-                                shape = getSettingsShape(availableTabs.size, index),
-                                title = when (tabKey) {
-                                    "home" -> stringResource(R.string.nav_home)
-                                    "search" -> stringResource(R.string.nav_search)
-                                    "genres" -> stringResource(R.string.explorer_title)
-                                    "library" -> stringResource(R.string.nav_library)
-                                    else -> tabKey
-                                },
-                                hasSwitch = true,
-                                switchState = isChecked,
-                                onSwitchChange = { checked ->
-                                    val newItems = items.toMutableList()
-                                    if (checked) {
-                                        if (!newItems.contains(tabKey)) newItems.add(tabKey)
-                                    } else {
-                                        // Ensure at least one item remains
-                                        if (newItems.size > 1) {
-                                            newItems.remove(tabKey)
-                                        }
-                                    }
-                                    // Preserve original order based on availableTabs
-                                    val orderedNewItems = availableTabs.filter { it in newItems }
-                                    prefs.setBottomMenuItems(orderedNewItems)
+                    Text(
+                        text = stringResource(R.string.pref_bottom_menu_tabs_reorder),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 16.dp, bottom = 8.dp)
+                    )
+                }
+            }
+            itemsIndexed(currentOrder, key = { _, key -> key }) { index, tabKey ->
+                Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 1.dp)) {
+                    ReorderableItem(state = reorderState, key = tabKey) { isDragging ->
+                        val elevation by animateDpAsState(
+                            if (isDragging) 8.dp else 0.dp,
+                            label = "tabElevation"
+                        )
+                        val isChecked = items.contains(tabKey)
+                        val isLastOn = isChecked && items.size == 1
+
+                        val screen = when (tabKey) {
+                            "home" -> Screen.Home
+                            "search" -> Screen.Search
+                            "genres" -> Screen.Explore
+                            "library" -> Screen.Library
+                            else -> null
+                        }
+
+                        val icon = when (tabKey) {
+                            "home" -> Icons.Rounded.Home
+                            "search" -> Icons.Rounded.Search
+                            "genres" -> Icons.Default.Explore
+                            "library" -> Icons.Default.LibraryMusic
+                            else -> Icons.Rounded.Home
+                        }
+
+                        val title = screen?.let { stringResource(it.titleResId) } ?: tabKey
+
+                        Surface(
+                            shape = if (isDragging) RoundedCornerShape(16.dp) else getSettingsShape(currentOrder.size, index),
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            shadowElevation = elevation,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .zIndex(if (isDragging) 1f else 0f)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 60.dp)
+                                    .padding(start = 4.dp, end = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .draggableHandle(
+                                            onDragStarted = {
+                                                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                            },
+                                            onDragStopped = {
+                                                view.performHapticFeedback(HapticFeedbackConstants.GESTURE_END)
+                                            }
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.DragHandle,
+                                        contentDescription = stringResource(R.string.reorder_handle),
+                                        tint = if (isDragging) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(24.dp)
+                                    )
                                 }
-                            )
+
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = null,
+                                    tint = if (isChecked) MaterialTheme.colorScheme.onSurfaceVariant
+                                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
+                                    modifier = Modifier.size(22.dp)
+                                )
+
+                                Spacer(Modifier.width(16.dp))
+
+                                Text(
+                                    text = title,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = if (isChecked) MaterialTheme.colorScheme.onSurface
+                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+
+                                SettingsSwitch(
+                                    checked = isChecked,
+                                    enabled = !isLastOn,
+                                    onCheckedChange = if (isLastOn) null else { checked ->
+                                        val newItems = if (checked) {
+                                            currentOrder.filter { it in items || it == tabKey }
+                                        } else {
+                                            currentOrder.filter { it in items && it != tabKey }
+                                        }
+                                        prefs.setBottomMenuItems(newItems)
+                                        view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                                    }
+                                )
+                            }
                         }
                     }
                 }

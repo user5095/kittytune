@@ -210,7 +210,8 @@ object ProxyManager {
 
         // Reset RetrofitClient singleton to recreate with new proxy settings
         RetrofitClient.resetClient()
-        cachedClient = null
+        // The shared client carries the old proxy, so it has to go with it.
+        sharedClient = null
     }
 
     fun configureOkHttpClient(builder: OkHttpClient.Builder, context: Context? = null): OkHttpClient.Builder {
@@ -222,25 +223,30 @@ object ProxyManager {
         return builder
     }
 
-    // Every caller across the app (SoundCloud, NewPipe/YouTube, Spotify, lyrics, ...) used to get
-    // a brand-new OkHttpClient - and therefore a brand-new connection pool - on every single call,
-    // paying a fresh TCP+TLS handshake instead of reusing a keep-alive connection. That's the
-    // single biggest reason track loading felt slow: cached here and rebuilt only when the proxy
-    // configuration actually changes (see the invalidation at the end of [applyConfiguration]).
+    /**
+     * One client per proxy configuration, shared by every caller. This used to build a fresh
+     * [OkHttpClient] per call, and its own connection pool and dispatcher with it: the stream
+     * resolver reaches this several times per track resolution, and the lyrics translator once per
+     * line, so every one of those requests paid a full TCP+TLS handshake instead of reusing a warm
+     * socket and left a dispatcher thread behind.
+     *
+     * Safe to cache: [configureOkHttpClient] only reads the proxy fields, which are both
+     * `@Volatile`, and its `context` parameter is unused. Cleared by [applyProxy] when the proxy
+     * changes, so a stale client is never reused under a new configuration.
+     */
     @Volatile
-    private var cachedClient: OkHttpClient? = null
+    private var sharedClient: OkHttpClient? = null
 
     fun getOkHttpClient(context: Context? = null): OkHttpClient {
-        cachedClient?.let { return it }
-        synchronized(this) {
-            cachedClient?.let { return it }
-            val builder = OkHttpClient.Builder()
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(15, TimeUnit.SECONDS)
-                .writeTimeout(15, TimeUnit.SECONDS)
-            val client = configureOkHttpClient(builder, context).build()
-            cachedClient = client
-            return client
+        sharedClient?.let { return it }
+        return synchronized(this) {
+            sharedClient ?: run {
+                val builder = OkHttpClient.Builder()
+                    .connectTimeout(15, TimeUnit.SECONDS)
+                    .readTimeout(15, TimeUnit.SECONDS)
+                    .writeTimeout(15, TimeUnit.SECONDS)
+                configureOkHttpClient(builder, context).build().also { sharedClient = it }
+            }
         }
     }
 

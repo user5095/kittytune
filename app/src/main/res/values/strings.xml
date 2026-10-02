@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="Typos,Grammar">
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="Typos,Grammar,TypographyDashes">
 
     <!-- ═══════════════════════════════════════════════════════════════════════════════ -->
     <!-- APP & CORE                                                                       -->
@@ -142,7 +142,7 @@
     <string name="new_releases_popular_tracks">Popular Tracks</string>
     <string name="new_releases_all_playlists">All Playlists</string>
     <string name="search_source_soundcloud">SoundCloud</string>
-    <string name="search_source_youtube">YouTube</string>
+    <string name="search_source_youtube">YouTube Music</string>
     <string name="search_source_spotify">Spotify</string>
     <string name="search_source_vk">VKontakte (VK)</string>
     <string name="search_source_deezer">Deezer</string>
@@ -303,6 +303,9 @@
     <string name="menu_unpin_folder">Unpin folder</string>
     <string name="menu_move_to_folder">Move to folder</string>
     <string name="menu_move_to_library">Move to library</string>
+    <string name="menu_like_all_songs">Like all songs</string>
+    <string name="toast_like_all_done">Liked %1$d songs</string>
+    <string name="toast_like_all_nothing">No new songs to like</string>
     <string name="menu_rename_folder">Rename folder</string>
     <string name="menu_delete_folder">Delete folder</string>
     <string name="dialog_delete_folder_title">Delete folder?</string>
@@ -570,6 +573,14 @@
     <string name="menu_repeat_all">Repeat (All)</string>
     <string name="menu_repeat_one">Repeat (1)</string>
     <string name="menu_remove">Remove</string>
+    <string name="menu_block_track">Hide track</string>
+    <string name="menu_unblock_track">Unhide track</string>
+    <string name="track_hidden_toast">Track hidden</string>
+    <string name="track_unhidden_toast">Track restored</string>
+    <string name="menu_block_artist">Block artist</string>
+    <string name="menu_unblock_artist">Unblock artist</string>
+    <string name="artist_blocked_toast">Artist blocked</string>
+    <string name="artist_unblocked_toast">Artist unblocked</string>
     <string name="menu_repost">Repost</string>
     <string name="menu_reposted">Reposted</string>
     <string name="social_proof_liked_by">liked by</string>
@@ -640,6 +651,20 @@
     <string name="detail_show_less">Show less</string>
     <string name="untitled_track">Untitled Track</string>
     <string name="unknown_artist">Unknown Artist</string>
+    <string name="share_card_settings_group">Share card</string>
+    <string name="share_card_code_title">Cover as QR code</string>
+    <string name="share_card_code_subtitle">How the code and the artwork are combined</string>
+    <string name="share_card_code_auto">Automatic</string>
+    <string name="share_card_code_auto_desc">Chosen per cover, favouring the one that still scans</string>
+    <string name="share_card_code_solid">Robust</string>
+    <string name="share_card_code_solid_desc">Highest contrast, artwork only inside the code</string>
+    <string name="share_card_code_halftone">Full cover</string>
+    <string name="share_card_code_halftone_desc">Whole artwork visible, harder to scan</string>
+    <string name="share_card_face_song">Song</string>
+    <string name="share_card_face_lyrics">Lyrics</string>
+    <string name="share_card_qr">Cover as QR code</string>
+    <string name="share_card_send">Share card</string>
+    <string name="share_card_title">Share as card</string>
     <string name="share_via">Share via</string>
     <string name="generic_title">Title</string>
     <string name="generic_artist">Artist</string>
@@ -757,8 +782,17 @@
     <!-- SETTINGS                                                                         -->
     <!-- ═══════════════════════════════════════════════════════════════════════════════ -->
 
+    <string name="settings_cat_interface_sub">Themes, the player and lyrics</string>
+    <string name="settings_cat_interface">Interface</string>
+    <string name="settings_cat_misc">Miscellaneous</string>
+    <string name="settings_page_themes">Themes</string>
+    <string name="settings_page_themes_sub">Colours, wallpaper and the font</string>
+    <string name="settings_page_player">Player</string>
+    <string name="settings_page_player_sub">Layout and controls</string>
+    <string name="settings_page_lyrics_sub">How lyrics look and behave</string>
     <string name="settings_title">Settings</string>
     <string name="settings_cat_general">General</string>
+    <string name="settings_cat_general_sub">Language, start screen and updates</string>
     <string name="settings_cat_appearance">Appearance</string>
     <string name="settings_cat_typography">Typography</string>
     <string name="settings_cat_playback">Playback</string>
@@ -955,11 +989,13 @@
     <string name="pref_persist_queue_sub">Restore playback after restart</string>
     <string name="pref_quality">Stream Quality</string>
     <string name="quality_high">High (Default)</string>
-    <string name="quality_low">Eco (Data Saver)</string>
+    <string name="quality_low">Eco</string>
     <string name="quality_high_sub">Best quality (128kbps+)</string>
-    <string name="quality_low_sub">Saves data on mobile networks</string>
+    <string name="quality_low_sub">Lowest bitrate on every source</string>
     <string name="pref_youtube_fallback">Unlock Restricted Tracks</string>
     <string name="pref_youtube_fallback_sub">Via NewPipe Extractor for Go+ tracks</string>
+    <string name="pref_hide_youtube_videos">Hide Videos &amp; Shorts</string>
+    <string name="pref_hide_youtube_videos_sub">Show only official music tracks when searching on YouTube Music</string>
     <string name="pref_download_drm">Download Native DRM</string>
     <string name="pref_download_drm_sub">Keep enabled to cache DRM natively for internal playback. Disable to force unencrypted MP3 downloads via YouTube fallback.</string>
     <string name="drm_explanation_text">DRM-protected tracks are encrypted by rightsholders to prevent extraction and protect copyrights.\n\n• Enabled (Recommended): The track is downloaded in its native high quality to KittyTune\'s secure internal cache. It can only be played inside the app and will not appear in your configured download folder.\n\n• Disabled: KittyTune will ignore the encrypted version and attempt to find and download the song via YouTube. The file will be converted to a standard MP3 and saved in your designated folder. Warning: Since the search is automatic, it may download incorrect content (such as a music video or a cover) if the track is not well-known.</string>
@@ -1020,6 +1056,8 @@
     <string name="pref_lyrics_apple_effect_sub">Fills letters smoothly instead of jumping from word to word.</string>
     <string name="pref_lyrics_duet_title">Duet mode</string>
     <string name="pref_lyrics_duet_desc">Align lyrics according to the singer (left for singer 1, right for singer 2)</string>
+    <string name="menu_disable_duet_lyrics">Disable duet lyrics</string>
+    <string name="menu_enable_duet_lyrics">Enable duet lyrics</string>
     <string name="pref_android_auto_synced_lyrics">Android Auto Synchronized Lyrics</string>
     <string name="pref_android_auto_synced_lyrics_desc">Display synchronized lyrics in place of the artist name when connected to Android Auto</string>
     <string name="pref_animated_covers">Animated album covers</string>
@@ -1200,6 +1238,106 @@
     <string name="discord_login_captcha_error">Security check failed. Please retry.</string>
 
     <!-- ABOUT -->
+    <!-- Content filtering / blocked content -->
+    <string name="pref_content_filter_title">Filtered Content</string>
+    <string name="pref_content_filter_subtitle">Hidden tracks, blocked artists, AI detection</string>
+    <string name="block_section_ai">AI Music Detection</string>
+    <string name="block_ai_auto_skip">Auto-skip AI tracks</string>
+    <string name="block_ai_auto_skip_sub">Automatically skip tracks detected as AI-generated (not infallible, false positives may occur)</string>
+    <string name="block_ai_auto_block">Also add to block list</string>
+    <string name="block_ai_auto_block_sub">Permanently hide auto-skipped tracks so they never reappear</string>
+    <string name="block_ai_threshold">Detection threshold: %d%%</string>
+    <string name="block_ai_threshold_sub">P(AI) ≥ %d%% → track is considered AI-generated</string>
+    <string name="block_model_card_title">ArtifactNet Neural Detector</string>
+    <string name="block_model_card_subtitle">On-device neural model (~17 MB)</string>
+    <string name="block_model_desc_what">Analyzes raw audio for microscopic forensic signatures left by AI music generators (Suno, Udio, etc.) completely on-device.</string>
+    <string name="block_model_desc_why">Enables automatic skipping of AI tracks and displays confidence tags in the player without sending any audio to external servers.</string>
+    <string name="block_model_disclaimer">Neural detection is statistical and not infallible. Occasional false positives may occur. You can adjust the sensitivity threshold below.</string>
+    <string name="block_model_feat_offline">Offline</string>
+    <string name="block_model_feat_autoskip">Auto-skip</string>
+    <string name="block_model_feat_privacy">100% Local</string>
+    <string name="block_model_status_ready">Model installed (17.2 MB) · Offline ready</string>
+    <string name="block_model_status_not_installed">Not installed · 17.2 MB download</string>
+    <string name="block_model_downloading">Downloading model… %d%%</string>
+    <string name="block_model_download_btn">Download Model (17 MB)</string>
+    <string name="block_model_delete_btn">Uninstall Model</string>
+    <string name="block_model_delete_title">Uninstall AI Model?</string>
+    <string name="block_model_delete_body">The 17.2 MB model files will be removed from your device. AI music detection and auto-skip will be paused until re-downloaded.</string>
+    <string name="block_model_download_prompt_title">Download AI Model?</string>
+    <string name="block_model_download_prompt_body">The ArtifactNet model (~17 MB) is required to detect AI-generated music on-device. Would you like to download it now?</string>
+    <string name="block_section_tracks">Hidden tracks (%d)</string>
+    <string name="block_section_artists">Blocked artists (%d)</string>
+    <string name="block_empty_tracks">No hidden tracks</string>
+    <string name="block_empty_artists">No blocked artists</string>
+    <string name="block_reason_ai">Blocked automatically · AI-generated</string>
+    <string name="block_reason_manual">Blocked manually</string>
+    <string name="block_restore">Restore</string>
+    <string name="block_unblock_track_title">Restore this track?</string>
+    <string name="block_unblock_track_body">"%s" will reappear in queues and recommendations.</string>
+    <string name="block_unblock_artist_title">Unblock this artist?</string>
+    <string name="block_unblock_artist_body">Tracks by "%s" will reappear in queues and recommendations.</string>
+    <string name="block_clear_all_title">Clear all</string>
+    <string name="block_clear_all_body">All hidden tracks and blocked artists will be restored. This cannot be undone.</string>
+    <string name="block_clear_all_confirm">Clear all</string>
+
+    <!-- AI Detection Player Badge & Sheet -->
+    <string name="pref_ai_show_badge">Show AI badge in player</string>
+    <string name="pref_ai_show_badge_sub">Display AI detection tag and confidence score during playback</string>
+    <string name="pref_ai_show_human_badge">Show badge for human tracks</string>
+    <string name="pref_ai_show_human_badge_sub">Also display a tag when a track is classified as human music</string>
+    <string name="ai_badge_scanning">AI…</string>
+    <string name="ai_badge_ai_tag">AI %d%%</string>
+    <string name="ai_badge_human_tag">Human %d%%</string>
+    <string name="ai_sheet_title_ai">AI-Generated Audio Detected</string>
+    <string name="ai_sheet_title_human">Authentic Audio</string>
+    <string name="ai_sheet_title_analyzing">Analyzing Audio…</string>
+    <string name="ai_sheet_prob_label">ArtifactNet P(AI) Confidence</string>
+    <string name="ai_sheet_confidence_high_ai">High probability synthetic audio (neural codec artifacts detected)</string>
+    <string name="ai_sheet_confidence_likely_ai">Likely AI-generated music</string>
+    <string name="ai_sheet_confidence_borderline">Borderline / ambiguous audio artifacts</string>
+    <string name="ai_sheet_confidence_human">Forensic acoustic signature matches human production</string>
+    <string name="ai_sheet_confidence_analyzing">Extracting forensic codec residuals from PCM stream…</string>
+    <string name="ai_sheet_meter_human">0% Human</string>
+    <string name="ai_sheet_meter_threshold">Threshold (%d%%)</string>
+    <string name="ai_sheet_meter_ai">100% AI</string>
+    <string name="ai_sheet_privacy_note">Analysis is performed 100% on-device using ArtifactNet. Detection is not infallible: occasional false positives may occur. No audio data ever leaves your device.</string>
+    <string name="ai_sheet_block_track">Block this track</string>
+    <string name="ai_sheet_block_artist">Block artist \"%s\"</string>
+    <string name="ai_sheet_unblock_track">Restore track</string>
+    <string name="ai_sheet_open_settings">Filter &amp; AI Settings</string>
+    <string name="block_ai_spare_favorites">Spare favorite tracks</string>
+    <string name="block_ai_spare_favorites_sub">Never auto-skip tracks that you have liked</string>
+    <string name="block_ai_window_title">Analysis window</string>
+    <string name="block_ai_window_sub">Duration analyzed before making a decision</string>
+    <string name="block_ai_window_dialog_title">AI Analysis Window</string>
+    <string name="block_ai_window_4s_title">4 seconds (Recommended)</string>
+    <string name="block_ai_window_4s_desc">Pros: Maximum accuracy, native continuous analysis without repetition.\nCons: Detection takes ~4s of playback (slight delay before skip).</string>
+    <string name="block_ai_window_1s_title">1 second (Ultra-fast)</string>
+    <string name="block_ai_window_1s_desc">Pros: Skips AI tracks almost immediately (~1s), instant responsiveness.\nCons: Audio snippet is looped with crossfade, slightly more sensitive to atypical intros.</string>
+    <string name="ai_skip_undo_message">AI track skipped</string>
+    <string name="pref_notif_extra_button_title">Notification extra button</string>
+    <string name="pref_notif_extra_button_subtitle">Action button shown on the right side of the media notification</string>
+    <string name="notif_player_options_group">Notification Player</string>
+    <string name="notif_btn_dislike">Dislike &amp; skip</string>
+    <string name="notif_btn_dislike_sub">Block track and skip immediately to next</string>
+    <string name="notif_btn_shuffle">Shuffle</string>
+    <string name="notif_btn_shuffle_sub">Toggle shuffle mode</string>
+    <string name="notif_btn_repeat">Repeat</string>
+    <string name="notif_btn_repeat_sub">Cycle repeat mode</string>
+    <string name="notif_btn_add_playlist">Add to last playlist</string>
+    <string name="notif_btn_add_playlist_sub">Quickly add current track to last used playlist</string>
+    <string name="notif_btn_haptics">Music haptics</string>
+    <string name="notif_btn_haptics_sub">Toggle rhythmic vibrations</string>
+    <string name="notif_btn_share">Share</string>
+    <string name="notif_btn_share_sub">Share the current track link</string>
+    <string name="notif_btn_download">Download</string>
+    <string name="notif_btn_download_sub">Save track for offline listening</string>
+    <string name="notif_btn_off">Disabled</string>
+    <string name="notif_btn_off_sub">Do not show an extra action button</string>
+    <string name="notif_dislike_toast">Track blocked and skipped</string>
+    <string name="notif_added_to_playlist">Added to \"%s\"</string>
+    <string name="notif_no_playlist_available">No playlist available yet</string>
+
     <string name="pref_about_title">About</string>
     <string name="pref_about_subtitle">Version and credits</string>
     <string name="about_github">Source Code (GitHub)</string>
@@ -1259,6 +1397,8 @@
     <string name="update_check_manual">Check for updates</string>
     <string name="pref_auto_update">Auto Check Updates</string>
     <string name="pref_auto_update_sub">Check for new versions on startup</string>
+    <string name="pref_remember_search_filter">Remember search filter</string>
+    <string name="pref_remember_search_filter_sub">Keep the last selected filter (Artists, Playlists…) when opening search</string>
 
     <!-- ═══════════════════════════════════════════════════════════════════════════════ -->
     <!-- ACHIEVEMENTS                                                                     -->
@@ -1498,12 +1638,61 @@
     <!-- ═══════════════════════════════════════════════════════════════════════════════ -->
 
     <string name="profile_menu_listening_stats">Listening Stats</string>
+    <string name="listening_stats_show_all">Show all</string>
+    <string name="listening_stats_all_tracks">All Tracks</string>
+    <string name="listening_stats_all_artists">All Artists</string>
+    <string name="listening_stats_all_plays">All Plays</string>
+    <string name="listening_stats_change_week">%1$s on last week</string>
+    <string name="listening_stats_change_month">%1$s on last month</string>
+    <string name="listening_stats_change_year">%1$s on last year</string>
+    <string name="listening_stats_activity_days">Listening per day</string>
+    <string name="listening_stats_activity_months">Listening per month</string>
+    <string name="listening_stats_activity_avg_day">%1$s a day on average</string>
+    <string name="listening_stats_activity_avg_month">%1$s a month on average</string>
+    <string name="listening_stats_hours">Time of day</string>
+    <string name="listening_stats_since">%1$s – today</string>
+    <string name="listening_stats_skips_of">Skipped: %1$d</string>
+    <string name="listening_stats_avg_play_desc">How long a track plays on average</string>
+    <string name="listening_stats_duration_min">%1$d min</string>
+    <string name="listening_stats_streak">Days in a row</string>
+    <string name="listening_stats_period_week_short">Week</string>
+    <string name="listening_stats_period_month_short">Month</string>
+    <string name="listening_stats_period_year_short">Year</string>
+    <string name="stats_sort_time">By time</string>
+    <string name="stats_sort_plays">By plays</string>
+    <string name="stats_sort_name">A–Z</string>
+    <string name="stats_filter_hint">Filter</string>
+    <string name="stats_today">Today</string>
+    <string name="listening_stats_peak_hour_label">Peak %1$s</string>
+    <string name="listening_stats_busiest_day_named">Busiest %1$s</string>
+    <string name="listening_stats_active_days_count">%1$d days with listening</string>
     <string name="listening_stats_title">Listening Stats</string>
     <string name="listening_stats_subtitle">Your listening habits</string>
 
     <string name="listening_stats_period_week">This Week</string>
     <string name="listening_stats_period_month">This Month</string>
     <string name="listening_stats_period_all">All Time</string>
+    <string name="listening_stats_period_year">This Year</string>
+
+    <!-- Comparison against the equivalent span before this one -->
+    <string name="listening_stats_vs_previous">vs %1$s</string>
+    <string name="listening_stats_more">%1$s more</string>
+    <string name="listening_stats_less">%1$s less</string>
+
+    <!-- New section built from the one-pass report -->
+    <string name="listening_stats_when">When You Listen</string>
+    <string name="listening_stats_night">Night</string>
+    <string name="listening_stats_morning">Morning</string>
+    <string name="listening_stats_afternoon">Afternoon</string>
+    <string name="listening_stats_evening">Evening</string>
+    <string name="listening_stats_streak_title">Longest streak</string>
+    <string name="listening_stats_streak_days">%1$d days</string>
+    <string name="listening_stats_streak_one">%1$d day</string>
+    <string name="listening_stats_busiest_day">Busiest day</string>
+    <string name="listening_stats_peak_hour">Peak hour</string>
+    <string name="listening_stats_active_days">Active days</string>
+    <string name="listening_stats_per_day">Per day</string>
+    <string name="listening_stats_avg_play">Avg per play</string>
 
     <string name="listening_stats_time_listened">Time Listened</string>
     <string name="listening_stats_plays">Plays</string>
@@ -1546,6 +1735,19 @@
     <string name="listening_stats_duration_min_sec">%1$dm %2$ds</string>
     <string name="listening_stats_duration_sec">%1$ds</string>
 
+    <string name="stats_style_overview">Overview</string>
+    <string name="stats_style_compact">Compact</string>
+    <string name="stats_style_story">Recap</string>
+    <string name="stats_story_you_listened">You listened for</string>
+    <string name="stats_story_numbers">%1$d plays · %2$d tracks · %3$d artists</string>
+    <string name="stats_story_top_artist">Your top artist</string>
+    <string name="stats_story_top_track">Your top track</string>
+    <string name="stats_story_track_times">Played %1$d× · %2$s</string>
+    <string name="stats_story_when">Your hour</string>
+    <string name="stats_story_habits">How you listen</string>
+    <string name="stats_story_active_days">days with music</string>
+    <string name="listening_stats_disclaimer">These statistics are based on KittyTune\'s playback algorithm and may not reflect your complete external listening history.</string>
+
     <string name="label_intensity">Intensity: %d%%</string>
     <string name="label_speed_8d">Rotation Speed: %d%%</string>
     <string name="label_cutoff">Filter: %d%%</string>
@@ -1578,13 +1780,31 @@
     <string name="automix_overlap_4bars">4 bars</string>
     <string name="automix_overlap_8bars">8 bars</string>
     <string name="automix_overlap_custom">Custom duration</string>
+    <string name="automix_start_offset">Start Offset</string>
+    <string name="automix_start_offset_desc">Choose where the incoming track begins playback during transition</string>
+    <string name="automix_start_offset_auto">Automatic (Smart intro skip)</string>
+    <string name="automix_start_offset_beginning">Track beginning (0:00)</string>
+    <string name="automix_start_offset_custom">Custom offset</string>
+    <string name="automix_start_offset_custom_value">Offset: %d seconds</string>
     <string name="automixing">Automixing</string>
     <string name="crossfading">Crossfading</string>
     <string name="automix_mix_in">MIX IN %1$d</string>
     <string name="crossfade_gapless">Don\'t crossfade tracks from the same album</string>
     <string name="crossfade_gapless_desc">Preserve seamless transitions in live recordings and continuous albums</string>
+    <string name="pref_crossfade_indicator_title">Show crossfade indicator</string>
+    <string name="pref_crossfade_indicator_desc">Display the \'Crossfading\' badge on the player during track transition</string>
+    <string name="pref_automix_indicator_title">Show automix indicator</string>
+    <string name="pref_automix_indicator_desc">Display the countdown and \'Automixing\' badge on the player during DJ transitions</string>
 
     <string name="pref_bottom_menu_title">Navigation Bar</string>
+    <string name="pref_explorer_grid_title">Explorer Grid View</string>
+    <string name="pref_explorer_grid_subtitle">Display explorer categories as square tiles in 2 columns</string>
+    <string name="pref_library_category_layout_title">Library category layout</string>
+    <string name="pref_library_category_layout_subtitle">Choose between connected buttons and a single desktop-style dropdown button</string>
+    <string name="pref_library_category_layout_connected">Connected buttons</string>
+    <string name="pref_library_category_layout_connected_desc">Show all sections side by side (Playlists, Albums, Artists, Stations)</string>
+    <string name="pref_library_category_layout_dropdown">Single button (Desktop style)</string>
+    <string name="pref_library_category_layout_dropdown_desc">Press \"All\" to open a dropdown and choose any section</string>
     <string name="pref_bottom_menu_subtitle">Customize the bottom bar and FAB</string>
     <string name="pref_bottom_menu_style">Menu Style</string>
     <string name="pref_bottom_menu_style_modern">Modern</string>
@@ -1595,6 +1815,14 @@
     <string name="pref_bottom_menu_fab_recognition">Music Recognition</string>
     <string name="pref_bottom_menu_blur">Blur Effect</string>
     <string name="pref_bottom_menu_blur_sub">Apply a frosted glass effect</string>
+    <string name="pref_mini_player_title">Mini player</string>
+    <string name="pref_mini_player_swipe_action_title">Swipe gesture</string>
+    <string name="pref_mini_player_swipe_action_change_track">Change track</string>
+    <string name="pref_mini_player_swipe_action_change_track_desc">Swipe left for next track, right for previous track</string>
+    <string name="pref_mini_player_swipe_action_dismiss">Dismiss player</string>
+    <string name="pref_mini_player_swipe_action_dismiss_desc">Swipe horizontally to close the mini player</string>
+    <string name="pref_bottom_menu_tabs_reorder">Drag to reorder. The bar follows this order.</string>
+    <string name="reorder_handle">Reorder</string>
     <string name="pref_bottom_menu_tabs">Visible Tabs</string>
 \n    <string name="fab_settings_no_playlists">No playlist found in your library.</string>
     <string name="fab_settings_hint">Tip: only playlists added to your library appear here. Feel free to like playlists so you can use them as shortcuts!</string>
@@ -1619,12 +1847,22 @@
     <string name="date_today">Today</string>
     <string name="date_yesterday">Yesterday</string>
     <string name="recognition_tap_to_identify">Tap to identify music</string>
-    <string name="recognition_listening">Listening&#8230;</string>
+    <string name="recognition_listening">Identifying song&#8230;</string>
+    <string name="recognition_processing">Identifying song&#8230;</string>
     <string name="recognition_listening_desc">Listen to music around you</string>
-    <string name="recognition_processing">Analyzing&#8230;</string>
     <string name="recognition_listen_on_kittytune">Listen on KittyTune</string>
-    <string name="btn_retry">Retry</string>
-    <string name="recognition_track_not_found">Track not found</string>
+    <string name="btn_retry">Try again</string>
+    <string name="recognition_track_not_found">Couldn\'t identify song</string>
+    <string name="recognition_tap_to_identify_device">Tap to identify from apps</string>
+    <string name="recognition_listening_device_desc">Listen to music from apps on this device</string>
+    <string name="recognition_source_mic">Microphone</string>
+    <string name="recognition_source_device">This device</string>
+    <string name="recognition_device_not_supported">Internal audio capture requires Android 10 or later</string>
+    <string name="recognition_notif_listening_device">Listening to device audio&#8230;</string>
+    <string name="recognition_notif_channel">Music Recognition</string>
+    <string name="recognition_notif_channel_desc">Used during internal audio recognition</string>
+    <string name="recognition_notif_stop">Stop</string>
+    <string name="recognition_notif_track_found">Found: %1$s - %2$s</string>
     <!-- About Screen Redesign -->
     <string name="about_kofi_title">Support KittyTune</string>
     <string name="about_kofi_desc">This project is entirely free and open-source. If you enjoy my work, please consider supporting its development by buying me a coffee on Ko-fi!</string>
@@ -1909,6 +2147,11 @@
     <string name="upload_crop_artwork_title">Crop artwork</string>
     <string name="upload_crop_artwork_desc">Adjust and crop the image for your track</string>
     <string name="playlist_crop_artwork_desc">Adjust and crop the image for your playlist</string>
+    <string name="gif_cover_preview_title">Animated GIF cover</string>
+    <string name="gif_cover_preview_note">The GIF will loop as an animated cover. Cropping isn\'t available for GIFs — non-square images are center-cropped automatically. Animation plays in KittyTune; SoundCloud shows the first frame.</string>
+    <string name="gif_cover_set_btn">Set cover</string>
+    <string name="gif_cover_set_done">Animated GIF cover set</string>
+    <string name="gif_cover_too_large">GIF is too large — max %1$d MB</string>
     <string name="upload_crop_rotate_90">90°</string>
     <string name="upload_crop_free_rotate">Free rotation</string>
     <string name="upload_crop_reset">Reset</string>
@@ -1988,6 +2231,8 @@
     <string name="player_style_classic_desc">Classic standard mode (Flat bar)</string>
     <string name="player_customization_title">Player Customization</string>
     <string name="player_customization_subtitle">Styles, visual effects and action bar</string>
+    <string name="player_style_classic_short">Classic</string>
+    <string name="player_style_hybrid_short">Hybrid</string>
     <string name="player_style_group">PLAYER STYLE</string>
     <string name="player_mode_soundcloud">SoundCloud</string>
     <string name="player_mode_hybrid">Hybrid</string>
@@ -1999,6 +2244,25 @@
     <string name="player_opt_reactions_bar_subtitle">Quick reaction capsule on the card</string>
     <string name="player_opt_parallax_title">Artwork slide (Parallax)</string>
     <string name="player_opt_parallax_subtitle">Dynamic scrolling during playback</string>
+    <string name="pref_waveform_color_title">Waveform color</string>
+    <string name="pref_waveform_color_subtitle">Highlight color for waveform playback progress</string>
+    <string name="waveform_color_soundcloud">Classic Orange (SoundCloud)</string>
+    <string name="waveform_color_cover_art">Match cover art (Auto)</string>
+    <string name="waveform_color_app_theme">App theme accent</string>
+    <string name="waveform_color_custom">Custom color</string>
+    <string name="waveform_preview_title">Waveform Preview</string>
+    <string name="waveform_mode_soundcloud_title">SoundCloud</string>
+    <string name="waveform_mode_soundcloud_sub">Classic Orange</string>
+    <string name="waveform_mode_cover_title">Cover Art</string>
+    <string name="waveform_mode_cover_sub">Auto Match</string>
+    <string name="waveform_mode_theme_title">App Theme</string>
+    <string name="waveform_mode_theme_sub">Theme Accent</string>
+    <string name="waveform_mode_custom_title">Custom</string>
+    <string name="waveform_mode_custom_sub">Touch Picker</string>
+    <string name="color_picker_hue">Hue</string>
+    <string name="color_picker_saturation">Saturation</string>
+    <string name="color_picker_brightness">Brightness</string>
+    <string name="color_picker_presets">Preset Colors</string>
     <string name="player_action_bar_5_title">BOTTOM ACTION BAR (5 BUTTONS)</string>
     <string name="player_action_bar_4_title">BOTTOM ACTION BAR (4 BUTTONS)</string>
     <string name="player_action_bar_5_desc">5 configurable buttons at the bottom of the player</string>
@@ -2577,4 +2841,319 @@
     <string name="home_support_banner_donate_kofi">Support on Ko-fi</string>
     <string name="home_support_banner_dismiss">Dismiss</string>
     <string name="home_support_banner_remind_later">Remind me later</string>
+
+    <!-- Equalizer -->
+    <string name="equalizer_title">Equalizer</string>
+    <string name="equalizer_subtitle">16-band graphic equalizer &amp; preamp</string>
+    <string name="equalizer_response_curve">Frequency Response</string>
+    <string name="equalizer_presets">Presets</string>
+    <string name="equalizer_preamp">Preamp</string>
+    <string name="equalizer_bands_title">Frequency Bands</string>
+    <string name="equalizer_double_tap_hint">Double tap any band to reset to 0 dB</string>
+    <string name="equalizer_reset">Reset Equalizer</string>
+    <string name="equalizer_off">Off</string>
+    <!-- DJ Flow / DJ assistant -->
+    <string name="dj_flow_title">DJ Flow</string>
+    <string name="dj_flow_subtitle_on">Non-stop mixing</string>
+    <string name="dj_flow_subtitle_off">Off</string>
+    <string name="dj_flow_tempo">Tempo</string>
+    <string name="dj_flow_key">Key</string>
+    <string name="dj_flow_analysing">Analysing…</string>
+    <string name="dj_flow_unknown">—</string>
+    <string name="dj_flow_bpm_value">%1$d BPM</string>
+    <string name="dj_flow_bar_beat">Bar %1$d/4 · Beat %2$d/16</string>
+    <string name="dj_flow_ask_button">What do you want to hear?</string>
+    <string name="dj_flow_next_up">Next up</string>
+    <string name="dj_flow_unknown_track">Unknown</string>
+    <string name="dj_flow_match_summary">%1$d%% match</string>
+    <string name="dj_flow_mixing_in_bars">Mixing in %1$d bars</string>
+    <string name="dj_flow_mixing_in_bar">Mixing in 1 bar</string>
+    <string name="dj_flow_mixing_now">Mixing now</string>
+    <string name="dj_flow_mix_now">Mix now</string>
+    <string name="dj_flow_empty_queue">Add tracks to the queue so the DJ can plan ahead.</string>
+
+    <string name="pref_haptics_contrast">Impact</string>
+    <string name="pref_haptics_contrast_sub">How much the vibration follows contrast rather than loudness. Higher keeps build-ups light so the drop lands.</string>
+    <string name="pref_haptics_contrast_off">Off</string>
+    <string name="pref_haptics_contrast_full">Full</string>
+
+    <!-- App Logs & Diagnostics -->
+    <string name="logs_title">App Logs &amp; Diagnostics</string>
+    <string name="logs_subtitle">View, export, or share logs to help troubleshoot issues</string>
+    <string name="logs_save_all">Save to File</string>
+    <string name="logs_save_logcat">Save Logcat</string>
+    <string name="logs_copy_all">Copy All</string>
+    <string name="logs_copy_summary">Copy Diagnostics</string>
+    <string name="logs_copy_logcat">Copy Logcat</string>
+    <string name="logs_share">Share Logs</string>
+    <string name="logs_copied_toast">Logs copied to clipboard!</string>
+    <string name="logs_saved_toast">Logs saved successfully!</string>
+    <string name="logs_save_failed_toast">Failed to save logs to file.</string>
+    <string name="logs_tab_diagnostics">Diagnostics</string>
+    <string name="logs_tab_logcat">Logcat</string>
+    <string name="logs_tab_crash">Crash Report</string>
+    <string name="logs_no_crash">No crash recorded. The app is running smoothly!</string>
+    <string name="logs_clear_crash">Clear Crash Log</string>
+    <string name="logs_search_hint">Filter logs (e.g. error, exoplayer)&#8230;</string>
+    <string name="logs_sec_device">Device &amp; System</string>
+    <string name="logs_sec_app">Application</string>
+    <string name="logs_sec_memory">Memory &amp; Storage</string>
+    <string name="logs_sec_playback">Playback &amp; Audio</string>
+    <string name="logs_sec_network">Network &amp; Providers</string>
+    <!-- Settings Parity & Search -->
+    <string name="homepage_search">Search settings</string>
+    <string name="search_settings_hint">Search settings…</string>
+    <string name="settings_search_results">Search results</string>
+    <string name="settings_search_no_results">No settings found</string>
+    <string name="search_no_recent_results">No recent search results</string>
+    <string name="search_no_results">No results</string>
+    <string name="search_suggestion_no_match">No results for \"%1$s\"</string>
+    <string name="settings_search_recent_header">Recent search results</string>
+    <string name="settings_search_clear_recent">Clear</string>
+    <string name="settings_search_clear_history">Clear history</string>
+
+    <!-- Theme Presets -->
+    <string name="theme_presets_title">Ready-made themes</string>
+    <string name="theme_preset_ocean">Ocean</string>
+    <string name="theme_preset_forest">Forest</string>
+    <string name="theme_preset_sunset">Sunset</string>
+    <string name="theme_preset_rose">Rose</string>
+    <string name="theme_preset_lavender">Lavender</string>
+    <string name="theme_preset_mint">Mint</string>
+    <string name="theme_preset_default">KittyTune</string>
+    <string name="theme_custom_short">Custom</string>
+    <string name="theme_amoled">AMOLED</string>
+    <string name="logs_refresh">Refresh</string>
+
+
+    <string name="pref_show_remaining_time">Remaining time</string>
+    <string name="pref_show_remaining_time_desc">Show remaining time (-00:14) instead of total duration on playback bar</string>
+    <string name="pref_volume_slider_title">Volume slider</string>
+    <string name="volume_horizontal">Horizontal</string>
+    <string name="volume_vertical">Vertical</string>
+    <string name="volume_style_title">Volume style</string>
+    <string name="volume_style_same">Match progress bar</string>
+    <string name="player_buttons_title">Player buttons</string>
+    <string name="player_buttons_desc">Show or hide player bar buttons according to your preferences</string>
+    <string name="player_button_like">Like</string>
+    <string name="player_button_like_desc">Displays heart next to artwork to like track</string>
+    <string name="player_button_lyrics">Lyrics</string>
+    <string name="player_button_lyrics_desc">Instantly opens synchronized lyrics</string>
+    <string name="player_button_miniplayer">Mini-player</string>
+    <string name="player_button_miniplayer_desc">Switch to floating Picture-in-Picture window</string>
+    <string name="player_button_panel">Settings panel</string>
+    <string name="player_button_panel_desc">Opens side panel with track details, lyrics and effects</string>
+    <string name="player_button_queue">Queue</string>
+    <string name="player_button_queue_desc">Direct access to the upcoming tracks queue</string>
+    <string name="player_button_shuffle">Shuffle</string>
+    <string name="player_button_shuffle_desc">Enable or disable track shuffle</string>
+    <string name="player_button_repeat">Repeat</string>
+    <string name="player_button_repeat_desc">Repeat current song or playlist</string>
+
+    <!-- Menu Tiles (3 dots sheet) -->
+    <string name="menu_tiles_title">Menu buttons</string>
+    <string name="menu_tiles_desc">Hold a button in the track or playlist menu to move it, right-click to hide it. Bring hidden ones back here.</string>
+    <string name="menu_tiles_reset">Reset order</string>
+    <string name="menu_tiles_track">Track menu</string>
+    <string name="menu_tiles_reorder_desc">Drag to reorder. The track menu follows this order.</string>
+    <string name="menu_tiles_playlist">Playlist menu</string>
+
+    <!-- Player Shape -->
+    <string name="player_shape_title">Player silhouette</string>
+    <string name="player_shape_desc">Choose overall player bar appearance</string>
+    <string name="player_shape_default">Standard</string>
+    <string name="player_shape_default_desc">Discrete seamless bar</string>
+    <string name="player_shape_rounded">Rounded</string>
+    <string name="player_shape_rounded_desc">Modern soft corners</string>
+    <string name="player_shape_floating">Floating dock</string>
+    <string name="player_shape_floating_desc">Levitating pill container</string>
+
+    <!-- Floating Bar Details -->
+    <string name="floating_bar_title">Floating bar</string>
+    <string name="floating_bar_corner">Corner radius</string>
+    <string name="floating_bar_width">Width</string>
+    <string name="floating_bar_margin">Bottom spacing</string>
+    <string name="floating_bar_translucent">Translucent</string>
+    <string name="floating_bar_translucent_sub">Screen content shows softly through the bar</string>
+
+    <string name="settings_group_window">Window and text</string>
+    <string name="settings_group_covers">Covers &amp; Visuals</string>
+    <string name="player_advanced_title">Controls &amp; Sensitivity</string>
+    <string name="player_advanced_desc">Scrubbing sensitivity and behavior</string>
+    <string name="pref_seek_wheel">Scrubbing sensitivity</string>
+    <string name="pref_screensaver_title">Dim on inactivity</string>
+    <string name="pref_screensaver_desc">Dims playback view after inactivity</string>
+
+    <!-- YEARLY PLAYBACK / SOUNDCLOUD WRAPPED -->
+    <string name="yearly_playback_title">SoundCloud Wrapped</string>
+    <string name="yearly_playback_menu_title">SoundCloud Wrapped</string>
+    <string name="yearly_playback_home_badge">SoundCloud Wrapped</string>
+    <string name="yearly_playback_home_title">Your 2026 in Sound</string>
+    <string name="yearly_playback_home_subtitle">Relive the tracks, artists and moments that define your musical journey</string>
+    <string name="yearly_playback_home_action">Explore</string>
+    <string name="yearly_playback_stats_banner_title">SoundCloud Wrapped</string>
+    <string name="yearly_playback_stats_banner_sub">2026 in progress &amp; past archives</string>
+    <string name="yearly_playback_stats_play_action">Explore</string>
+    <string name="yearly_playback_hub_title">SoundCloud Wrapped</string>
+    <string name="yearly_playback_hub_subtitle">Your musical milestones &amp; annual recaps</string>
+    <string name="yearly_playback_in_prep_badge">In preparation</string>
+    <string name="yearly_playback_in_prep_title">SoundCloud Wrapped %1$s</string>
+    <string name="yearly_playback_in_prep_desc">Your %1$s Wrapped is in preparation. Keep listening to your music, your recap will arrive at the end of the year ( ˘ ᵕ ˘ ) ♬</string>
+    <string name="yearly_playback_in_prep_status">Arriving at the end of the year</string>
+    <string name="yearly_playback_in_prep_toast">SoundCloud Wrapped %1$s is currently in preparation and will be available at the end of the year!</string>
+    <string name="yearly_playback_archives_title">Archives</string>
+    <string name="yearly_playback_archives_subtitle">Relive previous SoundCloud Wrapped editions</string>
+    <string name="yearly_playback_locked_badge">Not eligible</string>
+    <string name="yearly_playback_locked_account_desc">Account created in %1$s</string>
+    <string name="yearly_playback_locked_toast">Unavailable: your SoundCloud account was created in %1$s, after this edition.</string>
+    <string name="yearly_playback_launch_story">Play Story</string>
+    <string name="yearly_playback_view_playlist">View Playlist</string>
+    <string name="yearly_playback_member_since">SoundCloud member since %1$s</string>
+    <string name="yearly_playback_close">Close</string>
+    <string name="yearly_playback_unavailable_badge">Unavailable</string>
+    <string name="yearly_playback_unavailable_desc">No Playback generated on SoundCloud for this year</string>
+    <string name="yearly_playback_unavailable_toast">SoundCloud didn\'t generate a Playback playlist for your account in %1$s.</string>
+    <string name="yearly_playback_playlist_404_title">Playback Unavailable</string>
+    <string name="yearly_playback_playlist_404_desc">This Playback playlist is not available or was not generated by SoundCloud for your account.</string>
+
+    <!-- SHARE SCREENSHOT & SOCIAL OPTIONS -->
+    <string name="share_screenshot_title">Share your screenshot</string>
+    <string name="share_screenshot_subtitle">Share visual with a link to this track so that your friends can also listen to it too.</string>
+    <string name="share_option_whatsapp">WhatsApp</string>
+    <string name="share_option_whatsapp_status">Status</string>
+    <string name="share_option_instagram_stories">Stories</string>
+    <string name="share_option_facebook_story">Stories</string>
+    <string name="share_option_snapchat">Snapchat</string>
+    <string name="share_option_twitter">X</string>
+    <string name="share_option_threads">Threads</string>
+    <string name="share_option_bluesky">Bluesky</string>
+    <string name="share_option_mastodon">Mastodon</string>
+    <string name="share_option_telegram">Telegram</string>
+    <string name="share_option_sms">SMS</string>
+    <string name="share_option_save_to_device">Save</string>
+    <string name="share_option_copy_link">Copy Link</string>
+    <string name="more_options_share_option">More</string>
+    <string name="share_copied_to_clipboard">Link copied to clipboard</string>
+    <string name="share_screenshot_saved_toast">Image saved to device</string>
+    <string name="share_screenshot_save_failed_toast">Failed to save image</string>
+    <string name="share_tracktitle_artist_link">Listen to %1$s by %2$s on #SoundCloud\n%3$s</string>
+    <string name="share_tracktitle_link">Listen to %1$s on #SoundCloud\n%2$s</string>
+    <string name="share_playlist_artist_link">Listen to %1$s, a playlist by %2$s on #SoundCloud\n%3$s</string>
+    <string name="share_playback_link">Listen to my 2025 Playback on #SoundCloud\n%1$s</string>
+
+    <!-- YOUR MIX -->
+    <string name="mix_title">Your mix</string>
+    <string name="mix_subtitle">Built from what you actually play, not what you already liked.</string>
+    <string name="mix_start">Start mixing</string>
+    <string name="mix_building">Building your mix…</string>
+    <string name="mix_customise">Customise the mix</string>
+    <string name="mix_needs_history">Play a few tracks first — the mix is built from your listening.</string>
+    <string name="mix_nothing_found">Nothing came back. Check your connection and try again.</string>
+    <string name="mix_no_seeds">Could not find that artist on SoundCloud. Try the exact name.</string>
+    <string name="mix_all_known">Everything found was already in your library. Try a different artist or genre.</string>
+    <string name="mix_in_the_style_of">In the style of an artist</string>
+    <string name="mix_artist_hint">Yeat, Fred again.., …</string>
+    <string name="mix_by_genre">Or a genre</string>
+    <string name="mix_track_count">%1$d tracks</string>
+    <string name="mix_basis">Based on %1$s</string>
+    <string name="mix_basis_more">+%1$d more</string>
+    <string name="mix_done">%1$d tracks from %2$s, in your queue.</string>
+    <string name="mix_customise_sub">Build it around one artist, or one genre.</string>
+    <string name="mix_genre_search_hint">Search a genre, or type any tag</string>
+    <string name="mix_genre_custom">Mix “%1$s”</string>
+    <string name="mix_trusted_sources_title">Trusted sources &amp; verified artists</string>
+    <string name="mix_trusted_sources_sub">Prioritise artists with more followers. Turn off to freely include remixes, bootlegs and small creators.</string>
+    <string name="mix_card_subtitle">Enable your personal mix, created especially for you</string>
+    <string name="mix_enable">Enable mix</string>
+    <string name="mix_vibe_my_taste">My Vibe</string>
+    <string name="mix_vibe_my_taste_sub">Alternative, personal flow</string>
+    <string name="mix_vibe_rock">E-e, rock!</string>
+    <string name="mix_vibe_rock_sub">Alternative, not like everyone else</string>
+    <string name="mix_vibe_sad">Survive this sadness</string>
+    <string name="mix_vibe_sad_sub">Melancholy &amp; calm vibes</string>
+    <string name="mix_vibe_rap">Yo, rap</string>
+    <string name="mix_vibe_rap_sub">Hip-Hop, trap &amp; beats</string>
+    <string name="mix_vibe_dance">Dance what\'s inside</string>
+    <string name="mix_vibe_dance_sub">Electronic, club &amp; synth</string>
+    <string name="mix_vibe_pop">Pop hits</string>
+    <string name="mix_vibe_pop_sub">Catchy melodies &amp; pop energy</string>
+    <string name="mix_vibe_artist">In the style of %1$s</string>
+    <string name="mix_playing">Playing mix</string>
+    <string name="mix_resume">Resume mix</string>
+    <string name="mix_dislike">I don\'t like this</string>
+    <string name="pref_home_cards_group_title">Home screen cards</string>
+    <string name="pref_home_listening_stats_desc">Show listening statistics card on the home screen</string>
+    <string name="pref_home_your_mix_desc">Show personalized mix card on the home screen</string>
+
+    <!-- Search Keywords (Localized Tags for Settings Search) -->
+    <string name="keywords_themes">theme, color, dark mode, light mode, amoled, oled, palette, wallpaper, colors, appearance</string>
+    <string name="keywords_player">player, seekbar, slider, wavy, slim, squiggly, buttons, menu, sheet, dock, floating, bar, volume</string>
+    <string name="keywords_navigation_bar">navigation bar, bottom bar, tabs, fab, dock, shortcuts, customize</string>
+    <string name="keywords_fab">floating action button, fab, shortcut, floating button, quick action</string>
+    <string name="keywords_lyrics">lyrics, karaoke, sync, synced lyrics, translation, song words, provider, font</string>
+    <string name="keywords_color_palette">color palette, accent color, tint, custom color</string>
+    <string name="keywords_app_icon">app icon, icon, logo, visual</string>
+    <string name="keywords_dynamic_colors">dynamic colors, wallpaper colors, monet, material you</string>
+    <string name="keywords_track_dynamic">album art, cover color, track dynamic, cover</string>
+    <string name="keywords_pure_black">pure black, true black, amoled, oled</string>
+    <string name="keywords_remaining_time">remaining time, countdown, elapsed, duration, time left</string>
+    <string name="keywords_volume_slider">volume, volume slider, vertical, horizontal</string>
+    <string name="keywords_animated_covers">animated covers, video cover, video artwork, live cover</string>
+    <string name="keywords_animated_artist_profiles">animated artist profiles, artist video, banner</string>
+    <string name="keywords_font">font, typography, custom font, typeface, font weight, text style</string>
+    <string name="keywords_explorer_grid">explorer grid, grid layout, display grid</string>
+    <string name="keywords_library_layout">library, filters, categories, desktop layout, buttons</string>
+    <string name="keywords_achievements">achievements, trophies, rewards, badges, popups</string>
+    <string name="keywords_stats">stats, listening stats, history, recap, wrapped, listening time, top tracks, top artists</string>
+    <string name="keywords_your_mix">your mix, start mixing, recommendations, custom playlist, daily mix, vibe</string>
+    <string name="keywords_audio">audio quality, equalizer, normalization, gain, bitrate, audio settings</string>
+    <string name="keywords_equalizer">equalizer, eq, preamp, preset, bass, treble, frequency, sound</string>
+    <string name="keywords_volume_normalization">volume normalization, replaygain, lufs, gain, loudness</string>
+    <string name="keywords_audio_mono">mono, mono audio, stereo, channels</string>
+    <string name="keywords_haptics">haptics, vibrations, touch feedback, vibration strength</string>
+    <string name="keywords_crossfade">crossfade, gapless, transition, blend, fade</string>
+    <string name="keywords_autoplay">autoplay, automatic playback, recommendation, up next</string>
+    <string name="keywords_automix">automix, smart transition, beatmatch, dj flow, overlap</string>
+    <string name="keywords_stop_on_task_clear">stop on task clear, quit, app close, kill task</string>
+    <string name="keywords_persist_queue">persist queue, remember queue, queue, playlist queue</string>
+    <string name="keywords_save_position">save position, resume playback, playback position</string>
+    <string name="keywords_sleep_timer">sleep timer, bedtime, auto stop, timer, countdown, fade out</string>
+    <string name="keywords_accounts">accounts, streaming sources, connections, login, link account</string>
+    <string name="keywords_storage">storage, cache, clear cache, disk space, memory, cleanup</string>
+    <string name="keywords_local_media">local files, folders, sd card, scan, offline music, mp3</string>
+    <string name="keywords_backup">backup, restore, export, import, transfer, settings backup</string>
+    <string name="keywords_sync">sync, devices, pairing, connect device, qr code</string>
+    <string name="keywords_proxy">proxy, network, port, ip, socks, http, dns, vpn</string>
+    <string name="keywords_language">language, translate, english, french, german, russian, vietnamese, hungarian, system</string>
+    <string name="keywords_start_screen">start screen, home, library, startup</string>
+    <string name="keywords_auto_update">auto update, check for updates, new version, startup check</string>
+    <string name="keywords_content_filter">content filter, ai detection, block music, auto skip, blocked tracks, blocked artists</string>
+    <string name="keywords_mini_player_swipe">mini player, swipe gesture, skip track, dismiss</string>
+
+    <!-- YEARLY PLAYBACK ADDITIONAL STRINGS -->
+    <string name="yearly_playback_year_title">SoundCloud Wrapped %1$d</string>
+    <string name="yearly_playback_playback_year_title">SoundCloud Playback %1$d</string>
+    <string name="yearly_playback_archive_2025_subtitle">Your 2025 Playback • Official Rive Story</string>
+    <string name="yearly_playback_archive_2024_subtitle">Your top tracks playlist of 2024</string>
+    <string name="yearly_playback_archive_2023_subtitle">Your hits playlist of 2023</string>
+    <string name="yearly_playback_loading_title">Loading your Wrapped…</string>
+    <string name="yearly_playback_loading_desc">Fetching your highlights from SoundCloud</string>
+    <string name="yearly_playback_empty_title">No Playback History Yet</string>
+    <string name="yearly_playback_empty_desc">No SoundCloud Wrapped was found for your account for this year.</string>
+    <string name="yearly_playback_error_title">Couldn\'t Load Playback</string>
+    <string name="yearly_playback_error_desc">Please check your network connection or try again later.</string>
+    <string name="yearly_playback_explore_detailed_stats">Explore Detailed Stats</string>
+
+    <!-- ECO MODE / DATA SAVER -->
+    <string name="quality_data_section">Quality &amp; Data</string>
+    <string name="data_saver_title">Data Saver</string>
+    <string name="data_saver_sub">One switch for all traffic: lowest bitrate on every source, light covers, no animated artwork. Applies to SoundCloud, YouTube Music, Qobuz, TIDAL and Deezer.</string>
+    <string name="data_saver_metered_only">Only on mobile network</string>
+    <string name="data_saver_metered_only_sub">On Wi-Fi everything returns to your chosen quality</string>
+    <string name="data_saver_forced_eco">Eco — forced by Data Saver</string>
+    <string name="provider_data_saver_title">Disable on mobile data</string>
+    <string name="provider_data_saver_sub">Qobuz, TIDAL and Deezer will not be used on a mobile network — only SoundCloud and YouTube. Connect to Wi-Fi to enjoy Hi-Res again.</string>
+    <string name="provider_enabled_hint">SoundCloud and YouTube Music are the base sources and are always available.</string>
+    <string name="provider_disabled_suffix">(off)</string>
+    <string name="keywords_data_saver">data saver, traffic, mobile data, eco, save, bandwidth, network, mobile network</string>
 </resources>

@@ -1,8 +1,12 @@
     package com.alananasss.kittytune.ui.home
 
+    import android.view.HapticFeedbackConstants
+    import androidx.compose.foundation.ExperimentalFoundationApi
     import androidx.compose.foundation.background
     import androidx.compose.foundation.clickable
+    import androidx.compose.foundation.combinedClickable
     import androidx.compose.foundation.layout.*
+    import androidx.compose.ui.platform.LocalView
     import androidx.compose.foundation.lazy.LazyColumn
     import androidx.compose.foundation.lazy.LazyRow
     import androidx.compose.foundation.lazy.items
@@ -16,6 +20,9 @@
 import com.alananasss.kittytune.ui.icons.Icon
     import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
     import androidx.compose.runtime.Composable
+    import androidx.compose.runtime.collectAsState
+    import androidx.compose.runtime.getValue
+    import androidx.compose.runtime.remember
     import androidx.compose.ui.Alignment
     import androidx.compose.ui.Modifier
     import androidx.compose.ui.draw.clip
@@ -118,6 +125,12 @@ import com.alananasss.kittytune.ui.icons.Icon
                     Text(stringResource(R.string.no_results), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } else {
+                val blockedTrackIds by com.alananasss.kittytune.data.BlockManager.blockedTrackIdsFlow.collectAsState()
+                val blockedArtistIds by com.alananasss.kittytune.data.BlockManager.blockedArtistIdsFlow.collectAsState()
+                val unblockedTracks = remember(viewModel.popularTracks, blockedTrackIds, blockedArtistIds) {
+                    viewModel.popularTracks.filter { it.id !in blockedTrackIds && (it.user?.id == null || it.user.id !in blockedArtistIds) }
+                }
+
                 // main content in a vertically scrollable column
                 LazyColumn(
                     modifier = Modifier.padding(innerPadding),
@@ -150,7 +163,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                     }
 
                     // popular tracks section with horizontal swiping by groups of 5
-                    if (viewModel.popularTracks.isNotEmpty()) {
+                    if (unblockedTracks.isNotEmpty()) {
                         item {
                             Text(
                                 text = stringResource(R.string.new_releases_popular_tracks),
@@ -161,7 +174,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                         }
 
                         // split the list into pages of 5 tracks
-                        val pages = viewModel.popularTracks.chunked(5)
+                        val pages = unblockedTracks.chunked(5)
                         item {
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
@@ -179,7 +192,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                                                 track = track,
                                                 rank = absoluteIndex + 1,
                                                 currentlyPlayingTrack = playerViewModel.currentTrack,
-                                                onClick = { playerViewModel.playPlaylist(viewModel.popularTracks, absoluteIndex) },
+                                                onClick = { playerViewModel.playPlaylist(unblockedTracks, absoluteIndex) },
                                                 onOptionClick = { playerViewModel.showTrackOptions(track) }
                                             )
                                         }
@@ -193,7 +206,7 @@ import com.alananasss.kittytune.ui.icons.Icon
         }
     }
 
-    // this is the track row with rank and play count
+    @OptIn(ExperimentalFoundationApi::class)
     @Composable
     fun PopularTrackRow(
         track: Track,
@@ -202,13 +215,27 @@ import com.alananasss.kittytune.ui.icons.Icon
         onClick: () -> Unit,
         onOptionClick: () -> Unit
     ) {
+        val view = LocalView.current
+        val blockedTrackIds by com.alananasss.kittytune.data.BlockManager.blockedTrackIdsFlow.collectAsState()
+        val blockedArtistIds by com.alananasss.kittytune.data.BlockManager.blockedArtistIdsFlow.collectAsState()
+        if (track.id in blockedTrackIds || (track.user?.id != null && track.user.id in blockedArtistIds)) {
+            return
+        }
+
         val isCurrent = currentlyPlayingTrack?.id == track.id
         val titleColor = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onClick)
+                .clip(RoundedCornerShape(12.dp))
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = {
+                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        onOptionClick()
+                    }
+                )
                 .padding(vertical = 6.dp), // no horizontal padding here, it's on the column
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -265,7 +292,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                 )
                 // artist and play count
                 Text(
-                    text = "${track.user?.username ?: stringResource(R.string.unknown_artist)} • ${formatNumber(track.playbackCount)} ${stringResource(R.string.playback_count_formatted)}",
+                    text = "${track.displayArtist.ifBlank { track.user?.username ?: stringResource(R.string.unknown_artist) }} • ${formatNumber(track.playbackCount)} ${stringResource(R.string.playback_count_formatted)}",
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodyMedium,
@@ -321,7 +348,8 @@ import com.alananasss.kittytune.ui.icons.Icon
                         text = subtitle,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }

@@ -17,7 +17,9 @@
     import com.alananasss.kittytune.data.network.RetrofitClient
     import com.alananasss.kittytune.domain.Playlist
     import com.alananasss.kittytune.domain.Track
+    import com.alananasss.kittytune.domain.TrackPublisherMetadata
     import com.alananasss.kittytune.domain.User
+    import com.alananasss.kittytune.data.BlockManager
     import com.alananasss.kittytune.data.SessionManager
     import com.google.gson.Gson
     import com.google.gson.reflect.TypeToken
@@ -44,6 +46,13 @@
     import kotlinx.coroutines.awaitAll
     import com.zionhuang.innertube.models.WatchEndpoint
     import com.alananasss.kittytune.utils.NetworkUtils
+    import com.alananasss.kittytune.data.ArtistProfileCache
+    import com.alananasss.kittytune.data.local.AppDatabase
+    import com.alananasss.kittytune.data.local.LocalPlaylist
+    import com.alananasss.kittytune.data.local.LocalTrack
+    import com.alananasss.kittytune.data.local.LocalArtist
+    import com.alananasss.kittytune.data.local.toTrack
+    import kotlinx.coroutines.flow.firstOrNull
 
     data class HomeSection(
         val title: String,
@@ -98,6 +107,8 @@
         private fun getString(resId: Int): String = com.alananasss.kittytune.utils.LocaleUtils.updateBaseContextLocale(getApplication()).getString(resId)
         private fun getString(resId: Int, vararg args: Any): String = com.alananasss.kittytune.utils.LocaleUtils.updateBaseContextLocale(getApplication()).getString(resId, *args)
 
+        private val playerPrefs = com.alananasss.kittytune.data.local.PlayerPreferences(application)
+
         var userProfile by mutableStateOf<User?>(null)
 
         val homeSections = mutableStateListOf<HomeSection>()
@@ -105,7 +116,17 @@
 
         var isSearching by mutableStateOf(false)
         var searchQuery by mutableStateOf("")
-        var activeFilter by mutableStateOf(SearchFilter.ALL)
+        var activeFilter by mutableStateOf(
+            if (playerPrefs.getRememberSearchFilter()) {
+                try {
+                    SearchFilter.valueOf(playerPrefs.getLastSearchFilter())
+                } catch (_: Exception) {
+                    SearchFilter.ALL
+                }
+            } else {
+                SearchFilter.ALL
+            }
+        )
         var isSearchLoading by mutableStateOf(false)
         var activeSearchSource by mutableStateOf(SearchSource.SOUNDCLOUD)
 
@@ -170,6 +191,33 @@
                     generatePersonalizedCategories()
                 }
             }
+            viewModelScope.launch {
+                com.alananasss.kittytune.data.BlockManager.blockedTrackIdsFlow.collect { blockedIds ->
+                    if (blockedIds.isNotEmpty()) {
+                        searchResultsTracks.removeAll { it.id in blockedIds }
+                        searchResultsYoutube.removeAll { it.id in blockedIds }
+                        searchResultsVk.removeAll { it.id in blockedIds }
+                        searchResultsSpotify.removeAll { it.id in blockedIds }
+                        searchResultsDeezerTracks.removeAll { it.id in blockedIds }
+                        searchResultsTidalTracks.removeAll { it.id in blockedIds }
+                        searchResultsQobuzTracks.removeAll { it.id in blockedIds }
+                    }
+                }
+            }
+            viewModelScope.launch {
+                com.alananasss.kittytune.data.BlockManager.blockedArtistIdsFlow.collect { blockedArtists ->
+                    if (blockedArtists.isNotEmpty()) {
+                        searchResultsTracks.removeAll { it.user?.id in blockedArtists }
+                        searchResultsArtists.removeAll { it.id in blockedArtists }
+                        searchResultsYoutube.removeAll { it.user?.id in blockedArtists }
+                        searchResultsVk.removeAll { it.user?.id in blockedArtists }
+                        searchResultsSpotify.removeAll { it.user?.id in blockedArtists }
+                        searchResultsDeezerTracks.removeAll { it.user?.id in blockedArtists }
+                        searchResultsTidalTracks.removeAll { it.user?.id in blockedArtists }
+                        searchResultsQobuzTracks.removeAll { it.user?.id in blockedArtists }
+                    }
+                }
+            }
         }
 
         fun onSearchQueryChanged(query: String) {
@@ -208,6 +256,12 @@
             if (!NetworkUtils.isInternetAvailable(getApplication())) {
                 isOfflineMode = true
                 isRefreshing = false
+                if (homeSections.isEmpty()) {
+                    loadFromCache()
+                    if (homeSections.isEmpty()) {
+                        loadOfflineFallbackSections()
+                    }
+                }
                 return
             }
 
@@ -223,11 +277,12 @@
 
         private suspend fun unshortenUrl(shortUrl: String): String = withContext(Dispatchers.IO) {
             try {
-                val builder = OkHttpClient.Builder().followRedirects(true).followSslRedirects(true)
-                val client = com.alananasss.kittytune.data.network.ProxyManager.configureOkHttpClient(builder).build()
+                // The shared client already follows redirects; the response is closed so its pooled
+                // connection goes back instead of leaking. Only the request metadata is read here,
+                // so the body was never consumed and the socket was never released.
+                val client = com.alananasss.kittytune.data.network.ProxyManager.getOkHttpClient()
                 val request = Request.Builder().url(shortUrl).head().build()
-                val response = client.newCall(request).execute()
-                response.request.url.toString()
+                client.newCall(request).execute().use { response -> response.request.url.toString() }
             } catch (e: Exception) {
                 shortUrl
             }
@@ -381,9 +436,37 @@
         }
 
         var searchTrigger by mutableStateOf(0)
-        fun activateSearch() { isSearching = true; searchTrigger++ }
-        fun clearSearch() { searchQuery = ""; isSearching = false; clearSearchResults() }
-        fun onFilterChanged(filter: SearchFilter) { activeFilter = filter; if (searchQuery.isNotBlank()) { searchJob?.cancel(); searchJob = viewModelScope.launch { performSearch(searchQuery) } } }
+        fun activateSearch() {
+            if (!playerPrefs.getRememberSearchFilter()) {
+                activeFilter = SearchFilter.ALL
+            } else {
+                try {
+                    activeFilter = SearchFilter.valueOf(playerPrefs.getLastSearchFilter())
+                } catch (_: Exception) {
+                    activeFilter = SearchFilter.ALL
+                }
+            }
+            isSearching = true
+            searchTrigger++
+        }
+        fun clearSearch() {
+            searchQuery = ""
+            isSearching = false
+            if (!playerPrefs.getRememberSearchFilter()) {
+                activeFilter = SearchFilter.ALL
+            }
+            clearSearchResults()
+        }
+        fun onFilterChanged(filter: SearchFilter) {
+            activeFilter = filter
+            if (playerPrefs.getRememberSearchFilter()) {
+                playerPrefs.setLastSearchFilter(filter.name)
+            }
+            if (searchQuery.isNotBlank()) {
+                searchJob?.cancel()
+                searchJob = viewModelScope.launch { performSearch(searchQuery) }
+            }
+        }
 
         fun onSearchSourceChanged(source: SearchSource) {
             if (activeSearchSource == source) return
@@ -403,10 +486,17 @@
             searchResultsTidalTracks.clear(); searchResultsTidalAlbums.clear(); searchResultsTidalPlaylists.clear(); searchResultsTidalArtists.clear()
             searchResultsQobuzTracks.clear(); searchResultsQobuzAlbums.clear(); searchResultsQobuzPlaylists.clear(); searchResultsQobuzArtists.clear()
             tracksNextUrl = null; artistsNextUrl = null; playlistsNextUrl = null
+            youtubeContinuation = null
         }
 
         private suspend fun performSearch(query: String) {
             isSearchLoading = true; clearSearchResults()
+            val isOffline = !NetworkUtils.isInternetAvailable(getApplication())
+            if (isOffline) {
+                performOfflineSearch(query)
+                isSearchLoading = false
+                return
+            }
             try {
                 when (activeSearchSource) {
                     SearchSource.SOUNDCLOUD -> performSoundCloudSearch(query)
@@ -417,10 +507,182 @@
                     SearchSource.TIDAL -> performTidalSearch(query)
                     SearchSource.QOBUZ -> performQobuzSearch(query)
                 }
+                if (searchResultsTracks.isEmpty() && searchResultsArtists.isEmpty() && searchResultsPlaylists.isEmpty()) {
+                    performOfflineSearch(query)
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
+                performOfflineSearch(query)
             } finally {
                 isSearchLoading = false
+            }
+        }
+
+        suspend fun performOfflineSearch(query: String) {
+            val cleanQuery = query.trim().lowercase()
+            if (cleanQuery.isBlank()) {
+                clearSearchResults()
+                return
+            }
+
+            withContext(Dispatchers.IO) {
+                val db = AppDatabase.getDatabase(getApplication()).downloadDao()
+
+                // 1. Downloaded tracks
+                val downloadedTracks: List<Track> = try {
+                    db.getAllTracksList().filter {
+                        it.localAudioPath.isNotEmpty() && (
+                            it.title.lowercase().contains(cleanQuery) ||
+                            it.artist.lowercase().contains(cleanQuery)
+                        )
+                    }.map {
+                        it.toTrack(
+                            artworkOverride = it.localArtworkPath.ifEmpty { it.artworkUrl },
+                            isLiked = true
+                        )
+                    }
+                } catch (e: Exception) {
+                    emptyList<Track>()
+                }
+
+                // 2. Liked tracks
+                val likedTracks: List<Track> = try {
+                    LikeRepository.likedTracks.value.filter {
+                        it.title?.lowercase()?.contains(cleanQuery) == true ||
+                        (it.user?.username?.lowercase()?.contains(cleanQuery) == true)
+                    }
+                } catch (e: Exception) {
+                    emptyList<Track>()
+                }
+
+                // 3. Cached Home & Mix tracks
+                val homeTracks: List<Track> = try {
+                    homeSections.flatMap { it.content.filterIsInstance<Track>() }.filter {
+                        it.title?.lowercase()?.contains(cleanQuery) == true ||
+                        (it.user?.username?.lowercase()?.contains(cleanQuery) == true)
+                    }
+                } catch (e: Exception) {
+                    emptyList<Track>()
+                }
+
+                // 4. History tracks
+                val historyTracks: List<Track> = try {
+                    db.getHistory().first().filter {
+                        it.title.lowercase().contains(cleanQuery) ||
+                        it.subtitle.lowercase().contains(cleanQuery)
+                    }.map {
+                        Track(
+                            id = it.numericId.takeIf { nid -> nid != 0L } ?: kotlin.math.abs(it.id.hashCode().toLong()),
+                            title = it.title,
+                            user = User(0L, it.subtitle, null),
+                            artworkUrl = it.imageUrl,
+                            durationMs = 0L,
+                            permalinkUrl = it.originalUrl ?: "",
+                            source = it.source
+                        )
+                    }
+                } catch (e: Exception) {
+                    emptyList<Track>()
+                }
+
+                val allMatchedTracks: List<Track> = (downloadedTracks + likedTracks + homeTracks + historyTracks)
+                    .distinctBy { it.id }
+                    .filter { it.user?.id !in BlockManager.blockedArtistIdsFlow.value }
+
+                // 5. Saved Artists, Cached Artists & Artists from downloaded tracks
+                val savedArtistsUsers: List<User> = try {
+                    db.getAllSavedArtists().first().filter {
+                        it.username.lowercase().contains(cleanQuery)
+                    }.map {
+                        User(
+                            id = it.id,
+                            username = it.username,
+                            avatarUrl = it.avatarUrl,
+                            trackCount = it.trackCount
+                        )
+                    }
+                } catch (e: Exception) {
+                    emptyList<User>()
+                }
+
+                val cachedArtistsUsers: List<User> = try {
+                    ArtistProfileCache.getAllCachedArtists().filter {
+                        it.username?.lowercase()?.contains(cleanQuery) == true
+                    }
+                } catch (e: Exception) {
+                    emptyList<User>()
+                }
+
+                val downloadedArtists: List<User> = try {
+                    db.getAllTracksList().filter {
+                        it.localAudioPath.isNotEmpty() && it.artist.lowercase().contains(cleanQuery)
+                    }.map {
+                        User(
+                            id = kotlin.math.abs(it.artist.hashCode().toLong()),
+                            username = it.artist,
+                            avatarUrl = it.localArtworkPath.ifEmpty { it.artworkUrl }
+                        )
+                    }
+                } catch (e: Exception) {
+                    emptyList<User>()
+                }
+
+                val allMatchedArtists: List<User> = (savedArtistsUsers + cachedArtistsUsers + downloadedArtists)
+                    .distinctBy { it.username?.lowercase()?.trim() }
+                    .filter { it.id !in BlockManager.blockedArtistIdsFlow.value }
+
+                // 6. Downloaded Playlists & Home Playlists
+                val downloadedPlaylists: List<Playlist> = try {
+                    db.getDownloadedPlaylists().first().filter {
+                        it.title.lowercase().contains(cleanQuery) ||
+                        it.artist.lowercase().contains(cleanQuery)
+                    }.map { local ->
+                        Playlist(
+                            id = local.id,
+                            title = local.title,
+                            artworkUrl = local.localCoverPath ?: local.artworkUrl,
+                            calculatedArtworkUrl = local.localCoverPath,
+                            trackCount = 0,
+                            user = User(0, local.artist, null)
+                        )
+                    }
+                } catch (e: Exception) {
+                    emptyList<Playlist>()
+                }
+
+                val homePlaylists: List<Playlist> = try {
+                    homeSections.flatMap { it.content.filterIsInstance<Playlist>() }.filter {
+                        it.title?.lowercase()?.contains(cleanQuery) == true ||
+                        (it.user?.username?.lowercase()?.contains(cleanQuery) == true)
+                    }
+                } catch (e: Exception) {
+                    emptyList<Playlist>()
+                }
+
+                val allMatchedPlaylists: List<Playlist> = (downloadedPlaylists + homePlaylists).distinctBy { it.id }
+
+                withContext(Dispatchers.Main) {
+                    searchResultsTracks.clear()
+                    searchResultsArtists.clear()
+                    searchResultsPlaylists.clear()
+
+                    when (activeFilter) {
+                        SearchFilter.ALL -> {
+                            searchResultsTracks.addAll(allMatchedTracks)
+                            searchResultsArtists.addAll(allMatchedArtists)
+                            searchResultsPlaylists.addAll(allMatchedPlaylists)
+                        }
+                        SearchFilter.TRACKS -> {
+                            searchResultsTracks.addAll(allMatchedTracks)
+                        }
+                        SearchFilter.ARTISTS -> {
+                            searchResultsArtists.addAll(allMatchedArtists)
+                        }
+                        SearchFilter.PLAYLISTS -> {
+                            searchResultsPlaylists.addAll(allMatchedPlaylists)
+                        }
+                    }
+                }
             }
         }
 
@@ -430,13 +692,13 @@
                     val result = com.alananasss.kittytune.data.deezer.DeezerSearchRepository.search(query, limit = 50)
                     withContext(Dispatchers.Main) {
                         searchResultsDeezerTracks.clear()
-                        searchResultsDeezerTracks.addAll(result.tracks)
+                        searchResultsDeezerTracks.addAll(BlockManager.filterBlocked(result.tracks))
                         searchResultsDeezerAlbums.clear()
                         searchResultsDeezerAlbums.addAll(result.albums)
                         searchResultsDeezerPlaylists.clear()
                         searchResultsDeezerPlaylists.addAll(result.playlists)
                         searchResultsDeezerArtists.clear()
-                        searchResultsDeezerArtists.addAll(result.artists)
+                        searchResultsDeezerArtists.addAll(result.artists.filter { it.id !in BlockManager.blockedArtistIdsFlow.value })
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -450,13 +712,13 @@
                     val result = com.alananasss.kittytune.data.tidal.TidalSearchRepository.search(getApplication(), query, limit = 50)
                     withContext(Dispatchers.Main) {
                         searchResultsTidalTracks.clear()
-                        searchResultsTidalTracks.addAll(result.tracks)
+                        searchResultsTidalTracks.addAll(BlockManager.filterBlocked(result.tracks))
                         searchResultsTidalAlbums.clear()
                         searchResultsTidalAlbums.addAll(result.albums)
                         searchResultsTidalPlaylists.clear()
                         searchResultsTidalPlaylists.addAll(result.playlists)
                         searchResultsTidalArtists.clear()
-                        searchResultsTidalArtists.addAll(result.artists)
+                        searchResultsTidalArtists.addAll(result.artists.filter { it.id !in BlockManager.blockedArtistIdsFlow.value })
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -470,13 +732,13 @@
                     val result = com.alananasss.kittytune.data.qobuz.QobuzSearchRepository.search(getApplication(), query, limit = 50)
                     withContext(Dispatchers.Main) {
                         searchResultsQobuzTracks.clear()
-                        searchResultsQobuzTracks.addAll(result.tracks)
+                        searchResultsQobuzTracks.addAll(BlockManager.filterBlocked(result.tracks))
                         searchResultsQobuzAlbums.clear()
                         searchResultsQobuzAlbums.addAll(result.albums)
                         searchResultsQobuzPlaylists.clear()
                         searchResultsQobuzPlaylists.addAll(result.playlists)
                         searchResultsQobuzArtists.clear()
-                        searchResultsQobuzArtists.addAll(result.artists)
+                        searchResultsQobuzArtists.addAll(result.artists.filter { it.id !in BlockManager.blockedArtistIdsFlow.value })
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -491,7 +753,7 @@
                     val results = vkApi.searchAudios(query)
                     withContext(Dispatchers.Main) {
                         searchResultsVk.clear()
-                        searchResultsVk.addAll(results.tracks)
+                        searchResultsVk.addAll(BlockManager.filterBlocked(results.tracks))
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -513,7 +775,7 @@
                                     avatarUrl = matched.avatarUrl ?: a.avatarUrl
                                 )
                             } else a
-                        }
+                        }.filter { it.name.isNotBlank() }.distinctBy { (it.id.ifBlank { it.name }).trim().lowercase() }
                         val firstA = enrichedArtists.firstOrNull()
                         val baseTrack = track.copy(artists = enrichedArtists).toTrack()
                         if (firstA != null) {
@@ -530,7 +792,7 @@
                     }
                     withContext(Dispatchers.Main) {
                         searchResultsSpotify.clear()
-                        searchResultsSpotify.addAll(mappedTracks)
+                        searchResultsSpotify.addAll(BlockManager.filterBlocked(mappedTracks))
                         searchResultsSpotifyAlbums.clear()
                         searchResultsSpotifyAlbums.addAll(results.albums)
                         searchResultsSpotifyPlaylists.clear()
@@ -551,16 +813,24 @@
                     val artistName = seedTrack.user?.username ?: ""
                     val query = "$cleanTitle $artistName audio"
 
-                    val result = YouTube.search(query, YouTube.SearchFilter.FILTER_VIDEO).getOrNull()
+                    val hideVideos = playerPrefs.getHideYoutubeVideos()
+                    val searchFilter = if (hideVideos) YouTube.SearchFilter.FILTER_SONG else YouTube.SearchFilter.FILTER_VIDEO
+                    val result = YouTube.search(query, searchFilter).getOrNull()
                     result?.items?.mapNotNull { item ->
                         if (item is SongItem) {
+                            val displayArtist = item.artists.joinToString(", ") { it.name }.ifEmpty { "YouTube Music" }
                             Track(
                                 id = kotlin.math.abs(item.id.hashCode().toLong()),
                                 title = item.title,
-                                user = User(0L, item.artists.firstOrNull()?.name ?: "YouTube", null),
+                                user = User(0L, displayArtist, null),
                                 artworkUrl = item.thumbnail,
                                 durationMs = (item.duration ?: 0) * 1000L,
                                 permalinkUrl = "https://youtube.com/watch?v=${item.id}",
+                                publisherMetadata = TrackPublisherMetadata(
+                                    albumTitle = item.album?.name,
+                                    artist = displayArtist,
+                                    explicit = item.explicit
+                                ),
                                 source = "youtube"
                             )
                         } else {
@@ -576,7 +846,7 @@
                                 Track(
                                     id = kotlin.math.abs(id.hashCode().toLong()),
                                     title = title,
-                                    user = User(0L, "YouTube", null),
+                                    user = User(0L, "YouTube Music", null),
                                     artworkUrl = null,
                                     durationMs = 0L,
                                     permalinkUrl = "https://youtube.com/watch?v=$id",
@@ -594,12 +864,14 @@
             }
         }
 
+        private var youtubeContinuation: String? = null
+
         private suspend fun performYoutubeSearch(query: String) {
             withContext(Dispatchers.IO) {
                 try {
                     val result = com.alananasss.kittytune.data.youtube.YoutubeSearchRepository.search(query)
                     withContext(Dispatchers.Main) {
-                        searchResultsYoutube.clear(); searchResultsYoutube.addAll(result.tracks)
+                        searchResultsYoutube.clear(); searchResultsYoutube.addAll(BlockManager.filterBlocked(result.tracks))
                         searchResultsYoutubeAlbums.clear(); searchResultsYoutubeAlbums.addAll(result.albums)
                         searchResultsYoutubePlaylists.clear(); searchResultsYoutubePlaylists.addAll(result.playlists)
                         searchResultsYoutubeArtists.clear(); searchResultsYoutubeArtists.addAll(result.artists)
@@ -617,15 +889,15 @@
                         val usersDef = async { try { api.searchUsers(query, limit = 5) } catch (e: Exception) { null } }
                         val playlistsDef = async { try { api.searchPlaylists(query, limit = 5) } catch (e: Exception) { null } }
 
-                        tracksDef.await()?.let { searchResultsTracks.addAll(it.collection); tracksNextUrl = it.next_href }
-                        usersDef.await()?.let { searchResultsArtists.addAll(it.collection); artistsNextUrl = it.next_href }
+                        tracksDef.await()?.let { searchResultsTracks.addAll(BlockManager.filterBlocked(it.collection)); tracksNextUrl = it.next_href }
+                        usersDef.await()?.let { searchResultsArtists.addAll(it.collection.filter { artist -> artist.id !in BlockManager.blockedArtistIdsFlow.value }); artistsNextUrl = it.next_href }
                         playlistsDef.await()?.let { searchResultsPlaylists.addAll(it.collection); playlistsNextUrl = it.next_href }
                     }
                     SearchFilter.TRACKS -> {
-                        val response = api.searchTracks(query, limit = 30); searchResultsTracks.addAll(response.collection); tracksNextUrl = response.next_href
+                        val response = api.searchTracks(query, limit = 30); searchResultsTracks.addAll(BlockManager.filterBlocked(response.collection)); tracksNextUrl = response.next_href
                     }
                     SearchFilter.ARTISTS -> {
-                        val response = api.searchUsers(query, limit = 30); searchResultsArtists.addAll(response.collection); artistsNextUrl = response.next_href
+                        val response = api.searchUsers(query, limit = 30); searchResultsArtists.addAll(response.collection.filter { artist -> artist.id !in BlockManager.blockedArtistIdsFlow.value }); artistsNextUrl = response.next_href
                     }
                     SearchFilter.PLAYLISTS -> {
                         val response = api.searchPlaylists(query, limit = 30); searchResultsPlaylists.addAll(response.collection); playlistsNextUrl = response.next_href
@@ -645,20 +917,50 @@
                             val vkApi = com.alananasss.kittytune.data.vk.VkApi(getApplication())
                             val results = vkApi.searchAudios(searchQuery, offset = currentCount)
                             if (results.tracks.isNotEmpty()) {
-                                val newTracks = results.tracks.filter { nt -> searchResultsVk.none { it.id == nt.id && it.user?.id == nt.user?.id } }
+                                val newTracks = BlockManager.filterBlocked(results.tracks.filter { nt -> searchResultsVk.none { it.id == nt.id && it.user?.id == nt.user?.id } })
                                 searchResultsVk.addAll(newTracks)
+                            }
+                        }
+                    } else if (activeSearchSource == SearchSource.YOUTUBE) {
+                        val continuation = youtubeContinuation
+                        if (continuation != null) {
+                            val contResult = withContext(Dispatchers.IO) {
+                                YouTube.searchContinuation(continuation).getOrNull()
+                            }
+                            youtubeContinuation = contResult?.continuation
+                            val newTracks = contResult?.items?.mapNotNull { item ->
+                                if (item is SongItem) {
+                                    val displayArtist = item.artists.joinToString(", ") { it.name }.ifEmpty { "YouTube Music" }
+                                    Track(
+                                        id = kotlin.math.abs(item.id.hashCode().toLong()),
+                                        title = item.title,
+                                        user = User(0L, displayArtist, null),
+                                        artworkUrl = item.thumbnail,
+                                        durationMs = (item.duration ?: 0) * 1000L,
+                                        permalinkUrl = "https://youtube.com/watch?v=${item.id}",
+                                        publisherMetadata = TrackPublisherMetadata(
+                                            albumTitle = item.album?.name,
+                                            artist = displayArtist,
+                                            explicit = item.explicit
+                                        ),
+                                        source = "youtube"
+                                    )
+                                } else null
+                            } ?: emptyList()
+                            if (newTracks.isNotEmpty()) {
+                                searchResultsYoutube.addAll(BlockManager.filterBlocked(newTracks.filter { nt -> searchResultsYoutube.none { it.id == nt.id } }))
                             }
                         }
                     } else {
                         when (activeFilter) {
                             SearchFilter.TRACKS -> {
                                 if (tracksNextUrl != null) {
-                                    val response = api.getSearchTracksNextPage(tracksNextUrl!!); searchResultsTracks.addAll(response.collection); tracksNextUrl = response.next_href
+                                    val response = api.getSearchTracksNextPage(tracksNextUrl!!); searchResultsTracks.addAll(BlockManager.filterBlocked(response.collection)); tracksNextUrl = response.next_href
                                 }
                             }
                             SearchFilter.ARTISTS -> {
                                 if (artistsNextUrl != null) {
-                                    val response = api.getSearchUsersNextPage(artistsNextUrl!!); searchResultsArtists.addAll(response.collection); artistsNextUrl = response.next_href
+                                    val response = api.getSearchUsersNextPage(artistsNextUrl!!); searchResultsArtists.addAll(response.collection.filter { artist -> artist.id !in BlockManager.blockedArtistIdsFlow.value }); artistsNextUrl = response.next_href
                                 }
                             }
                             SearchFilter.PLAYLISTS -> {
@@ -777,6 +1079,12 @@
             if (!NetworkUtils.isInternetAvailable(getApplication())) {
                 isOfflineMode = true
                 isLoading = false
+                if (homeSections.isEmpty()) {
+                    loadFromCache()
+                    if (homeSections.isEmpty()) {
+                        loadOfflineFallbackSections()
+                    }
+                }
                 return
             }
             isOfflineMode = false
@@ -784,6 +1092,83 @@
             viewModelScope.launch {
                 val token = tokenManager.getAccessToken()
                 if (token.isNullOrEmpty()) loadGuestData() else loadAuthenticatedData()
+            }
+        }
+
+        fun loadOfflineFallbackSections() {
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    val db = AppDatabase.getDatabase(getApplication()).downloadDao()
+                    val downloadedTracks = db.getAllTracksList().filter { it.localAudioPath.isNotEmpty() }
+                    val downloadedPlaylists = db.getDownloadedPlaylists().firstOrNull() ?: emptyList<LocalPlaylist>()
+                    val savedArtists = db.getAllSavedArtists().firstOrNull() ?: emptyList<LocalArtist>()
+
+                    val sections = mutableListOf<HomeSection>()
+
+                    if (downloadedTracks.isNotEmpty()) {
+                        val tracks = downloadedTracks.map { it.toTrack(artworkOverride = it.localArtworkPath.ifEmpty { it.artworkUrl }, isLiked = true) }
+                        sections.add(
+                            HomeSection(
+                                title = getApplication<Application>().getString(R.string.lib_downloads),
+                                subtitle = getApplication<Application>().getString(R.string.lib_downloads_subtitle),
+                                content = tracks,
+                                type = SectionType.TRACKS_ROW,
+                                id = "offline_downloads_tracks"
+                            )
+                        )
+                    }
+
+                    if (downloadedPlaylists.isNotEmpty()) {
+                        val playlists = downloadedPlaylists.map { local ->
+                            Playlist(
+                                id = local.id,
+                                title = local.title,
+                                artworkUrl = local.localCoverPath ?: local.artworkUrl,
+                                calculatedArtworkUrl = local.localCoverPath,
+                                trackCount = 0,
+                                user = User(0, local.artist, null)
+                            )
+                        }
+                        sections.add(
+                            HomeSection(
+                                title = getApplication<Application>().getString(R.string.lib_playlists),
+                                subtitle = getApplication<Application>().getString(R.string.lib_downloads_subtitle),
+                                content = playlists,
+                                type = SectionType.STATIONS_ROW,
+                                id = "offline_downloads_playlists"
+                            )
+                        )
+                    }
+
+                    if (savedArtists.isNotEmpty()) {
+                        val artists = savedArtists.map {
+                            User(
+                                id = it.id,
+                                username = it.username,
+                                avatarUrl = it.avatarUrl,
+                                trackCount = it.trackCount
+                            )
+                        }
+                        sections.add(
+                            HomeSection(
+                                title = getApplication<Application>().getString(R.string.lib_artists),
+                                subtitle = "",
+                                content = artists,
+                                type = SectionType.ARTISTS_ROW,
+                                id = "offline_saved_artists"
+                            )
+                        )
+                    }
+
+                    withContext(Dispatchers.Main) {
+                        if (sections.isNotEmpty()) {
+                            homeSections.clear()
+                            homeSections.addAll(sections)
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
         }
 

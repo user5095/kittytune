@@ -785,7 +785,8 @@ fun ProxySettingsScreen(
                                     text = stringResource(R.string.proxy_profile_save_as),
                                     fontWeight = FontWeight.SemiBold,
                                     style = MaterialTheme.typography.labelLarge,
-                                    maxLines = 1
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
 
@@ -835,7 +836,8 @@ fun ProxySettingsScreen(
                                     Text(
                                         text = stringResource(R.string.proxy_testing),
                                         style = MaterialTheme.typography.labelLarge,
-                                        maxLines = 1
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 } else {
                                     Icon(
@@ -848,7 +850,8 @@ fun ProxySettingsScreen(
                                         text = stringResource(R.string.proxy_test_connection),
                                         fontWeight = FontWeight.Bold,
                                         style = MaterialTheme.typography.labelLarge,
-                                        maxLines = 1
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
@@ -948,7 +951,8 @@ private fun PresetChip(
             text = label,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold,
-            maxLines = 1
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }

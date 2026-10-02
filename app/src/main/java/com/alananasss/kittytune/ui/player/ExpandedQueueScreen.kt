@@ -41,6 +41,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.alananasss.kittytune.R
@@ -60,12 +61,23 @@ fun ExpandedQueueScreen(
     val view = LocalView.current
     val listState = rememberLazyListState()
 
+    // Anchored only when the playing track is not already on screen, and jumping rather than
+    // crawling when it is far off. This ran on every currentTrack change, so tapping a row jumped
+    // the list and put the row third from the top - which made tapping anything past the first
+    // screen unusable.
     LaunchedEffect(viewModel.currentTrack) {
         val track = viewModel.currentTrack
         if (track != null && queueState.isNotEmpty()) {
             val index = queueState.indexOfFirst { it.id == track.id }
             if (index >= 0) {
-                listState.scrollToItem(kotlin.math.max(0, index - 2))
+                val alreadyVisible = listState.layoutInfo.visibleItemsInfo.any { it.index == index }
+                if (!alreadyVisible) {
+                    if (index - listState.firstVisibleItemIndex > FAR_JUMP_ITEMS) {
+                        listState.scrollToItem(kotlin.math.max(0, index - 2))
+                    } else {
+                        listState.animateScrollToItem(kotlin.math.max(0, index - 2))
+                    }
+                }
             }
         }
     }
@@ -197,7 +209,7 @@ fun ExpandedQueueScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             AsyncImage(
-                                model = track.fullResArtwork,
+                                model = track.thumbnailUrl,
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
@@ -220,7 +232,8 @@ fun ExpandedQueueScreen(
                                         MaterialTheme.colorScheme.primary
                                     else
                                         MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
                                     text = track.displayArtist.ifBlank {
@@ -228,7 +241,8 @@ fun ExpandedQueueScreen(
                                     },
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                             Icon(
@@ -363,3 +377,6 @@ private fun SwipeToDeleteItem(
         }
     }
 }
+
+/** Past this many rows away, jump instead of scrolling a whole screenful. */
+private const val FAR_JUMP_ITEMS = 12

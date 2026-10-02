@@ -18,6 +18,7 @@ import com.alananasss.kittytune.ui.icons.Icon
     import androidx.compose.ui.Alignment
     import androidx.compose.ui.Modifier
     import androidx.compose.ui.draw.clip
+    import androidx.compose.ui.draw.clipToBounds
     import androidx.compose.ui.graphics.Color
     import androidx.compose.ui.layout.ContentScale
     import androidx.compose.ui.res.stringResource
@@ -80,6 +81,7 @@ import com.alananasss.kittytune.ui.icons.Icon
             modifier = modifier
                 .fillMaxWidth()
                 .height(64.dp)
+                .clipToBounds()
                 .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
                 .clickable(onClick = onClick)
                 .background(MaterialTheme.colorScheme.surfaceContainer)
@@ -91,7 +93,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                     .padding(horizontal = 12.dp)
             ) {
                 AsyncImage(
-                    model = track.fullResArtwork,
+                    model = track.thumbnailUrl,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
@@ -134,7 +136,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                     )
                 }
 
-                IconButton(onClick = { viewModel.playNext() }) {
+                IconButton(onClick = { viewModel.requestSkipNext() }) {
                     if (com.alananasss.kittytune.ui.theme.LocalPixelTheme.current) {
                         com.alananasss.kittytune.ui.theme.PixelSkipIcon(
                             forward = true,

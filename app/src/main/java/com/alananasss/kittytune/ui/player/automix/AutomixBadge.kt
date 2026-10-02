@@ -1,5 +1,13 @@
+/**
+ * Developed by Jason-Marshall Fastner, Germany <jasonfastner@protonmail.com>
+ * Questions, feedback, or beat-matching debates? Feel free to reach out via email!
+ * 
+ * Note: Cats always land on their feet, and with this engine, your transitions will too.
+ */
 package com.alananasss.kittytune.ui.player.automix
 
+import android.content.Context
+import android.content.SharedPreferences
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -24,24 +32,50 @@ import com.alananasss.kittytune.ui.icons.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alananasss.kittytune.R
 import com.alananasss.kittytune.audio.automix.AutomixManager
+import com.alananasss.kittytune.data.local.PlayerPreferences
 
 @Composable
 fun AutomixBadge(
     textColor: Color,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val prefs = remember(context) { PlayerPreferences(context) }
+    var showCrossfadeIndicator by remember { mutableStateOf(prefs.getCrossfadeIndicatorEnabled()) }
+    var showAutomixIndicator by remember { mutableStateOf(prefs.getAutomixIndicatorEnabled()) }
+
+    DisposableEffect(context) {
+        val sharedPrefs = context.getSharedPreferences("player_state", Context.MODE_PRIVATE)
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == PlayerPreferences.KEY_CROSSFADE_INDICATOR) {
+                showCrossfadeIndicator = prefs.getCrossfadeIndicatorEnabled()
+            } else if (key == PlayerPreferences.KEY_AUTOMIX_INDICATOR) {
+                showAutomixIndicator = prefs.getAutomixIndicatorEnabled()
+            }
+        }
+        sharedPrefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose {
+            sharedPrefs.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
+
     val isAutomixing by AutomixManager.isAutomixing.collectAsState()
     val automixDebug by AutomixManager.automixDebugInfo.collectAsState()
     val mixBeatsLeft by AutomixManager.mixBeatsLeft.collectAsState()
@@ -51,8 +85,10 @@ fun AutomixBadge(
     // Dynamic tempo-synced beat period (ms) based on outgoing track BPM
     val mixBeatMs = automixDebug?.outBpm?.takeIf { it > 0f }?.let { 60_000f / it } ?: 500f
 
-    // Only show badge when countdown is active, automixing, or crossfading
-    val visible = isAutomixing || isCrossfading || (beats != null && beats > 0)
+    val shouldShowAutomix = showAutomixIndicator && (isAutomixing || (beats != null && beats > 0))
+    val shouldShowCrossfade = showCrossfadeIndicator && isCrossfading && !isAutomixing
+
+    val visible = shouldShowAutomix || shouldShowCrossfade
 
     AnimatedVisibility(
         visible = visible,
@@ -71,7 +107,7 @@ fun AutomixBadge(
                 )
                 .padding(horizontal = 10.dp, vertical = 4.dp)
         ) {
-            if (isAutomixing || isCrossfading) {
+            if ((shouldShowAutomix && isAutomixing) || shouldShowCrossfade) {
                 val infiniteTransition = rememberInfiniteTransition(label = "CrossfadePulse")
                 val alpha by infiniteTransition.animateFloat(
                     initialValue = 0.35f,
@@ -88,13 +124,13 @@ fun AutomixBadge(
                     horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
                     Icon(
-                        imageVector = if (isAutomixing) Icons.Rounded.GraphicEq else Icons.Rounded.Repeat,
-                        contentDescription = if (isAutomixing) "Automixing" else "Crossfading",
+                        imageVector = if (shouldShowAutomix && isAutomixing) Icons.Rounded.GraphicEq else Icons.Rounded.Repeat,
+                        contentDescription = if (shouldShowAutomix && isAutomixing) "Automixing" else "Crossfading",
                         tint = textColor.copy(alpha = alpha),
                         modifier = Modifier.size(13.dp)
                     )
                     Text(
-                        text = stringResource(if (isAutomixing) R.string.automixing else R.string.crossfading),
+                        text = stringResource(if (shouldShowAutomix && isAutomixing) R.string.automixing else R.string.crossfading),
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
@@ -104,7 +140,7 @@ fun AutomixBadge(
                         maxLines = 1,
                     )
                 }
-            } else if (beats != null) {
+            } else if (shouldShowAutomix && beats != null) {
                 val beatTransition = rememberInfiniteTransition(label = "MixCountdownBeat")
                 val beatAlpha by beatTransition.animateFloat(
                     initialValue = 1f,
@@ -118,7 +154,7 @@ fun AutomixBadge(
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.GraphicEq,
@@ -136,6 +172,21 @@ fun AutomixBadge(
                         color = textColor.copy(alpha = beatAlpha),
                         maxLines = 1,
                     )
+                    // Animated 4-Beat LED grid
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        (1..4).forEach { dotIdx ->
+                            val isCurrentBeat = (((32 - beats) % 4) + 1) == dotIdx
+                            Box(
+                                modifier = Modifier
+                                    .size(if (isCurrentBeat) 6.dp else 4.dp)
+                                    .clip(androidx.compose.foundation.shape.CircleShape)
+                                    .background(if (isCurrentBeat) textColor else textColor.copy(alpha = 0.3f))
+                            )
+                        }
+                    }
                 }
             }
         }

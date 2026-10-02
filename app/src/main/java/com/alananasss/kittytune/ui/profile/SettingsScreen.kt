@@ -1,196 +1,174 @@
-    package com.alananasss.kittytune.ui.profile
+package com.alananasss.kittytune.ui.profile
 
-    import androidx.compose.foundation.layout.PaddingValues
-    import androidx.compose.ui.res.vectorResource
-    import androidx.compose.foundation.layout.fillMaxSize
-    import androidx.compose.foundation.layout.padding
-    import androidx.compose.foundation.lazy.LazyColumn
-    import androidx.compose.material.icons.Icons
-    import androidx.compose.material.icons.filled.SdStorage
-    import androidx.compose.material.icons.rounded.*
-    import androidx.compose.material3.MaterialTheme
-    import androidx.compose.runtime.Composable
-    import androidx.compose.runtime.remember
-    import androidx.compose.ui.Modifier
-    import androidx.compose.ui.res.stringResource
-    import androidx.compose.ui.unit.dp
-    import androidx.navigation.NavController
-    import com.alananasss.kittytune.R
-    import com.alananasss.kittytune.ui.common.SettingsGroup
-    import com.alananasss.kittytune.ui.common.SettingsItem
-    import com.alananasss.kittytune.ui.common.SettingsScaffold
-    import com.alananasss.kittytune.ui.player.PlayerViewModel
+import java.text.Normalizer
+import androidx.activity.compose.BackHandler
+import androidx.annotation.StringRes
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.*
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.navigation.NavController
+import com.alananasss.kittytune.R
+import com.alananasss.kittytune.data.local.PlayerPreferences
+import com.alananasss.kittytune.ui.common.SettingsGroup
+import com.alananasss.kittytune.ui.common.SettingsHighlightManager
+import com.alananasss.kittytune.ui.common.SettingsItem
+import com.alananasss.kittytune.ui.common.SettingsScaffold
+import com.alananasss.kittytune.ui.player.PlayerViewModel
 
-    @Composable
-    fun SettingsScreen(
-        navController: NavController,
-        onBackClick: () -> Unit,
-        playerViewModel: PlayerViewModel
-    ) {
-        val context = androidx.compose.ui.platform.LocalContext.current
-        val prefs = remember { com.alananasss.kittytune.data.local.PlayerPreferences(context) }
 
-        SettingsScaffold(
-            title = stringResource(R.string.settings_title),
-            onBackClick = onBackClick
-        ) { innerPadding ->
 
-            val miniPlayerHeight = if (playerViewModel.currentTrack != null) 64.dp else 0.dp
+/**
+ * The settings screen, structured exactly like KittyTune Desktop:
+ * - A top search bar with live filtering across all settings, keywords, and direct toggle switches.
+ * - The 7 clean desktop categories: Interface, Audio, Sources, Storage, Sync, Network, Misc.
+ */
+@Composable
+fun SettingsScreen(
+    navController: NavController,
+    onBackClick: () -> Unit,
+    playerViewModel: PlayerViewModel
+) {
+    SettingsScaffold(
+        title = stringResource(R.string.settings_title),
+        onBackClick = onBackClick
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .padding(top = innerPadding.calculateTopPadding())
+                .fillMaxSize()
+        ) {
+            // AOSP Settings Search Bar
+            SettingsHomeSearchBar(
+                onClick = { navController.navigate("settings_search") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+
             LazyColumn(
                 modifier = Modifier
-                    .padding(top = innerPadding.calculateTopPadding())
-                    .fillMaxSize(),
-                contentPadding = PaddingValues(bottom = innerPadding.calculateBottomPadding() + miniPlayerHeight + 150.dp, top = 16.dp)
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentPadding = PaddingValues(bottom = 180.dp, top = 8.dp)
             ) {
-
-                item {
-                    SettingsGroup(
-                        title = stringResource(R.string.settings_cat_appearance),
-                        items = listOf(
-                            { shape ->
-                                SettingsItem(
-                                    shape = shape,
-                                    title = stringResource(R.string.pref_appearance_title),
-                                    subtitle = stringResource(R.string.pref_appearance_subtitle),
-                                    icon = Icons.Rounded.Palette,
-                                    onClick = { navController.navigate("appearance_settings") }
-                                )
-                            },
-                            { shape ->
-                                SettingsItem(
-                                    shape = shape,
-                                    title = stringResource(R.string.pref_lyrics_title),
-                                    subtitle = stringResource(R.string.pref_lyrics_subtitle),
-                                    icon = Icons.Rounded.TextSnippet,
-                                    onClick = { navController.navigate("lyrics_settings") }
-                                )
+                SettingsCategory.entries.forEach { category ->
+                    item(key = "cat-${category.name}") {
+                        SettingsGroup(
+                            title = stringResource(category.titleRes),
+                            items = category.entriesFor().map { entry ->
+                                { shape ->
+                                    SettingsItem(
+                                        shape = shape,
+                                        title = stringResource(entry.titleRes),
+                                        subtitle = entry.subtitleRes?.let { stringResource(it) },
+                                        icon = entry.icon,
+                                        onClick = { navController.navigate(entry.route) }
+                                    )
+                                }
                             }
                         )
-                    )
-                }
-
-                item {
-                    SettingsGroup(
-                        title = stringResource(R.string.settings_cat_playback),
-                        items = listOf(
-                            { shape ->
-                                SettingsItem(
-                                    shape = shape,
-                                    title = stringResource(R.string.pref_audio_title),
-                                    subtitle = stringResource(R.string.pref_audio_subtitle),
-                                    icon = Icons.Rounded.GraphicEq,
-                                    onClick = { navController.navigate("audio_settings") }
-                                )
-                            },
-                            { shape ->
-                                SettingsItem(
-                                    shape = shape,
-                                    title = stringResource(R.string.pref_haptics_title),
-                                    subtitle = stringResource(R.string.pref_haptics_subtitle),
-                                    icon = Icons.Rounded.Vibration,
-                                    onClick = { navController.navigate("haptic_settings") }
-                                )
-                            }
-                        )
-                    )
-                }
-
-                item {
-                    SettingsGroup(
-                        title = stringResource(R.string.settings_cat_accounts),
-                        items = listOf(
-                            { shape ->
-                                SettingsItem(
-                                    shape = shape,
-                                    title = stringResource(R.string.pref_accounts_title),
-                                    subtitle = stringResource(R.string.pref_accounts_subtitle),
-                                    icon = Icons.Rounded.ManageAccounts,
-                                    onClick = { navController.navigate("accounts_settings") }
-                                )
-                            }
-                        )
-                    )
-                }
-
-                item {
-                    SettingsGroup(
-                        title = stringResource(R.string.settings_cat_general),
-                        items = listOf(
-                            { shape ->
-                                SettingsItem(
-                                    shape = shape,
-                                    title = stringResource(R.string.pref_local_title),
-                                    subtitle = stringResource(R.string.pref_local_subtitle),
-                                    icon = Icons.Filled.SdStorage,
-                                    onClick = { navController.navigate("local_media_settings") }
-                                )
-                            },
-                            { shape ->
-                                SettingsItem(
-                                    shape = shape,
-                                    title = stringResource(R.string.pref_storage_title),
-                                    subtitle = stringResource(R.string.pref_storage_subtitle),
-                                    icon = Icons.Rounded.Storage,
-                                    onClick = { navController.navigate("storage") }
-                                )
-                            },
-                            { shape ->
-                                SettingsItem(
-                                    shape = shape,
-                                    title = stringResource(R.string.pref_backup_title),
-                                    subtitle = stringResource(R.string.pref_backup_subtitle),
-                                    icon = Icons.Rounded.Backup,
-                                    onClick = { navController.navigate("backup_restore") }
-                                )
-                            },
-                            { shape ->
-                                SettingsItem(
-                                    shape = shape,
-                                    title = stringResource(R.string.music_import_title),
-                                    subtitle = stringResource(R.string.music_import_settings_subtitle),
-                                    icon = Icons.Rounded.ImportExport,
-                                    onClick = { navController.navigate("music_import") }
-                                )
-                            },
-                            { shape ->
-                                val proxyEnabled = prefs.getProxyEnabled()
-                                val proxyType = prefs.getProxyType()
-                                val proxyHost = prefs.getProxyHost().ifBlank { "127.0.0.1" }
-                                val proxyPort = prefs.getProxyPort()
-                                SettingsItem(
-                                    shape = shape,
-                                    title = stringResource(R.string.pref_proxy_title),
-                                    subtitle = if (proxyEnabled) {
-                                        stringResource(R.string.proxy_status_enabled, proxyType, proxyHost, proxyPort)
-                                    } else {
-                                        stringResource(R.string.pref_proxy_subtitle)
-                                    },
-                                    icon = Icons.Rounded.Dns,
-                                    onClick = { navController.navigate("proxy_settings") }
-                                )
-                            },
-                            { shape ->
-                                SettingsItem(
-                                    shape = shape,
-                                    title = stringResource(R.string.sync_title),
-                                    subtitle = stringResource(R.string.sync_intro),
-                                    icon = Icons.Rounded.Devices,
-                                    onClick = { navController.navigate("sync_settings") }
-                                )
-                            },
-                            { shape ->
-                                SettingsItem(
-                                    shape = shape,
-                                    title = stringResource(R.string.pref_about_title),
-                                    subtitle = stringResource(R.string.pref_about_subtitle),
-                                    icon = Icons.Rounded.Info,
-                                    onClick = { navController.navigate("about") }
-                                )
-                            }
-                        )
-                    )
+                    }
                 }
             }
         }
     }
+}
 
+/**
+ * AOSP Settings homepage search bar card (SearchBarStyle_v2 in com.android.settings_17.apk).
+ * Tapping it navigates to the dedicated AOSP settings search screen.
+ */
+@Composable
+fun SettingsHomeSearchBar(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(56.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp)
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_homepage_search),
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Text(
+                text = stringResource(R.string.homepage_search),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/**
+ * The Interface category's sub-pages, rendered identically to Desktop Screenshot 5:
+ * Thèmes, Design du lecteur, Barre de navigation, Paroles.
+ */
+@Composable
+fun InterfaceSettingsScreen(
+    navController: NavController,
+    onBackClick: () -> Unit
+) {
+    SettingsScaffold(
+        title = stringResource(R.string.settings_cat_interface),
+        onBackClick = onBackClick
+    ) { innerPadding ->
+        LazyColumn(
+            modifier = Modifier
+                .padding(top = innerPadding.calculateTopPadding())
+                .fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 180.dp, top = 16.dp)
+        ) {
+            item {
+                SettingsGroup(
+                    items = SettingsSubPage.interfacePages.map { page ->
+                        { shape ->
+                            SettingsItem(
+                                shape = shape,
+                                title = stringResource(page.titleRes),
+                                subtitle = page.subtitleRes?.let { stringResource(it) },
+                                icon = page.icon,
+                                iconContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                onClick = { navController.navigate(page.route) }
+                            )
+                        }
+                    }
+                )
+            }
+        }
+    }
+}

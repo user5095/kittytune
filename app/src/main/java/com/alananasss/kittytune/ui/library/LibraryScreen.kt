@@ -49,6 +49,7 @@ import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material3.*
 import com.alananasss.kittytune.ui.icons.Icon
+import com.alananasss.kittytune.ui.common.KittyOutlinedTextField
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -77,7 +78,9 @@ import com.alananasss.kittytune.data.LikeRepository
 import com.alananasss.kittytune.data.TokenManager
 import com.alananasss.kittytune.data.local.AppDatabase
 import com.alananasss.kittytune.data.local.LibraryFolder
+import com.alananasss.kittytune.data.local.LibraryCategoryLayout
 import com.alananasss.kittytune.data.local.LocalArtist
+import com.alananasss.kittytune.data.local.PlayerPreferences
 import com.alananasss.kittytune.data.network.RetrofitClient
 import com.alananasss.kittytune.domain.Playlist
 import com.alananasss.kittytune.domain.Track
@@ -113,6 +116,8 @@ fun LibraryScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val isGuest = TokenManager(context).isGuestMode()
+    val prefs = remember { PlayerPreferences(context) }
+    val libraryCategoryLayout by prefs.libraryCategoryLayoutFlow().collectAsState(initial = prefs.getLibraryCategoryLayout())
 
     val listState = rememberLazyGridState()
 
@@ -222,6 +227,51 @@ fun LibraryScreen(
 
     val scope = rememberCoroutineScope()
 
+    suspend fun resolvePlaylistTracks(playlist: Playlist): List<Track> {
+        if (!playlist.tracks.isNullOrEmpty()) return playlist.tracks!!
+        val local = AppDatabase.getDatabase(context).downloadDao().getTracksForPlaylistSync(playlist.id)
+        if (local.isNotEmpty()) {
+            return local.map { it.toTrack(artworkOverride = it.artworkUrl) }
+        }
+        val api = RetrofitClient.create(context)
+        val permalink = playlist.permalinkUrl ?: playlist.permalink
+        if (playlist.urn?.startsWith("soundcloud:system-playlists:") == true) {
+            return try {
+                val pl = api.getSystemPlaylist(playlist.urn!!)
+                val raw = pl.tracks ?: emptyList()
+                val incomplete = raw.filter { it.title.isNullOrBlank() || it.user == null }.map { it.id }
+                if (incomplete.isNotEmpty()) {
+                    val map = api.getTracksByIds(incomplete.joinToString(",")).associateBy { it.id }
+                    raw.map { map[it.id] ?: it }
+                } else raw
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+        if (permalink != null && (permalink.contains("discover/sets/") || permalink.contains("your-playback") || permalink.contains("system-playlists"))) {
+            return try {
+                val fullUrl = if (permalink.startsWith("http")) permalink else "https://soundcloud.com/${permalink.removePrefix("/")}"
+                val pl = api.resolvePlaylist(fullUrl)
+                val raw = pl.tracks ?: emptyList()
+                val incomplete = raw.filter { it.title.isNullOrBlank() || it.user == null }.map { it.id }
+                if (incomplete.isNotEmpty()) {
+                    val map = api.getTracksByIds(incomplete.joinToString(",")).associateBy { it.id }
+                    raw.map { map[it.id] ?: it }
+                } else raw
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+        if (playlist.id > 0) {
+            return try {
+                api.getPlaylist(playlist.id).tracks ?: emptyList()
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+        return emptyList()
+    }
+
     fun playPlaylistHelper(
         playlist: Playlist,
         shuffle: Boolean = false,
@@ -230,21 +280,7 @@ fun LibraryScreen(
         prepareBulkAdd: Boolean = false
     ) {
         scope.launch(Dispatchers.IO) {
-            val tracks: List<Track> = if (!playlist.tracks.isNullOrEmpty()) {
-                playlist.tracks!!
-            } else {
-                val local = AppDatabase.getDatabase(context).downloadDao().getTracksForPlaylistSync(playlist.id)
-                if (local.isNotEmpty()) {
-                    local.map { it.toTrack(artworkOverride = it.artworkUrl) }
-                } else if (playlist.id > 0) {
-                    try {
-                        val online = RetrofitClient.create(context).getPlaylist(playlist.id)
-                        online.tracks ?: emptyList()
-                    } catch (e: Exception) {
-                        emptyList()
-                    }
-                } else emptyList()
-            }
+            val tracks = resolvePlaylistTracks(playlist)
 
             if (tracks.isNotEmpty()) {
                 kotlinx.coroutines.withContext(Dispatchers.Main) {
@@ -264,12 +300,37 @@ fun LibraryScreen(
         }
     }
 
+    fun likeAllSongsHelper(playlist: Playlist) {
+        scope.launch(Dispatchers.IO) {
+            val tracks = resolvePlaylistTracks(playlist)
+            if (tracks.isEmpty()) {
+                kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(
+                        context,
+                        context.getString(R.string.toast_like_all_nothing),
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+                return@launch
+            }
+            val likedCount = LikeRepository.addLikesBulk(tracks)
+            kotlinx.coroutines.withContext(Dispatchers.Main) {
+                val message = if (likedCount > 0) {
+                    context.getString(R.string.toast_like_all_done, likedCount)
+                } else {
+                    context.getString(R.string.toast_like_all_nothing)
+                }
+                android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     if (showCreateDialog) {
         AlertDialog(
             onDismissRequest = { if (!isCreatingPlaylist) showCreateDialog = false },
             title = { Text(stringResource(R.string.lib_create_playlist_title)) },
             text = {
-                OutlinedTextField(
+                KittyOutlinedTextField(
                     value = newPlaylistName,
                     onValueChange = { newPlaylistName = it },
                     label = { Text(stringResource(R.string.lib_create_playlist_hint)) },
@@ -344,7 +405,7 @@ fun LibraryScreen(
             },
             title = { Text(stringResource(R.string.lib_create_folder_title)) },
             text = {
-                OutlinedTextField(
+                KittyOutlinedTextField(
                     value = newFolderName,
                     onValueChange = { newFolderName = it },
                     label = { Text(stringResource(R.string.lib_create_folder_hint)) },
@@ -396,7 +457,7 @@ fun LibraryScreen(
             onDismissRequest = { folderToRename = null },
             title = { Text(stringResource(R.string.dialog_rename_folder_title)) },
             text = {
-                OutlinedTextField(
+                KittyOutlinedTextField(
                     value = renameFolderName,
                     onValueChange = { renameFolderName = it },
                     label = { Text(stringResource(R.string.dialog_rename_folder_hint)) },
@@ -575,6 +636,18 @@ fun LibraryScreen(
                         playlistForDetails = targetPlaylist
                         showPlaylistDetailsSheet = true
                     })
+                }
+                if (playlist.isRealAlbum) {
+                    add(
+                        PlaylistActionItem(
+                            icon = Icons.Rounded.Favorite,
+                            text = context.getString(R.string.menu_like_all_songs),
+                            tint = primaryColor
+                        ) {
+                            selectedPlaylistForMenu = null
+                            likeAllSongsHelper(playlist)
+                        }
+                    )
                 }
                 if (!isInsideFolder) {
                     add(
@@ -1596,7 +1669,7 @@ fun LibraryScreen(
                             )
 
                             if (libraryViewModel.activeLibrarySource == LibrarySource.SOUNDCLOUD) {
-                                FilterChipsRow(libraryViewModel)
+                                FilterChipsRow(libraryViewModel, libraryCategoryLayout)
                             }
                         }
                     }
@@ -2064,6 +2137,9 @@ fun LibraryContentGrid(
                                 val stationId = permalink.substringAfter("track-stations:").substringBefore("?").substringBefore("/").substringBefore("&")
                                 "station:$stationId"
                             }
+                            permalink != null && (permalink.contains("discover/sets/") || permalink.contains("system-playlists") || permalink.contains("your-playback")) -> {
+                                "system_playlist:${android.net.Uri.encode(permalink)}"
+                            }
                             item.playlist.id < 0 -> "local_playlist:${item.playlist.id}"
                             else -> item.playlist.id.toString()
                         }
@@ -2287,8 +2363,12 @@ fun SearchBarHeader(
     )
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun FilterChipsRow(viewModel: LibraryViewModel) {
+fun FilterChipsRow(
+    viewModel: LibraryViewModel,
+    layout: LibraryCategoryLayout = LibraryCategoryLayout.CONNECTED
+) {
     val filters = remember(viewModel.uploadedTracks.size) {
         if (viewModel.uploadedTracks.isNotEmpty()) {
             listOf(
@@ -2308,27 +2388,183 @@ fun FilterChipsRow(viewModel: LibraryViewModel) {
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-    ) {
-        ExpressiveConnectedButtonGroup(
-            options = filters,
-            selectedOption = viewModel.selectedFilter,
-            onOptionSelected = { filter ->
-                viewModel.selectedFilter = if (viewModel.selectedFilter == filter) null else filter
-            },
-            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
-            labelProvider = { filter ->
-                Text(
-                    text = stringResource(filter.stringRes),
-                    style = MaterialTheme.typography.labelMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+    if (layout == LibraryCategoryLayout.CONNECTED) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp)
+        ) {
+            ExpressiveConnectedButtonGroup(
+                options = filters,
+                selectedOption = viewModel.selectedFilter,
+                onOptionSelected = { filter ->
+                    viewModel.selectedFilter = if (viewModel.selectedFilter == filter) null else filter
+                },
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                labelProvider = { filter ->
+                    Text(
+                        text = stringResource(filter.stringRes),
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            )
+        }
+    } else {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp)
+        ) {
+            var isMenuExpanded by remember { mutableStateOf(false) }
+            val arrowRotation by animateFloatAsState(
+                targetValue = if (isMenuExpanded) 180f else 0f,
+                animationSpec = tween(durationMillis = 200),
+                label = "FilterDropdownArrow"
+            )
+            val isFiltered = viewModel.selectedFilter != null
+
+            Box {
+                FilledTonalButton(
+                    onClick = { isMenuExpanded = true },
+                    shapes = ButtonDefaults.shapes(),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = if (isFiltered) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                        contentColor = if (isFiltered) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface
+                    ),
+                    contentPadding = PaddingValues(start = 14.dp, end = 10.dp, top = 6.dp, bottom = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = when (viewModel.selectedFilter) {
+                            LibraryFilter.PLAYLISTS -> Icons.AutoMirrored.Rounded.PlaylistPlay
+                            LibraryFilter.ALBUMS -> Icons.Rounded.Album
+                            LibraryFilter.ARTISTS -> Icons.Rounded.Person
+                            LibraryFilter.STATIONS -> Icons.Rounded.Radio
+                            LibraryFilter.UPLOADS -> Icons.Rounded.CloudUpload
+                            null -> Icons.Rounded.FilterList
+                        },
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = viewModel.selectedFilter?.let { stringResource(it.stringRes) }
+                            ?: stringResource(R.string.filter_all),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    if (isFiltered) {
+                        Box(
+                            modifier = Modifier
+                                .size(20.dp)
+                                .clip(CircleShape)
+                                .clickable { viewModel.selectedFilter = null },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Close,
+                                contentDescription = stringResource(R.string.btn_clear),
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    Icon(
+                        imageVector = Icons.Rounded.ArrowDropDown,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(20.dp)
+                            .rotate(arrowRotation)
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = isMenuExpanded,
+                    onDismissRequest = { isMenuExpanded = false },
+                    shape = RoundedCornerShape(16.dp),
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                ) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = stringResource(R.string.filter_all),
+                                fontWeight = if (viewModel.selectedFilter == null) FontWeight.Bold else FontWeight.Normal
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Rounded.AllInclusive,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = if (viewModel.selectedFilter == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        trailingIcon = if (viewModel.selectedFilter == null) {
+                            {
+                                Icon(
+                                    imageVector = Icons.Rounded.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        } else null,
+                        onClick = {
+                            viewModel.selectedFilter = null
+                            isMenuExpanded = false
+                        }
+                    )
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+
+                    filters.forEach { filter ->
+                        val isSelected = viewModel.selectedFilter == filter
+                        val icon = when (filter) {
+                            LibraryFilter.PLAYLISTS -> Icons.AutoMirrored.Rounded.PlaylistPlay
+                            LibraryFilter.ALBUMS -> Icons.Rounded.Album
+                            LibraryFilter.ARTISTS -> Icons.Rounded.Person
+                            LibraryFilter.STATIONS -> Icons.Rounded.Radio
+                            LibraryFilter.UPLOADS -> Icons.Rounded.CloudUpload
+                        }
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = stringResource(filter.stringRes),
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            },
+                            trailingIcon = if (isSelected) {
+                                {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Check,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            } else null,
+                            onClick = {
+                                viewModel.selectedFilter = if (isSelected) null else filter
+                                isMenuExpanded = false
+                            }
+                        )
+                    }
+                }
             }
-        )
+        }
     }
 }
 
@@ -2607,7 +2843,7 @@ fun UploadTrackGridCard(
             contentAlignment = Alignment.Center
         ) {
             AsyncImage(
-                model = track.fullResArtwork,
+                model = track.thumbnailUrl,
                 contentDescription = track.title,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop

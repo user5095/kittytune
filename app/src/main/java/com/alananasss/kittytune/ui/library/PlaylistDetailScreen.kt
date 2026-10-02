@@ -8,6 +8,8 @@ import android.content.Intent
 import android.net.Uri
 import android.util.Log
 import android.view.HapticFeedbackConstants
+import android.widget.Toast
+import com.alananasss.kittytune.utils.GifUtils
 import kotlinx.coroutines.flow.first
 import com.alananasss.kittytune.data.HistoryRepository
 import androidx.activity.compose.BackHandler
@@ -18,8 +20,10 @@ import com.alananasss.kittytune.ui.upload.TrackArtworkCropDialog
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -126,6 +130,7 @@ fun PlaylistDetailScreen(
     var isAlbum by remember { mutableStateOf(false) }
 
     var playlistTitle by remember { mutableStateOf("") }
+    var isNotFound by remember { mutableStateOf(false) }
     var playlistSharing by remember { mutableStateOf<String?>(null) }
     var playlistCover by remember { mutableStateOf<String?>(null) }
     var coverUpdateKey by remember { mutableLongStateOf(0L) }
@@ -159,16 +164,25 @@ fun PlaylistDetailScreen(
     val isYoutubeArtist = playlistId.startsWith("youtube:artist:")
     val isArtistView = isYoutubeArtist || isDeezerArtist || isTidalArtist || isQobuzArtist || isArtistStation
 
-    val cleanIdStr = playlistId.replace("station_artist:", "")
-        .replace("station_spotify:", "")
-        .replace("spotify_radio:", "")
-        .replace("spotify:album:", "")
-        .replace("spotify_album:", "")
-        .replace("spotify:playlist:", "")
+
+
+    val decodedPlaylistId = remember(playlistId) {
+        try {
+            java.net.URLDecoder.decode(playlistId, "UTF-8")
+        } catch (_: Exception) {
+            playlistId
+        }
+    }
+
+    val cleanIdStr = decodedPlaylistId
         .replace("spotify_playlist:", "")
         .replace("youtube:album:", "")
         .replace("youtube:playlist:", "")
         .replace("youtube:artist:", "")
+        .replace("spotify_album:", "")
+        .replace("spotify_radio:", "")
+        .replace("station_spotify:", "")
+        .replace("spotify:", "")
         .replace("deezer:album:", "")
         .replace("deezer:playlist:", "")
         .replace("deezer:artist:", "")
@@ -179,6 +193,7 @@ fun PlaylistDetailScreen(
         .replace("qobuz:playlist:", "")
         .replace("qobuz:artist:", "")
         .replace("station:", "")
+        .replace("station_artist:", "")
         .replace("liked_by:", "")
         .replace("local_playlist:", "")
         .replace("yt_radio:", "")
@@ -187,8 +202,14 @@ fun PlaylistDetailScreen(
 
     val currentIdLong = cleanIdStr.toLongOrNull() ?: 0L
 
-    val stableId = remember(playlistId, cleanIdStr, currentIdLong) {
-        if (currentIdLong != 0L) currentIdLong else kotlin.math.abs(cleanIdStr.hashCode().toLong())
+    val isSystemPlaylistRoute = playlistId.startsWith("system_playlist:") ||
+            decodedPlaylistId.startsWith("system_playlist:") ||
+            cleanIdStr.startsWith("soundcloud:system-playlists:") ||
+            cleanIdStr.contains("discover/sets/") ||
+            cleanIdStr.contains("your-playback")
+
+    val stableId = remember(playlistId, cleanIdStr, currentIdLong, isSystemPlaylistRoute) {
+        if (currentIdLong != 0L && !isSystemPlaylistRoute) currentIdLong else kotlin.math.abs(cleanIdStr.hashCode().toLong())
     }
 
     val playlistInDb by DownloadManager.isPlaylistInLibraryFlow(stableId).collectAsState(initial = null)
@@ -208,7 +229,6 @@ fun PlaylistDetailScreen(
 
     val isLikesScreen = playlistId == "likes" || playlistId.startsWith("liked_by:")
     val isSpotifyRadio = playlistId.startsWith("spotify_radio:") || playlistId.startsWith("station_spotify:")
-    val isSystemPlaylistRoute = playlistId.startsWith("system_playlist:")
     val isSpecialSystemScreen = isLikesScreen || playlistId == "downloads" || playlistId == "local_files" || isSystemPlaylistRoute || isSpotifyRadio || playlistId.startsWith("yt_radio:") || playlistId.startsWith("station:") || playlistId.startsWith("station_artist:") || playlistId.startsWith("spotify:")
     val isCanReorderGlobal = (isUserCreated || isDownloadedView) && !isSpecialSystemScreen
 
@@ -365,11 +385,29 @@ fun PlaylistDetailScreen(
 
     var tempCoverBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var showCoverCropDialog by remember { mutableStateOf(false) }
+    var pendingGifUri by remember { mutableStateOf<Uri?>(null) }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
         onResult = { uri ->
             if (uri != null && stableId != 0L) {
+                // animated GIF: keep the original animation instead of flattening it to
+                // the first frame. the bytes are saved as-is (no re-encode, no quality loss) 
+                // and played back by the Coil animated decoder, so the crop dialog
+                // (bitmap-only) is intentionally skipped for GIFs
+                if (GifUtils.isGif(context.contentResolver, uri)) {
+                    val size = GifUtils.contentSize(context.contentResolver, uri)
+                    if (size < 0 || GifUtils.isAcceptableGifCoverSize(size)) {
+                        pendingGifUri = uri
+                    } else {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.gif_cover_too_large, GifUtils.MAX_GIF_COVER_MB),
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    return@rememberLauncherForActivityResult
+                }
                 try {
                     val bitmap = if (Build.VERSION.SDK_INT < 28) {
                         @Suppress("DEPRECATION")
@@ -414,6 +452,34 @@ fun PlaylistDetailScreen(
                 }
                 showCoverCropDialog = false
                 tempCoverBitmap = null
+            }
+        )
+    }
+
+    if (pendingGifUri != null) {
+        GifCoverPreviewDialog(
+            uri = pendingGifUri!!,
+            onDismiss = { pendingGifUri = null },
+            onConfirm = {
+                if (stableId != 0L) {
+                    // saves the original GIF bytes byte-for-byte; the first frame is
+                    // uploaded to SoundCloud as a static JPEG fallback
+                    DownloadManager.updatePlaylistCover(
+                        playlistId = stableId,
+                        uri = pendingGifUri!!,
+                        title = playlistTitle,
+                        artist = playlistUser?.username
+                    )
+                    val newPath = java.io.File(context.filesDir, "playlist_cover_${stableId}.jpg").absolutePath
+                    playlistCover = newPath
+                    coverUpdateKey = System.currentTimeMillis()
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.gif_cover_set_done),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+                pendingGifUri = null
             }
         )
     }
@@ -489,6 +555,7 @@ fun PlaylistDetailScreen(
             TrackSortBy.ARTIST_AZ -> filtered.sortedBy { it.user?.username?.lowercase() ?: "" }
         }
     }
+
 
     val downloadedCount = remember(tracks.size, tracksToDisplay.size, downloadedIds) {
         if (tracksToDisplay.isEmpty()) 0
@@ -711,7 +778,7 @@ fun PlaylistDetailScreen(
                             }
                         }
                     } else {
-                        val isSystemPlaylistRoute = playlistId.startsWith("system_playlist:")
+                        val isSystemPlaylistRoute = playlistId.startsWith("system_playlist:") || playlistId.startsWith("soundcloud:system-playlists:")
                         val isSpotifyAlbum = playlistId.startsWith("spotify:album:") || playlistId.startsWith("spotify_album:")
                         val isSpotifyPlaylist = playlistId.startsWith("spotify:playlist:") || playlistId.startsWith("spotify_playlist:")
                         val isSpotifyRadio = playlistId.startsWith("spotify_radio:") || playlistId.startsWith("station_spotify:")
@@ -1060,17 +1127,104 @@ fun PlaylistDetailScreen(
                                 }
                             } else {
                                 val playlistObj = when {
-                                    isSystemPlaylistRoute -> api.getSystemPlaylist(cleanIdStr)
+                                    isSystemPlaylistRoute -> {
+                                        if (cleanIdStr.startsWith("http://") || cleanIdStr.startsWith("https://") || cleanIdStr.contains("soundcloud.com") || cleanIdStr.contains("discover/sets/")) {
+                                            val fullUrl = if (cleanIdStr.startsWith("http")) cleanIdStr else "https://soundcloud.com/${cleanIdStr.removePrefix("/")}"
+                                            api.resolvePlaylist(fullUrl)
+                                        } else {
+                                            api.getSystemPlaylist(cleanIdStr)
+                                        }
+                                    }
                                     isArtistStation -> api.getArtistStation(currentIdLong)
                                     isTrackStation -> api.getTrackStation(currentIdLong)
-                                    else -> api.getPlaylist(currentIdLong)
+                                    localFallback?.permalinkUrl != null && (localFallback.permalinkUrl.contains("discover/sets") || localFallback.permalinkUrl.contains("your-playback") || localFallback.permalinkUrl.contains("system-playlists")) -> {
+                                        val fallbackUrl = localFallback.permalinkUrl!!
+                                        val fullUrl = if (fallbackUrl.startsWith("http")) fallbackUrl else "https://soundcloud.com/${fallbackUrl.removePrefix("/")}"
+                                        api.resolvePlaylist(fullUrl)
+                                    }
+                                    else -> {
+                                        try {
+                                            api.getPlaylist(currentIdLong)
+                                        } catch (e: Exception) {
+                                            if (e is retrofit2.HttpException && e.code() == 404) {
+                                                var resolvedPl: Playlist? = null
+                                                val cachedUserId = com.alananasss.kittytune.data.local.PlayerPreferences(context).getCachedUserId().takeIf { it != 0L }
+                                                    ?: playerViewModel.currentUserId.takeIf { it != 0L }
+                                                    ?: try { api.getMe().id } catch (_: Exception) { 0L }
+
+                                                // 1. Try matching against system playlist hashes
+                                                if (cachedUserId != 0L) {
+                                                    for (yr in listOf(2027, 2026, 2025, 2024, 2023, 2022, 2021, 2020)) {
+                                                        val urn = "soundcloud:system-playlists:your-playback:$cachedUserId:$yr"
+                                                        val sysUrn = "system_playlist:$urn"
+                                                        val h1 = kotlin.math.abs(urn.hashCode().toLong())
+                                                        val h2 = kotlin.math.abs(sysUrn.hashCode().toLong())
+                                                        val h3 = com.alananasss.kittytune.ui.yearlyplayback.YearlyPlaybackViewModel.extractPlaylistId(urn)
+                                                        if (currentIdLong == h1 || currentIdLong == h2 || currentIdLong == h3) {
+                                                            resolvedPl = try { api.getSystemPlaylist(urn) } catch (_: Exception) { null }
+                                                            if (resolvedPl != null) break
+                                                        }
+                                                    }
+                                                }
+
+                                                // 2. Try looking up in play_history
+                                                if (resolvedPl == null) {
+                                                    val hist = try {
+                                                        db.getHistoryItemById(currentIdLong, "playlist:$currentIdLong")
+                                                            ?: db.getHistoryItemById(currentIdLong, playlistId)
+                                                    } catch (_: Exception) { null }
+
+                                                    if (hist != null) {
+                                                        val origUrl = hist.originalUrl
+                                                        if (!origUrl.isNullOrBlank()) {
+                                                            val urnToFetch = when {
+                                                                origUrl.startsWith("system_playlist:") -> origUrl.removePrefix("system_playlist:")
+                                                                origUrl.startsWith("soundcloud:system-playlists:") -> origUrl
+                                                                else -> null
+                                                            }
+                                                            if (urnToFetch != null) {
+                                                                resolvedPl = try { api.getSystemPlaylist(urnToFetch) } catch (_: Exception) { null }
+                                                            }
+                                                        }
+                                                        if (resolvedPl == null && (hist.title.contains("Playback", ignoreCase = true) || hist.title.contains("Wrapped", ignoreCase = true))) {
+                                                            val yr = Regex("\\b(20\\d\\d)\\b").find(hist.title)?.value
+                                                            if (yr != null && cachedUserId != 0L) {
+                                                                val urn = "soundcloud:system-playlists:your-playback:$cachedUserId:$yr"
+                                                                resolvedPl = try { api.getSystemPlaylist(urn) } catch (_: Exception) { null }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
+                                                if (resolvedPl != null) {
+                                                    val plObj = resolvedPl
+                                                    scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                                        try {
+                                                            db.deleteHistoryItem("playlist:$currentIdLong")
+                                                            db.deleteHistoryItem(playlistId)
+                                                            HistoryRepository.addToHistory(plObj)
+                                                        } catch (_: Exception) {}
+                                                    }
+                                                    resolvedPl
+                                                } else if (!localFallback?.permalinkUrl.isNullOrEmpty()) {
+                                                    val fallbackUrl = localFallback!!.permalinkUrl!!
+                                                    val fullUrl = if (fallbackUrl.startsWith("http")) fallbackUrl else "https://soundcloud.com/${fallbackUrl.removePrefix("/")}"
+                                                    api.resolvePlaylist(fullUrl)
+                                                } else {
+                                                    throw e
+                                                }
+                                            } else {
+                                                throw e
+                                            }
+                                        }
+                                    }
                                 }
                                 isAlbum = playlistObj.isRealAlbum
 
                             val rawFetchedTitle = playlistObj.title.takeIf { !it.isNullOrBlank() } ?: playlistTitle
                             playlistTitle = com.alananasss.kittytune.utils.SoundCloudLocalizationUtils.localizeSectionTitle(rawFetchedTitle, context)
-                            val localCoverFile = java.io.File(context.filesDir, "playlist_cover_${currentIdLong}.jpg")
-                            val localInDb = db.getPlaylist(currentIdLong)
+                            val localCoverFile = java.io.File(context.filesDir, "playlist_cover_${stableId}.jpg")
+                            val localInDb = db.getPlaylist(stableId)
                             val hasLocalCover = localInDb?.localCoverPath?.isNotEmpty() == true || localCoverFile.exists()
                             if (!playlistObj.artworkUrl.isNullOrBlank()) {
                                 playlistCover = playlistObj.fullResArtwork
@@ -1079,13 +1233,14 @@ fun PlaylistDetailScreen(
                             } else if (!playlistObj.fullResArtwork.isNullOrBlank()) {
                                 playlistCover = playlistObj.fullResArtwork
                             }
-                            if (localInDb != null && (localInDb.title == context.getString(R.string.untitled_track) || localInDb.title == "Untitled Track" || localInDb.artworkUrl.isBlank())) {
+                            if (localInDb != null) {
                                 db.updatePlaylist(
                                     localInDb.copy(
                                         title = playlistObj.title.takeIf { !it.isNullOrBlank() } ?: localInDb.title,
                                         artworkUrl = playlistObj.fullResArtwork.takeIf { !it.isNullOrBlank() } ?: localInDb.artworkUrl,
                                         artist = playlistObj.user?.username ?: localInDb.artist,
                                         permalinkUrl = playlistObj.permalinkUrl ?: localInDb.permalinkUrl,
+                                        trackCount = playlistObj.trackCount ?: playlistObj.tracks?.size ?: localInDb.trackCount,
                                         isAlbum = playlistObj.isRealAlbum
                                     )
                                 )
@@ -1167,6 +1322,15 @@ fun PlaylistDetailScreen(
 
         } catch (e: Exception) {
             e.printStackTrace()
+            if (e is retrofit2.HttpException && e.code() == 404) {
+                isNotFound = true
+                if (playlistId.contains("your-playback")) {
+                    val yr = playlistId.substringAfterLast(":", "")
+                    if (yr.isNotEmpty()) {
+                        playlistTitle = "SoundCloud Playback $yr"
+                    }
+                }
+            }
         } finally {
             isLoading = false
         }
@@ -1277,9 +1441,14 @@ fun PlaylistDetailScreen(
         )
     }
 
-    val playbackContext = remember(playlistId, playlistTitle, playlistCover, playlistUser, isAlbum, isArtistView) {
+    val playbackContext = remember(playlistId, playlistTitle, playlistCover, playlistUser, isAlbum, isArtistView, playlistUrn) {
         val creatorName = playlistUser?.username
         val isVerified = playlistUser?.verified == true
+        val effectiveNavId = when {
+            playlistUrn?.startsWith("soundcloud:system-playlists:") == true -> "system_playlist:$playlistUrn"
+            isSystemPlaylistRoute -> if (playlistId.startsWith("system_playlist:")) playlistId else "system_playlist:$cleanIdStr"
+            else -> playlistId
+        }
 
         when {
             playlistId == "likes" -> PlaybackContext(
@@ -1298,7 +1467,7 @@ fun PlaylistDetailScreen(
 
             isArtistView -> PlaybackContext(
                 context.getString(R.string.generic_artist) + " • " + playlistTitle,
-                playlistId,
+                effectiveNavId,
                 playlistCover,
                 artistName = playlistTitle,
                 isVerified = isVerified
@@ -1306,7 +1475,7 @@ fun PlaylistDetailScreen(
 
             playlistId.startsWith("station") || playlistId.startsWith("yt_radio:") -> PlaybackContext(
                 context.getString(R.string.context_station, playlistTitle),
-                playlistId,
+                effectiveNavId,
                 playlistCover,
                 artistName = null,
                 isVerified = isVerified
@@ -1314,7 +1483,7 @@ fun PlaylistDetailScreen(
 
             isAlbum -> PlaybackContext(
                 context.getString(R.string.context_album, playlistTitle),
-                playlistId,
+                effectiveNavId,
                 playlistCover,
                 artistName = creatorName,
                 isVerified = isVerified
@@ -1322,7 +1491,7 @@ fun PlaylistDetailScreen(
 
             else -> PlaybackContext(
                 context.getString(R.string.context_playlist, playlistTitle),
-                playlistId,
+                effectiveNavId,
                 playlistCover,
                 artistName = creatorName,
                 isVerified = isVerified
@@ -1629,7 +1798,8 @@ fun PlaylistDetailScreen(
                                                     )
                                                 }
                                             } else {
-                                                val isPlaylistLiked = likedPlaylistsRepo.contains(stableId)
+                                                val altSysId = playlistUrn?.let { com.alananasss.kittytune.ui.yearlyplayback.YearlyPlaybackViewModel.extractPlaylistId(it) }
+                                                val isPlaylistLiked = likedPlaylistsRepo.contains(stableId) || (altSysId != null && likedPlaylistsRepo.contains(altSysId))
                                                 IconButton(
                                                     onClick = {
                                                         if (!isPlaylistLiked) {
@@ -1786,11 +1956,17 @@ fun PlaylistDetailScreen(
                                             text = stringResource(R.string.lib_playlists),
                                             style = MaterialTheme.typography.titleMedium,
                                             fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.primary
+                                            color = MaterialTheme.colorScheme.primary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                         if (downloadedPlaylists.size > 4) {
                                             TextButton(onClick = { showAllPlaylists = true }) {
-                                                Text(stringResource(R.string.btn_see_all))
+                                                Text(
+                                                    stringResource(R.string.btn_see_all),
+                                                    maxLines = 1,
+                                                    softWrap = false
+                                                )
                                             }
                                         }
                                     }
@@ -1847,7 +2023,9 @@ fun PlaylistDetailScreen(
                                     item {
                                         EmptyPlaylistView(
                                             playlistId = playlistId,
-                                            isUserCreated = isUserCreated
+                                            isUserCreated = isUserCreated,
+                                            isNotFound = isNotFound,
+                                            onBackClick = onBackClick
                                         )
                                     }
                                 } else {
@@ -1889,7 +2067,9 @@ fun PlaylistDetailScreen(
                                                         Text(
                                                             stringResource(R.string.btn_play),
                                                             style = MaterialTheme.typography.titleMedium,
-                                                            fontWeight = FontWeight.Bold
+                                                            fontWeight = FontWeight.Bold,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
                                                         )
                                                     }
                                                     FilledTonalButton(
@@ -1911,7 +2091,9 @@ fun PlaylistDetailScreen(
                                                         Text(
                                                             stringResource(R.string.btn_shuffle),
                                                             style = MaterialTheme.typography.titleMedium,
-                                                            fontWeight = FontWeight.Bold
+                                                            fontWeight = FontWeight.Bold,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
                                                         )
                                                     }
                                                 }
@@ -2341,6 +2523,7 @@ fun PlaylistDetailScreen(
                     isYoutubeRadio = isYoutubeRadio,
                     playlistSharing = playlistSharing,
                     isUserOwned = isUserCreated,
+                    isAlbum = isAlbum,
                     onSharingToggle = { newSharing ->
                         scope.launch {
                             try {
@@ -2411,7 +2594,7 @@ fun PlaylistDetailScreen(
             ) {
                 PlaylistDetailsSheet(
                     playlistId = when {
-                        playlistId.startsWith("system_playlist:") || playlistId.startsWith("spotify:") || playlistId.startsWith("spotify_") -> playlistId
+                        playlistId.startsWith("system_playlist:") || playlistId.startsWith("soundcloud:system-playlists:") || playlistId.startsWith("spotify:") || playlistId.startsWith("spotify_") -> playlistId
                         currentIdLong > 0L -> currentIdLong.toString()
                         else -> playlistId
                     },
@@ -2483,6 +2666,7 @@ fun PlaylistOptionsSheet(
     isYoutubeRadio: Boolean = false,
     playlistSharing: String? = null,
     isUserOwned: Boolean = false,
+    isAlbum: Boolean = false,
     onSharingToggle: (String) -> Unit = {},
     onDetailsClick: () -> Unit = {},
     onDeleteClick: (() -> Unit)? = null
@@ -2557,7 +2741,7 @@ fun PlaylistOptionsSheet(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        val items = remember(isLocal, playlistId, isYoutubeRadio, isUserOwned, playlistSharing, onDeleteClick) {
+        val items = remember(isLocal, playlistId, isYoutubeRadio, isUserOwned, playlistSharing, onDeleteClick, isAlbum, tracks) {
             mutableListOf(
                 DockOptionItem(
                     Icons.Rounded.PlayArrow,
@@ -2584,6 +2768,23 @@ fun PlaylistOptionsSheet(
                             Icons.Default.Add,
                             context.getString(R.string.menu_add_playlist)
                         ) { playerViewModel.prepareBulkAdd(tracks); onDismiss() })
+                }
+
+                if (isAlbum && tracks.isNotEmpty() && !isYoutubeRadio) {
+                    add(
+                        DockOptionItem(
+                            Icons.Rounded.Favorite,
+                            context.getString(R.string.menu_like_all_songs)
+                        ) {
+                            val likedCount = com.alananasss.kittytune.data.LikeRepository.addLikesBulk(tracks)
+                            val message = if (likedCount > 0) {
+                                context.getString(R.string.toast_like_all_done, likedCount)
+                            } else {
+                                context.getString(R.string.toast_like_all_nothing)
+                            }
+                            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+                            onDismiss()
+                        })
                 }
 
                 if (playlistId != 0L && !isYoutubeRadio && playlistId != DownloadManager.LIKES_BATCH_ID) {
@@ -2714,6 +2915,7 @@ fun PlaylistOptionsSheet(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TrackListItem(
     track: Track,
@@ -2727,8 +2929,16 @@ fun TrackListItem(
     showLikeIndicator: Boolean = true,
     dragModifier: Modifier = Modifier,
     onClick: () -> Unit,
-    onOptionClick: () -> Unit
+    onOptionClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null
 ) {
+    val view = LocalView.current
+    val blockedTrackIds by com.alananasss.kittytune.data.BlockManager.blockedTrackIdsFlow.collectAsState()
+    val blockedArtistIds by com.alananasss.kittytune.data.BlockManager.blockedArtistIdsFlow.collectAsState()
+    if (track.id in blockedTrackIds || (track.user?.id != null && track.user.id in blockedArtistIds)) {
+        return
+    }
+
     val isCurrent = currentlyPlayingTrack?.id == track.id
     val titleColor = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
     val titleWeight = if (isCurrent) FontWeight.Bold else FontWeight.SemiBold
@@ -2746,10 +2956,18 @@ fun TrackListItem(
     }
 
     Surface(
-        onClick = onClick,
         shape = RoundedCornerShape(16.dp),
         color = Color.Transparent,
-        modifier = modifier.padding(horizontal = 8.dp)
+        modifier = modifier
+            .padding(horizontal = 8.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = {
+                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                    if (onLongClick != null) onLongClick() else onOptionClick()
+                }
+            )
     ) {
         Row(
             modifier = Modifier
@@ -2758,7 +2976,7 @@ fun TrackListItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(contentAlignment = Alignment.Center) {
-                val art = track.artworkUrl?.takeIf { it.isNotBlank() } ?: track.fullResArtwork
+                val art = track.thumbnailUrl
                 val imageModel: Any = remember(art) {
                     if (art.startsWith("/")) File(art) else art
                 }
@@ -2887,9 +3105,17 @@ fun TrackListItem(
 fun EmptyPlaylistView(
     playlistId: String,
     isUserCreated: Boolean,
-    isEmptySearch: Boolean = false
+    isEmptySearch: Boolean = false,
+    isNotFound: Boolean = false,
+    onBackClick: () -> Unit = {}
 ) {
     val (kaomoji, title, subtitle) = when {
+        isNotFound -> Triple(
+            "( ╥ω╥ )",
+            stringResource(R.string.yearly_playback_playlist_404_title),
+            stringResource(R.string.yearly_playback_playlist_404_desc)
+        )
+
         isEmptySearch -> Triple(
             stringResource(R.string.empty_playlist_search_kaomoji),
             stringResource(R.string.empty_playlist_search_title),
@@ -2948,7 +3174,22 @@ fun EmptyPlaylistView(
             )
         }
 
+        if (isNotFound) {
+            Spacer(Modifier.height(24.dp))
+            Button(
+                onClick = onBackClick,
+                shape = CircleShape,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                )
+            ) {
+                Text(text = stringResource(R.string.btn_close))
+            }
+        }
+
         Spacer(Modifier.height(48.dp))
     }
 }
+
 

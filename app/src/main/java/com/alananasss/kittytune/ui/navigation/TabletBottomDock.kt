@@ -5,6 +5,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -13,15 +14,19 @@ import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.ThumbDown
 import androidx.compose.material3.*
 import com.alananasss.kittytune.ui.icons.Icon
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -50,6 +55,10 @@ fun TabletBottomDock(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
+            .semantics { }
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = {})
+            }
             .padding(horizontal = 24.dp, vertical = 16.dp),
         horizontalArrangement = if (showMiniPlayer) Arrangement.spacedBy(16.dp) else Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
@@ -177,7 +186,9 @@ fun TabletBottomDock(
                         width = 1.dp,
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
                     ),
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clipToBounds()
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         Row(
@@ -187,7 +198,7 @@ fun TabletBottomDock(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             AsyncImage(
-                                model = track.fullResArtwork,
+                                model = track.thumbnailUrl,
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
@@ -233,6 +244,21 @@ fun TabletBottomDock(
                                 )
                             }
 
+                            if (playerViewModel.isYourMixActive) {
+                                IconButton(
+                                    onClick = { playerViewModel.dislikeCurrentTrackInMix() },
+                                    shapes = IconButtonDefaults.shapes(),
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.ThumbDown,
+                                        contentDescription = stringResource(R.string.mix_dislike),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+
                             // Bouton Lecture / Pause
                             IconButton(
                                 onClick = { playerViewModel.togglePlayPause() },
@@ -249,7 +275,7 @@ fun TabletBottomDock(
 
                             // Bouton Suivant
                             IconButton(
-                                onClick = { playerViewModel.playNext() },
+                                onClick = { playerViewModel.requestSkipNext() },
                                 shapes = IconButtonDefaults.shapes(),
                                 modifier = Modifier.size(36.dp)
                             ) {
@@ -262,12 +288,10 @@ fun TabletBottomDock(
                             }
                         }
 
-                        val progress = if (playerViewModel.duration > 0) {
-                            playerViewModel.currentPosition.toFloat() / playerViewModel.duration.toFloat()
-                        } else 0f
+                        val progress = rememberDockProgress(playerViewModel)
 
                         LinearProgressIndicator(
-                            progress = { progress },
+                            progress = { progress.value },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(3.dp)

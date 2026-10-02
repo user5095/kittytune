@@ -30,6 +30,17 @@
         @Query("DELETE FROM downloaded_tracks WHERE id = :trackId")
         suspend fun deleteTrack(trackId: Long)
 
+        @Query("""
+            SELECT * FROM downloaded_tracks 
+            WHERE localAudioPath != '' 
+              AND (
+                  (LOWER(TRIM(title)) = LOWER(TRIM(:title)) AND LOWER(TRIM(artist)) = LOWER(TRIM(:artist)))
+                  OR (LOWER(TRIM(title)) = LOWER(TRIM(:title)) AND (:artist = '' OR artist = ''))
+              )
+            LIMIT 1
+        """)
+        suspend fun findDownloadedTrack(title: String, artist: String): LocalTrack?
+
         @Query("SELECT * FROM downloaded_tracks WHERE localAudioPath != '' ORDER BY downloadedAt DESC")
         fun getAllTracks(): Flow<List<LocalTrack>>
 
@@ -197,6 +208,9 @@
         @Query("DELETE FROM play_history WHERE type != 'TRACK'")
         suspend fun clearContextsHistory()
 
+        @Query("DELETE FROM play_history WHERE originalUrl = 'your_mix' OR originalUrl LIKE '%your_mix%' OR id = 'your_mix' OR id LIKE '%your_mix%'")
+        suspend fun deleteMixHistory()
+
         // listening stats
         //
         // Every aggregate below asks the same question — was enough of this track heard? — instead of
@@ -231,6 +245,19 @@
 
         @Query("SELECT * FROM listening_stats WHERE timestamp >= :since ORDER BY timestamp DESC")
         suspend fun getEventsAfter(since: Long): List<ListeningStatsEvent>
+
+        /**
+         * The most recent [limit] rows, newest first.
+         *
+         * "All time" only ever charts its last two years and compares against nothing, so its report
+         * is built from a bounded read rather than from every listen ever recorded.
+         */
+        @Query("SELECT * FROM listening_stats WHERE timestamp >= :since ORDER BY timestamp DESC LIMIT :limit")
+        suspend fun getRecentEventsAfter(since: Long, limit: Int): List<ListeningStatsEvent>
+
+        /** Listening time inside a closed range, for comparing a span against the one before it. */
+        @Query("SELECT COALESCE(SUM(listenDurationMs), 0) FROM listening_stats WHERE timestamp >= :since AND timestamp < :until")
+        suspend fun getTotalListenTimeBetween(since: Long, until: Long): Long
 
         /**
          * Every number the statistics header shows, in one query.
@@ -281,11 +308,20 @@
         @Query("SELECT artistName, MAX(artistAvatarUrl) as artworkUrl, MAX(artistId) as artistId, MAX(artistPermalink) as artistPermalink, MAX(source) as source, COUNT(*) as playCount, SUM(listenDurationMs) as totalListenMs FROM listening_stats WHERE timestamp >= :since AND ${StatsSql.COUNTS_AS_PLAY} GROUP BY artistName ORDER BY totalListenMs DESC LIMIT :limit")
         suspend fun getTopArtistsAfter(since: Long, limit: Int = 10): List<TopArtistResult>
 
+        @Query("SELECT artistName, MAX(artistAvatarUrl) as artworkUrl, MAX(artistId) as artistId, MAX(artistPermalink) as artistPermalink, MAX(source) as source, COUNT(*) as playCount, SUM(listenDurationMs) as totalListenMs FROM listening_stats WHERE timestamp >= :since AND ${StatsSql.COUNTS_AS_PLAY} GROUP BY artistName")
+        suspend fun getRawTopArtistsAfter(since: Long): List<TopArtistResult>
+
         @Query("SELECT trackId, trackTitle, artistName, MAX(artworkUrl) as artworkUrl, MAX(source) as source, COUNT(*) as playCount, SUM(listenDurationMs) as totalListenMs FROM listening_stats WHERE timestamp >= :since AND timestamp < :until AND ${StatsSql.COUNTS_AS_PLAY} GROUP BY trackId ORDER BY totalListenMs DESC LIMIT :limit")
         suspend fun getTopTracksBetween(since: Long, until: Long, limit: Int = 1): List<TopTrackResult>
 
         @Query("SELECT artistName, MAX(artistAvatarUrl) as artworkUrl, MAX(artistId) as artistId, MAX(artistPermalink) as artistPermalink, MAX(source) as source, COUNT(*) as playCount, SUM(listenDurationMs) as totalListenMs FROM listening_stats WHERE timestamp >= :since AND timestamp < :until AND ${StatsSql.COUNTS_AS_PLAY} GROUP BY artistName ORDER BY totalListenMs DESC LIMIT :limit")
         suspend fun getTopArtistsBetween(since: Long, until: Long, limit: Int = 1): List<TopArtistResult>
+
+        @Query("SELECT artistName, MAX(artistAvatarUrl) as artworkUrl, MAX(artistId) as artistId, MAX(artistPermalink) as artistPermalink, MAX(source) as source, COUNT(*) as playCount, SUM(listenDurationMs) as totalListenMs FROM listening_stats WHERE timestamp >= :since AND timestamp < :until AND ${StatsSql.COUNTS_AS_PLAY} GROUP BY artistName")
+        suspend fun getRawTopArtistsBetween(since: Long, until: Long): List<TopArtistResult>
+
+        @Query("SELECT DISTINCT artistName FROM listening_stats WHERE timestamp >= :since AND ${StatsSql.COUNTS_AS_PLAY}")
+        suspend fun getDistinctArtistNamesAfter(since: Long): List<String>
 
         @Query("SELECT COALESCE(SUM(listenDurationMs), 0) FROM listening_stats WHERE timestamp >= :since")
         suspend fun getTotalListenTimeAfter(since: Long): Long
@@ -467,9 +503,10 @@
             LibraryFolder::class,
             LibraryItemMeta::class,
             TrackTrimRow::class,
-            BeatInfoEntity::class
+            BeatInfoEntity::class,
+            BlockedContent::class
         ],
-        version = 21,
+        version = 25,
         exportSchema = false
     )
     abstract class AppDatabase : RoomDatabase() {
@@ -477,6 +514,7 @@
         abstract fun recognitionHistoryDao(): RecognitionHistoryDao
         abstract fun folderDao(): FolderDao
         abstract fun beatInfoDao(): BeatInfoDao
+        abstract fun blockedContentDao(): BlockedContentDao
 
         companion object {
             val MIGRATION_16_17 = object : Migration(16, 17) {
@@ -549,6 +587,65 @@
                 }
             }
 
+            /**
+             * Downbeat and phrase anchors for the beat grid. Existing rows keep their BPM but
+             * are marked unanalyzed (analyzedAt = 0) so the downbeat pass re-runs for them —
+             * a cached grid without a downbeat cannot be quantized against.
+             */
+            val MIGRATION_21_22 = object : Migration(21, 22) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE beat_info ADD COLUMN downbeatOffsetMs INTEGER NOT NULL DEFAULT 0")
+                    db.execSQL("ALTER TABLE beat_info ADD COLUMN phraseOffsetMs INTEGER NOT NULL DEFAULT 0")
+                    db.execSQL("ALTER TABLE beat_info ADD COLUMN downbeatConfidence REAL NOT NULL DEFAULT 0")
+                    db.execSQL("UPDATE beat_info SET analyzedAt = 0")
+                }
+            }
+
+            /**
+             * Explicit analyzer version on each cached row. Existing rows default to 0, which is
+             * below the current version, so they are re-analyzed on next use — clearing analyzedAt
+             * alone did nothing, because the cache check never looked at it.
+             */
+            val MIGRATION_22_23 = object : Migration(22, 23) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE beat_info ADD COLUMN analysisVersion INTEGER NOT NULL DEFAULT 0")
+                }
+            }
+
+            /**
+             * Separate confidence for the phrase phase. Existing rows keep 0, which
+             * [gridTrust] reads as "analysed before this existed" rather than "unsure".
+             */
+            val MIGRATION_23_24 = object : Migration(23, 24) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE beat_info ADD COLUMN phraseConfidence REAL NOT NULL DEFAULT 0")
+                }
+            }
+
+            /**
+             * Blocked tracks and artists for content filtering (issue #41).
+             * Also stores AI-generated auto-blocks from ArtifactNet.
+             */
+            val MIGRATION_24_25 = object : Migration(24, 25) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "CREATE TABLE IF NOT EXISTS blocked_content (" +
+                            "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                            "trackId INTEGER, " +
+                            "trackTitle TEXT, " +
+                            "trackArtworkUrl TEXT, " +
+                            "artistId INTEGER, " +
+                            "artistName TEXT, " +
+                            "artistAvatarUrl TEXT, " +
+                            "source TEXT NOT NULL DEFAULT 'soundcloud', " +
+                            "reason TEXT NOT NULL DEFAULT 'MANUAL', " +
+                            "blockedAt INTEGER NOT NULL DEFAULT 0)"
+                    )
+                    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_blocked_content_trackId ON blocked_content(trackId)")
+                    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_blocked_content_artistId ON blocked_content(artistId)")
+                }
+            }
+
             @Volatile private var INSTANCE: AppDatabase? = null
             fun getDatabase(context: Context): AppDatabase {
                 return INSTANCE ?: synchronized(this) {
@@ -557,7 +654,7 @@
                         AppDatabase::class.java,
                         "soundtune_db"
                     )
-                        .addMigrations(MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21)
+                        .addMigrations(MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25)
                         .fallbackToDestructiveMigration()
                         .build()
                     INSTANCE = instance

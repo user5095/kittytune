@@ -2,8 +2,11 @@ package com.alananasss.kittytune
 
 import android.app.Application
 import android.content.Context
+import android.os.Build
 import coil.ImageLoader
 import coil.ImageLoaderFactory
+import coil.decode.GifDecoder
+import coil.decode.ImageDecoderDecoder
 import coil.map.Mapper
 import com.alananasss.kittytune.utils.Config
 import com.alananasss.kittytune.utils.LocaleUtils
@@ -21,8 +24,13 @@ class KittyTuneApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        com.alananasss.kittytune.utils.AppLogManager.init(this)
         LocaleUtils.applyAppLanguage(this)
         Config.init(applicationContext)
+
+        runCatching {
+            app.rive.runtime.kotlin.core.Rive.init(this)
+        }
 
         val activeLocale = LocaleUtils.getLocale(this)
         YouTube.locale = YouTubeLocale(
@@ -56,7 +64,43 @@ class KittyTuneApp : Application(), ImageLoaderFactory {
                 add(Mapper<String, File> { data, _ ->
                     if (data.startsWith("/") && !data.startsWith("http")) File(data) else null
                 })
+                // Animated image support (animated playlist covers etc.). Decoders sniff
+                // the actual bytes, so a GIF stored with a .jpg extension still animates.
+                // ImageDecoderDecoder (API 28+) covers animated GIF/WebP/AVIF via the
+                // platform AnimatedImageDrawable; GifDecoder is the software fallback
+                // for API 26-27 (app minSdk).
+                if (Build.VERSION.SDK_INT >= 28) {
+                    add(ImageDecoderDecoder.Factory())
+                } else {
+                    add(GifDecoder.Factory())
+                }
+                // Data saver choke point for artwork: every image request in the app goes
+                // through this interceptor, so a single URL rewrite here lightens covers in
+                // lists, players, playlists and widgets at once — no UI call site touched.
+                add(object : coil.intercept.Interceptor {
+                    override suspend fun intercept(chain: coil.intercept.Interceptor.Chain): coil.request.ImageResult {
+                        if (!com.alananasss.kittytune.data.DataSaver.isActive(this@KittyTuneApp)) {
+                            return chain.proceed(chain.request)
+                        }
+                        val data = chain.request.data
+                        if (data is String) {
+                            val light = com.alananasss.kittytune.data.DataSaver.lightArtwork(data)
+                            if (light != null && light != data) {
+                                return chain.proceed(chain.request.newBuilder().data(light).build())
+                            }
+                        }
+                        return chain.proceed(chain.request)
+                    }
+                })
             }
+            .diskCache {
+                coil.disk.DiskCache.Builder()
+                    .directory(cacheDir.resolve("image_cache"))
+                    .maxSizeBytes(250L * 1024 * 1024)
+                    .build()
+            }
+            .respectCacheHeaders(false)
+            .allowRgb565(true)
             .crossfade(true)
             .build()
     }
