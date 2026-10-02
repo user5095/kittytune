@@ -14,7 +14,7 @@
     import androidx.compose.runtime.getValue
     import androidx.compose.runtime.remember
     import androidx.compose.ui.Modifier
-    import androidx.compose.ui.draw.clip
+    import androidx.compose.ui.graphics.graphicsLayer
     import androidx.compose.ui.platform.LocalContext
     import androidx.compose.ui.platform.LocalDensity
     import androidx.compose.ui.unit.Dp
@@ -81,7 +81,11 @@
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(cornerRadius))
+                // Read in the draw phase: no per-frame recomposition, and no clip once the radius reaches 0.
+                .graphicsLayer {
+                    shape = RoundedCornerShape(cornerRadius)
+                    clip = cornerRadius > 0.dp
+                }
         ) {
             content()
         }

@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.*
+import com.alananasss.kittytune.ui.icons.Icon
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -606,6 +607,8 @@ fun MainScreen(
                 } else {
                     val isSelected = currentDestination?.hierarchy?.any { it.route == tab.route } == true
                     if (!isSelected) {
+                        // Search mode lives in the shared HomeViewModel and survives leaving Home.
+                        if (tab.route == Screen.Home.route) homeViewModel.clearSearch()
                         navController.navigate(tab.route) {
                             popUpTo(navController.graph.findStartDestination().id)
                             launchSingleTop = true
@@ -1427,8 +1430,13 @@ fun MainScreen(
                             onNavigateToProviderOrder = { navController.navigate("provider_order_settings") },
                             onNavigateToQobuz = { navController.navigate("qobuz_settings") },
                             onNavigateToTidal = { navController.navigate("tidal_settings") },
-                            onNavigateToDeezer = { navController.navigate("deezer_settings") }
+                            onNavigateToDeezer = { navController.navigate("deezer_settings") },
+                            onNavigateToYoutubeMusic = { navController.navigate("ytmusic_account") }
                         )
+                    }
+
+                    clippedComposable("ytmusic_account") {
+                        YoutubeMusicScreen(onBackClick = { navController.popBackStack() })
                     }
 
                     clippedComposable("provider_order_settings") {

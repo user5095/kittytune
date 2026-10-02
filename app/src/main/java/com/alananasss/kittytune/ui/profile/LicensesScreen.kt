@@ -14,6 +14,7 @@
     import androidx.compose.material.icons.automirrored.rounded.OpenInNew
     import androidx.compose.material.icons.rounded.*
     import androidx.compose.material3.*
+import com.alananasss.kittytune.ui.icons.Icon
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
     import androidx.compose.runtime.*
     import androidx.compose.ui.Alignment

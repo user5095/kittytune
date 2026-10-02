@@ -23,6 +23,8 @@
     import androidx.compose.material.icons.rounded.DownloadDone
     import androidx.compose.material.icons.rounded.Favorite
     import androidx.compose.material3.*
+import com.alananasss.kittytune.ui.icons.Icon
+import com.alananasss.kittytune.ui.theme.Switch
     import androidx.compose.runtime.*
     import androidx.compose.ui.Alignment
     import androidx.compose.ui.Modifier
@@ -273,7 +275,7 @@
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f)
                     )
-                    androidx.compose.material3.Switch(
+                    Switch(
                         checked = isSortedByLikes,
                         onCheckedChange = { onToggleSort() },
                         interactionSource = interactionSource,

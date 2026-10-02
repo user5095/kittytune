@@ -41,6 +41,7 @@ import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
+import com.alananasss.kittytune.ui.icons.Icon
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -155,7 +156,8 @@ fun PlaylistDetailScreen(
     val isTidalArtist = playlistId.startsWith("tidal:artist:")
     val isQobuzArtist = playlistId.startsWith("qobuz:artist:")
     val isArtistStation = playlistId.startsWith("station_artist:")
-    val isArtistView = isDeezerArtist || isTidalArtist || isQobuzArtist || isArtistStation
+    val isYoutubeArtist = playlistId.startsWith("youtube:artist:")
+    val isArtistView = isYoutubeArtist || isDeezerArtist || isTidalArtist || isQobuzArtist || isArtistStation
 
     val cleanIdStr = playlistId.replace("station_artist:", "")
         .replace("station_spotify:", "")
@@ -164,6 +166,9 @@ fun PlaylistDetailScreen(
         .replace("spotify_album:", "")
         .replace("spotify:playlist:", "")
         .replace("spotify_playlist:", "")
+        .replace("youtube:album:", "")
+        .replace("youtube:playlist:", "")
+        .replace("youtube:artist:", "")
         .replace("deezer:album:", "")
         .replace("deezer:playlist:", "")
         .replace("deezer:artist:", "")
@@ -756,6 +761,24 @@ fun PlaylistDetailScreen(
                                 playlistPermalinkUrl = "https://open.spotify.com/playlist/${pl.id}"
                                 playlistUrn = "spotify:playlist:${pl.id}"
                                 newTracks.addAll(pl.tracks.map { it.toTrack() })
+                            }
+                        } else if (playlistId.startsWith("youtube:")) {
+                            val yt = com.alananasss.kittytune.data.youtube.YoutubeSearchRepository
+                            val pl = when {
+                                playlistId.startsWith("youtube:album:") -> yt.getAlbum(cleanIdStr)
+                                playlistId.startsWith("youtube:artist:") -> yt.getArtist(cleanIdStr)
+                                else -> yt.getPlaylist(cleanIdStr)
+                            }
+                            if (pl != null) {
+                                isAlbum = pl.isAlbum
+                                playlistTitle = pl.title.orEmpty()
+                                playlistCover = pl.artworkUrl
+                                playlistDescription = pl.description
+                                playlistUser = pl.user
+                                playlistReleaseDate = pl.releaseDate
+                                playlistPermalinkUrl = pl.permalinkUrl
+                                playlistUrn = pl.urn
+                                newTracks.addAll(pl.tracks ?: emptyList())
                             }
                         } else if (isDeezerAlbum) {
                             val pl = com.alananasss.kittytune.data.deezer.DeezerSearchRepository.getAlbum(cleanIdStr)
@@ -1488,6 +1511,7 @@ fun PlaylistDetailScreen(
                                         val providerBadge = when {
                                             isQobuzArtist -> stringResource(R.string.generic_artist) + " • Qobuz"
                                             isDeezerArtist -> stringResource(R.string.generic_artist) + " • Deezer"
+                                            isYoutubeArtist -> stringResource(R.string.generic_artist) + " • YouTube"
                                             isTidalArtist -> stringResource(R.string.generic_artist) + " • TIDAL"
                                             else -> stringResource(R.string.generic_artist)
                                         }

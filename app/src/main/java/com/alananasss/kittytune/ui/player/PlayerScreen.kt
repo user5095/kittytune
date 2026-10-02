@@ -108,7 +108,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.Icon
+import com.alananasss.kittytune.ui.icons.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -753,7 +753,13 @@ fun PlayerScreen(
 ) {
     val context = LocalContext.current
     val prefs = remember { PlayerPreferences(context) }
-    val playerDesign by prefs.getPlayerDesignFlow().collectAsState(initial = prefs.getPlayerDesign())
+    val chosenPlayerDesign by prefs.getPlayerDesignFlow().collectAsState(initial = prefs.getPlayerDesign())
+    // Pixel theme always shows the pixel player, regardless of the design picked in Settings.
+    val playerDesign = if (com.alananasss.kittytune.ui.theme.LocalPixelTheme.current) {
+        com.alananasss.kittytune.data.local.PlayerDesign.PIXEL_PLAYER
+    } else {
+        chosenPlayerDesign
+    }
 
     when (playerDesign) {
         com.alananasss.kittytune.data.local.PlayerDesign.PIXEL_PLAYER -> {

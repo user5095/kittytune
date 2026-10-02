@@ -210,6 +210,7 @@ object ProxyManager {
 
         // Reset RetrofitClient singleton to recreate with new proxy settings
         RetrofitClient.resetClient()
+        cachedClient = null
     }
 
     fun configureOkHttpClient(builder: OkHttpClient.Builder, context: Context? = null): OkHttpClient.Builder {
@@ -221,12 +222,26 @@ object ProxyManager {
         return builder
     }
 
+    // Every caller across the app (SoundCloud, NewPipe/YouTube, Spotify, lyrics, ...) used to get
+    // a brand-new OkHttpClient - and therefore a brand-new connection pool - on every single call,
+    // paying a fresh TCP+TLS handshake instead of reusing a keep-alive connection. That's the
+    // single biggest reason track loading felt slow: cached here and rebuilt only when the proxy
+    // configuration actually changes (see the invalidation at the end of [applyConfiguration]).
+    @Volatile
+    private var cachedClient: OkHttpClient? = null
+
     fun getOkHttpClient(context: Context? = null): OkHttpClient {
-        val builder = OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
-            .writeTimeout(15, TimeUnit.SECONDS)
-        return configureOkHttpClient(builder, context).build()
+        cachedClient?.let { return it }
+        synchronized(this) {
+            cachedClient?.let { return it }
+            val builder = OkHttpClient.Builder()
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(15, TimeUnit.SECONDS)
+                .writeTimeout(15, TimeUnit.SECONDS)
+            val client = configureOkHttpClient(builder, context).build()
+            cachedClient = client
+            return client
+        }
     }
 
     suspend fun testProxyConnection(config: ProxyConfig): ProxyTestResult = withContext(Dispatchers.IO) {

@@ -44,6 +44,7 @@ import androidx.compose.material.icons.automirrored.rounded.*
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.*
+import com.alananasss.kittytune.ui.icons.Icon
 import com.alananasss.kittytune.ui.common.Slider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -91,6 +92,7 @@ fun AppearanceSettingsScreen(
     var trackDynamicTheme by remember { mutableStateOf(prefs.getTrackDynamicTheme()) }
     var themeMode by remember { mutableStateOf(prefs.getThemeMode()) }
     var pureBlack by remember { mutableStateOf(prefs.getPureBlack()) }
+    var pixelTheme by remember { mutableStateOf(prefs.getPixelTheme()) }
     var playerStyle by remember { mutableStateOf(prefs.getPlayerStyle()) }
     var playerDesign by remember { mutableStateOf(prefs.getPlayerDesign()) }
     var showPlayerDesignDialog by remember { mutableStateOf(false) }
@@ -495,7 +497,7 @@ fun AppearanceSettingsScreen(
                     )
 
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        val totalVisibleItems = if (isPureBlackVisible) 5 else 4
+                        val totalVisibleItems = if (isPureBlackVisible) 6 else 5
                         SettingsItem(
                             shape = getSettingsShape(totalVisibleItems, 0),
                             title = stringResource(R.string.pref_language),
@@ -550,6 +552,15 @@ fun AppearanceSettingsScreen(
                             title = stringResource(R.string.pref_color_palette_title),
                             subtitle = stringResource(R.string.pref_color_palette_subtitle),
                             onClick = onNavigateToColors
+                        )
+
+                        SettingsItem(
+                            shape = getSettingsShape(totalVisibleItems, if (isPureBlackVisible) 5 else 4),
+                            title = stringResource(R.string.pref_pixel_theme_title),
+                            subtitle = stringResource(R.string.pref_pixel_theme_sub),
+                            hasSwitch = true,
+                            switchState = pixelTheme,
+                            onSwitchChange = { pixelTheme = it; prefs.setPixelTheme(it) }
                         )
                     }
                 }

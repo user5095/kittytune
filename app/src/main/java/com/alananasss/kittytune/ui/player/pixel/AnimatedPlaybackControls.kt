@@ -31,7 +31,10 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.Icon
+import com.alananasss.kittytune.ui.icons.Icon
+import com.alananasss.kittytune.ui.theme.LocalPixelTheme
+import com.alananasss.kittytune.ui.theme.PixelCapsuleShape
+import com.alananasss.kittytune.ui.theme.PixelSkipIcon
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
@@ -124,11 +127,12 @@ fun AnimatedPlaybackControls(
                 animationSpec = pressAnimationSpec,
                 label = "prevWeight"
             )
+            val prevShape = if (LocalPixelTheme.current) PixelCapsuleShape() else CircleShape
             Box(
                 modifier = Modifier
                     .weight(prevWeight)
                     .fillMaxHeight()
-                    .clip(CircleShape)
+                    .clip(prevShape)
                     .background(colorPreviousButton)
                     .clickable {
                         lastClicked = PlaybackButtonType.PREVIOUS
@@ -140,12 +144,16 @@ fun AnimatedPlaybackControls(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.SkipPrevious,
-                    contentDescription = "Previous",
-                    tint = tintPreviousIcon,
-                    modifier = Modifier.size(iconSize)
-                )
+                if (LocalPixelTheme.current) {
+                    PixelSkipIcon(forward = false, tint = tintPreviousIcon, modifier = Modifier.size(iconSize))
+                } else {
+                    Icon(
+                        imageVector = Icons.Rounded.SkipPrevious,
+                        contentDescription = "Previous",
+                        tint = tintPreviousIcon,
+                        modifier = Modifier.size(iconSize)
+                    )
+                }
             }
 
             val playWeight by animateFloatAsState(
@@ -158,22 +166,27 @@ fun AnimatedPlaybackControls(
                 animationSpec = defaultSpatialDpSpec,
                 label = "playCorner"
             )
+            val pixelTheme = LocalPixelTheme.current
             Box(
                 modifier = Modifier
                     .weight(playWeight)
                     .fillMaxHeight()
                     .graphicsLayer {
                         clip = true
-                        shape = AbsoluteSmoothCornerShape(
-                            cornerRadiusTL = playCorner,
-                            smoothnessAsPercentTR = 60,
-                            cornerRadiusBL = playCorner,
-                            smoothnessAsPercentTL = 60,
-                            cornerRadiusTR = playCorner,
-                            smoothnessAsPercentBL = 60,
-                            cornerRadiusBR = playCorner,
-                            smoothnessAsPercentBR = 60
-                        )
+                        shape = if (pixelTheme) {
+                            PixelCapsuleShape()
+                        } else {
+                            AbsoluteSmoothCornerShape(
+                                cornerRadiusTL = playCorner,
+                                smoothnessAsPercentTR = 60,
+                                cornerRadiusBL = playCorner,
+                                smoothnessAsPercentTL = 60,
+                                cornerRadiusTR = playCorner,
+                                smoothnessAsPercentBL = 60,
+                                cornerRadiusBR = playCorner,
+                                smoothnessAsPercentBR = 60
+                            )
+                        }
                     }
                     .background(colorPlayPause)
                     .clickable {
@@ -198,11 +211,12 @@ fun AnimatedPlaybackControls(
                 animationSpec = pressAnimationSpec,
                 label = "nextWeight"
             )
+            val nextShape = if (LocalPixelTheme.current) PixelCapsuleShape() else CircleShape
             Box(
                 modifier = Modifier
                     .weight(nextWeight)
                     .fillMaxHeight()
-                    .clip(CircleShape)
+                    .clip(nextShape)
                     .background(colorNextButton)
                     .clickable {
                         lastClicked = PlaybackButtonType.NEXT
@@ -214,12 +228,16 @@ fun AnimatedPlaybackControls(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.SkipNext,
-                    contentDescription = "Next",
-                    tint = tintNextIcon,
-                    modifier = Modifier.size(iconSize)
-                )
+                if (LocalPixelTheme.current) {
+                    PixelSkipIcon(forward = true, tint = tintNextIcon, modifier = Modifier.size(iconSize))
+                } else {
+                    Icon(
+                        imageVector = Icons.Rounded.SkipNext,
+                        contentDescription = "Next",
+                        tint = tintNextIcon,
+                        modifier = Modifier.size(iconSize)
+                    )
+                }
             }
         }
     }

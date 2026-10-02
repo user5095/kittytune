@@ -17,6 +17,10 @@ enum class BlurDirection {
     TOP, BOTTOM
 }
 
+// Off: on a Galaxy S21 Ultra (SM-G998B, Android 15) this shader on the whole NavHost draws nothing, so the app
+// shows only its background. Root cause not found; re-enable once it is, or scope it to a smaller layer.
+private const val PROGRESSIVE_BLUR_SHADER_ENABLED = false
+
 @Language("AGSL")
 private val PROGRESSIVE_BLUR_SKSL = """
     uniform shader content;
@@ -84,7 +88,7 @@ fun Modifier.progressiveBlur(
 ): Modifier = composed {
     val overlayColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.65f)
 
-    val blurModifier = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && blurRadius > 0f) {
+    val blurModifier = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && blurRadius > 0f && PROGRESSIVE_BLUR_SHADER_ENABLED) {
         Modifier.graphicsLayer {
             val shader = RuntimeShader(PROGRESSIVE_BLUR_SKSL)
             shader.setFloatUniform("blurRadius", blurRadius)

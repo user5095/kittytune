@@ -8,6 +8,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackParameters
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
@@ -479,8 +480,27 @@ object MusicManager {
             .setUpstreamDataSourceFactory(resolvingDataSourceFactory)
             .setFlags(androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
 
+        // ExoPlayer's own default LoadControl won't start playback until 2.5s of media is
+        // buffered (DEFAULT_BUFFER_FOR_PLAYBACK_MS) - on top of however long stream resolution
+        // took, that's a flat 2.5s tax on every track start, on every source, regardless of how
+        // fast the resolved URL is. Audio bitrates are low enough that a few hundred ms of buffer
+        // is already enough to avoid stalling, so only that one threshold is lowered; min/max
+        // buffer and the after-rebuffer threshold stay at the defaults so mid-playback stability
+        // on a weak connection isn't traded away for a faster first start. Time is preferred over
+        // the byte threshold because YouTube's muxed MP4 otherwise waits for excess video bytes.
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
+                DefaultLoadControl.DEFAULT_MAX_BUFFER_MS,
+                200,
+                DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+
         val createExoPlayer = { index: Int ->
             ExoPlayer.Builder(context.applicationContext)
+                .setLoadControl(loadControl)
                 .setMediaSourceFactory(
                     DefaultMediaSourceFactory(context)
                         .setDataSourceFactory(cacheDataSourceFactory)

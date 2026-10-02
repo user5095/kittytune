@@ -51,7 +51,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.Icon
+import com.alananasss.kittytune.ui.icons.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -127,6 +127,8 @@ import com.alananasss.kittytune.ui.player.TrackTrimDialog
 import com.alananasss.kittytune.ui.player.cover.AnimatedArtwork
 import com.alananasss.kittytune.ui.player.cover.CanvasVideo
 import com.alananasss.kittytune.ui.theme.GoogleSansRounded
+import com.alananasss.kittytune.ui.theme.LocalPixelTheme
+import com.alananasss.kittytune.ui.theme.PixelFontFamily
 import com.alananasss.kittytune.utils.makeTimeString
 import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
 
@@ -473,7 +475,7 @@ fun PixelPlayerScreen(
                     )
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.rounded_keyboard_arrow_down_24),
+                        painter = painterResource(if (LocalPixelTheme.current) R.drawable.ic_pixel_keyboard_arrow_down else R.drawable.rounded_keyboard_arrow_down_24),
                         contentDescription = stringResource(R.string.btn_close),
                         tint = topBarBtnTint
                     )
@@ -483,7 +485,7 @@ fun PixelPlayerScreen(
                 Text(
                     text = stringResource(R.string.player_now_playing),
                     style = MaterialTheme.typography.titleMedium.copy(
-                        fontFamily = GoogleSansRounded,
+                        fontFamily = if (LocalPixelTheme.current) PixelFontFamily else GoogleSansRounded,
                         fontWeight = FontWeight.SemiBold
                     ),
                     color = mainTextColor
@@ -519,7 +521,7 @@ fun PixelPlayerScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            painter = painterResource(R.drawable.rounded_lyrics_24),
+                            painter = painterResource(if (LocalPixelTheme.current) R.drawable.ic_pixel_lyrics else R.drawable.rounded_lyrics_24),
                             contentDescription = stringResource(R.string.player_lyrics),
                             tint = if (viewModel.showInlineLyrics) activeChipTint else topBarBtnTint
                         )
@@ -542,7 +544,7 @@ fun PixelPlayerScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            painter = painterResource(R.drawable.rounded_queue_music_24),
+                            painter = painterResource(if (LocalPixelTheme.current) R.drawable.ic_pixel_queue_music else R.drawable.rounded_queue_music_24),
                             contentDescription = stringResource(R.string.player_queue),
                             tint = topBarBtnTint
                         )
@@ -674,7 +676,7 @@ fun PixelPlayerScreen(
                     text = track.title ?: stringResource(R.string.untitled_track),
                     style = MaterialTheme.typography.headlineSmall.copy(
                         fontWeight = FontWeight.Bold,
-                        fontFamily = GoogleSansRounded,
+                        fontFamily = if (LocalPixelTheme.current) PixelFontFamily else GoogleSansRounded,
                         color = mainTextColor
                     ),
                     maxLines = 1,
@@ -702,7 +704,7 @@ fun PixelPlayerScreen(
                             track.user?.username ?: stringResource(R.string.unknown_artist)
                         },
                         style = MaterialTheme.typography.titleMedium.copy(
-                            fontFamily = GoogleSansRounded,
+                            fontFamily = if (LocalPixelTheme.current) PixelFontFamily else GoogleSansRounded,
                             color = subTextColor
                         ),
                         maxLines = 1,
@@ -925,14 +927,14 @@ fun PixelPlayerScreen(
                     Text(
                         text = makeTimeString(effectivePositionState.value),
                         style = MaterialTheme.typography.labelMedium.copy(
-                            fontFamily = GoogleSansRounded,
+                            fontFamily = if (LocalPixelTheme.current) PixelFontFamily else GoogleSansRounded,
                             color = subTextColor
                         )
                     )
                     Text(
                         text = makeTimeString(totalDuration),
                         style = MaterialTheme.typography.labelMedium.copy(
-                            fontFamily = GoogleSansRounded,
+                            fontFamily = if (LocalPixelTheme.current) PixelFontFamily else GoogleSansRounded,
                             color = subTextColor
                         )
                     )

@@ -39,6 +39,8 @@ import androidx.compose.animation.core.tween
     import androidx.compose.material.icons.automirrored.rounded.FormatAlignLeft
     import androidx.compose.material.icons.automirrored.rounded.FormatAlignRight
     import androidx.compose.material3.*
+import com.alananasss.kittytune.ui.theme.Switch
+import com.alananasss.kittytune.ui.icons.Icon
     import com.alananasss.kittytune.ui.common.Slider
     import androidx.compose.runtime.*
     import com.alananasss.kittytune.ui.theme.rememberLyricsFontFamily

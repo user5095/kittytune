@@ -271,6 +271,7 @@ fun SoundTuneTheme(
     keyColor: Int = 0,
     colorStyle: String = "System",
     colorSpec: String = "SPEC_2025",
+    pixelTheme: Boolean = false,
     typography: androidx.compose.material3.Typography = Typography,
     content: @Composable () -> Unit,
 ) {
@@ -282,6 +283,8 @@ fun SoundTuneTheme(
         AppThemeMode.DARK -> true
     }
 
+    // Pixel theme only swaps typography/shapes: colors stay whatever the user already picked
+    // (dynamic color, seed, pure black) so the AMOLED "pure black" setting keeps working as-is.
     val colorScheme = rememberSoundTuneColorScheme(
         useDarkTheme = useDarkTheme,
         dynamicColor = dynamicColor,
@@ -291,6 +294,7 @@ fun SoundTuneTheme(
         colorStyle = colorStyle,
         colorSpec = colorSpec,
     )
+    val effectiveTypography = if (pixelTheme) PixelTypography else typography
 
     val view = LocalView.current
     if (!view.isInEditMode) {
@@ -307,10 +311,15 @@ fun SoundTuneTheme(
         }
     }
 
-    MaterialExpressiveTheme(
-        colorScheme = colorScheme,
-        typography = typography,
-        content = content,
-        motionScheme = MotionScheme.expressive(),
-    )
+    androidx.compose.runtime.CompositionLocalProvider(LocalPixelTheme provides pixelTheme) {
+        MaterialExpressiveTheme(
+            colorScheme = colorScheme,
+            typography = effectiveTypography,
+            content = content,
+            motionScheme = MotionScheme.expressive(),
+        )
+    }
 }
+
+/** True while the YTMusicPixelated pixel theme is active — read by [com.alananasss.kittytune.ui.icons.Icon]. */
+val LocalPixelTheme = androidx.compose.runtime.compositionLocalOf { false }

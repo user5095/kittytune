@@ -24,6 +24,7 @@
     import androidx.compose.material.icons.rounded.KeyboardArrowDown
     import androidx.compose.material.icons.rounded.Verified
     import androidx.compose.material3.*
+import com.alananasss.kittytune.ui.icons.Icon
     import androidx.compose.runtime.*
     import androidx.compose.ui.Alignment
     import androidx.compose.ui.Modifier

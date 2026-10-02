@@ -13,6 +13,7 @@
     import androidx.compose.material.icons.rounded.PlayArrow
     import androidx.compose.material.icons.rounded.SkipNext
     import androidx.compose.material3.*
+import com.alananasss.kittytune.ui.icons.Icon
     import androidx.compose.runtime.*
     import androidx.compose.ui.Alignment
     import androidx.compose.ui.Modifier
@@ -134,11 +135,18 @@
                 }
 
                 IconButton(onClick = { viewModel.playNext() }) {
-                    Icon(
-                        imageVector = Icons.Rounded.SkipNext,
-                        contentDescription = stringResource(R.string.menu_play_next),
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
+                    if (com.alananasss.kittytune.ui.theme.LocalPixelTheme.current) {
+                        com.alananasss.kittytune.ui.theme.PixelSkipIcon(
+                            forward = true,
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Rounded.SkipNext,
+                            contentDescription = stringResource(R.string.menu_play_next),
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
 

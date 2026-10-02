@@ -109,6 +109,11 @@ object LikeRepository {
         com.alananasss.kittytune.data.sync.SyncLikes.record(track.id, liked = true, track = track)
 
         scope.launch {
+            if (track.source == "youtube") {
+                // Its id is a hash of the video id: sending it to SoundCloud would like some unrelated track.
+                com.alananasss.kittytune.data.ytmusic.YtmSync.pushLike(appContext, track, like = true)
+                return@launch
+            }
             if (track.source == "vk") {
                 val vkTokenManager = com.alananasss.kittytune.data.vk.VkTokenManager(appContext)
                 if (vkTokenManager.isLoggedIn()) {
@@ -168,6 +173,11 @@ object LikeRepository {
                     }
                 }
             }
+            return
+        }
+
+        if (targetTrack?.source == "youtube") {
+            scope.launch { com.alananasss.kittytune.data.ytmusic.YtmSync.pushLike(appContext, targetTrack, like = false) }
             return
         }
 

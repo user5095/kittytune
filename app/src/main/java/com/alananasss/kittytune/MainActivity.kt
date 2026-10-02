@@ -64,6 +64,7 @@ import com.zionhuang.innertube.models.YouTubeLocale
         private var keyColorState by mutableIntStateOf(0)
         private var colorStyleState by mutableStateOf("Expressive")
         private var colorSpecState by mutableStateOf("SPEC_2025")
+        private var pixelThemeState by mutableStateOf(false)
 
         private val _shouldOpenSearch = MutableStateFlow(false)
         private val shouldOpenSearch = _shouldOpenSearch.asStateFlow()
@@ -104,6 +105,7 @@ import com.zionhuang.innertube.models.YouTubeLocale
             AchievementManager.init(applicationContext)
             RepostRepository.init(applicationContext)
             AchievementManager.resetSessionAchievements()
+            com.alananasss.kittytune.data.SoundCloudLikesPlaylist.start(applicationContext, lifecycleScope)
 
             preferences = PlayerPreferences(applicationContext)
             sharedPrefs = applicationContext.getSharedPreferences("player_state", MODE_PRIVATE)
@@ -139,6 +141,7 @@ import com.zionhuang.innertube.models.YouTubeLocale
                 DisposableEffect(lifecycleOwner) {
                     val observer = LifecycleEventObserver { _, event ->
                         if (event == Lifecycle.Event.ON_RESUME) {
+                            scope.launch { com.alananasss.kittytune.data.ytmusic.YtmSync.autoSync(applicationContext) }
                             val tokenManager = TokenManager(applicationContext)
                             val hasToken = !tokenManager.getAccessToken().isNullOrEmpty()
                             if (hasToken && !tokenManager.isGuestMode()) {
@@ -178,6 +181,7 @@ import com.zionhuang.innertube.models.YouTubeLocale
                     keyColor = activeKeyColor,
                     colorStyle = colorStyleState,
                     colorSpec = colorSpecState,
+                    pixelTheme = pixelThemeState,
                     typography = dynamicTypography
                 ) {
                     LaunchedEffect(Unit) {
@@ -238,6 +242,7 @@ import com.zionhuang.innertube.models.YouTubeLocale
             keyColorState = preferences.getKeyColor()
             colorStyleState = preferences.getColorStyle()
             colorSpecState = preferences.getColorSpec()
+            pixelThemeState = preferences.getPixelTheme()
             customFontEnabledState = preferences.getCustomFontEnabled()
             fontWghtState = preferences.getFontWght()
             fontWdthState = preferences.getFontWdth()

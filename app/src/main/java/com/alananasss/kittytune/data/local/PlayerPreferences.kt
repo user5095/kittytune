@@ -110,6 +110,7 @@ class PlayerPreferences(context: Context) {
         private const val KEY_TRACK_DYNAMIC_THEME = "track_dynamic_theme_enabled"
         private const val KEY_THEME_MODE = "app_theme_mode"
         private const val KEY_PURE_BLACK = "pure_black_enabled"
+        private const val KEY_PIXEL_THEME = "pixel_theme_enabled"
         const val KEY_PLAYER_STYLE = "player_background_style"
         private const val KEY_LOCAL_MEDIA_ENABLED = "local_media_enabled"
         private const val KEY_LOCAL_MEDIA_URIS_SET = "local_media_uris_set_v2"
@@ -654,6 +655,8 @@ class PlayerPreferences(context: Context) {
     fun setThemeMode(mode: AppThemeMode) = prefs.edit { putString(KEY_THEME_MODE, mode.name) }
     fun getPureBlack(): Boolean = prefs.getBoolean(KEY_PURE_BLACK, false)
     fun setPureBlack(enabled: Boolean) = prefs.edit { putBoolean(KEY_PURE_BLACK, enabled) }
+    fun getPixelTheme(): Boolean = prefs.getBoolean(KEY_PIXEL_THEME, false)
+    fun setPixelTheme(enabled: Boolean) = prefs.edit { putBoolean(KEY_PIXEL_THEME, enabled) }
     fun getPlayerStyle(): PlayerBackgroundStyle {
         val n = prefs.getString(KEY_PLAYER_STYLE, PlayerBackgroundStyle.APPLE_MUSIC.name); return try {
             PlayerBackgroundStyle.valueOf(n!!)

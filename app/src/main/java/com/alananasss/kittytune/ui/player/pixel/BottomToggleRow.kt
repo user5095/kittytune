@@ -22,7 +22,7 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.OpenInFull
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Vibration
-import androidx.compose.material3.Icon
+import com.alananasss.kittytune.ui.icons.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -37,6 +37,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.theme.LocalPixelTheme
+import com.alananasss.kittytune.ui.theme.PixelCapsuleShape
 import com.alananasss.kittytune.data.local.PlayerActionButtonSlot
 import com.alananasss.kittytune.ui.player.RepeatMode
 import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
@@ -80,6 +82,21 @@ fun BottomToggleRow(
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.7f)
 ) {
     val rowCorners = 60.dp
+    val pixelTheme = LocalPixelTheme.current
+    val containerShape = if (pixelTheme) {
+        PixelCapsuleShape(cornerRadius = rowCorners)
+    } else {
+        AbsoluteSmoothCornerShape(
+            cornerRadiusBL = rowCorners,
+            smoothnessAsPercentTR = 60,
+            cornerRadiusBR = rowCorners,
+            smoothnessAsPercentBL = 60,
+            cornerRadiusTL = rowCorners,
+            smoothnessAsPercentBR = 60,
+            cornerRadiusTR = rowCorners,
+            smoothnessAsPercentTL = 60
+        )
+    }
     val visibleSlots = slots.filter { it != PlayerActionButtonSlot.NONE }.ifEmpty {
         listOf(PlayerActionButtonSlot.SHUFFLE, PlayerActionButtonSlot.REPEAT, PlayerActionButtonSlot.LIKE)
     }
@@ -87,34 +104,14 @@ fun BottomToggleRow(
     Box(
         modifier = modifier.background(
             color = containerColor,
-            shape = AbsoluteSmoothCornerShape(
-                cornerRadiusBL = rowCorners,
-                smoothnessAsPercentTR = 60,
-                cornerRadiusBR = rowCorners,
-                smoothnessAsPercentBL = 60,
-                cornerRadiusTL = rowCorners,
-                smoothnessAsPercentBR = 60,
-                cornerRadiusTR = rowCorners,
-                smoothnessAsPercentTL = 60
-            )
+            shape = containerShape
         )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(8.dp)
-                .clip(
-                    AbsoluteSmoothCornerShape(
-                        cornerRadiusBL = rowCorners,
-                        smoothnessAsPercentTR = 60,
-                        cornerRadiusBR = rowCorners,
-                        smoothnessAsPercentBL = 60,
-                        cornerRadiusTL = rowCorners,
-                        smoothnessAsPercentBR = 60,
-                        cornerRadiusTR = rowCorners,
-                        smoothnessAsPercentTL = 60
-                    )
-                )
+                .clip(containerShape)
                 .background(Color.Transparent),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -138,6 +135,7 @@ fun BottomToggleRow(
 
                 when (slot) {
                     PlayerActionButtonSlot.SHUFFLE -> {
+                        val pixelTheme = LocalPixelTheme.current
                         ToggleSegmentButton(
                             modifier = commonModifier,
                             active = isShuffleEnabled,
@@ -147,14 +145,17 @@ fun BottomToggleRow(
                             inactiveColor = inactiveColor,
                             inactiveContentColor = inactiveContentColor,
                             onClick = onShuffleToggle,
-                            iconId = R.drawable.rounded_shuffle_24,
+                            iconId = if (pixelTheme) R.drawable.ic_pixel_shuffle else R.drawable.rounded_shuffle_24,
                             contentDesc = "Shuffle"
                         )
                     }
                     PlayerActionButtonSlot.REPEAT -> {
+                        val pixelTheme = LocalPixelTheme.current
                         val repeatActive = repeatMode != RepeatMode.NONE
-                        val repeatIcon = when (repeatMode) {
-                            RepeatMode.ONE -> R.drawable.rounded_repeat_one_24
+                        val repeatIcon = when {
+                            repeatMode == RepeatMode.ONE && pixelTheme -> R.drawable.ic_pixel_repeat_one
+                            repeatMode == RepeatMode.ONE -> R.drawable.rounded_repeat_one_24
+                            pixelTheme -> R.drawable.ic_pixel_repeat
                             else -> R.drawable.rounded_repeat_24
                         }
                         ToggleSegmentButton(
@@ -171,6 +172,7 @@ fun BottomToggleRow(
                         )
                     }
                     PlayerActionButtonSlot.LIKE -> {
+                        val pixelTheme = LocalPixelTheme.current
                         ToggleSegmentButton(
                             modifier = commonModifier,
                             active = isFavorite,
@@ -180,7 +182,12 @@ fun BottomToggleRow(
                             inactiveColor = inactiveColor,
                             inactiveContentColor = inactiveContentColor,
                             onClick = onFavoriteToggle,
-                            iconId = if (isFavorite) R.drawable.round_favorite_24 else R.drawable.round_favorite_border_24,
+                            iconId = when {
+                                isFavorite && pixelTheme -> R.drawable.ic_pixel_favorite
+                                isFavorite -> R.drawable.round_favorite_24
+                                pixelTheme -> R.drawable.ic_pixel_favorite_border
+                                else -> R.drawable.round_favorite_border_24
+                            },
                             contentDesc = "Favorite"
                         )
                     }
@@ -361,10 +368,15 @@ fun ToggleSegmentButton(
         Modifier.clickable(enabled = enabled, onClick = onClick)
     }
 
+    val shape = if (LocalPixelTheme.current) {
+        PixelCapsuleShape(cornerRadius = cornerRadius)
+    } else {
+        RoundedCornerShape(cornerRadius)
+    }
     Box(
         modifier = modifier
             .fillMaxSize()
-            .clip(RoundedCornerShape(cornerRadius))
+            .clip(shape)
             .background(bgColor)
             .then(clickModifier),
         contentAlignment = Alignment.Center

@@ -117,6 +117,9 @@
         val searchResultsArtists = mutableStateListOf<User>()
         val searchResultsPlaylists = mutableStateListOf<Playlist>()
         val searchResultsYoutube = mutableStateListOf<Track>()
+        val searchResultsYoutubeAlbums = mutableStateListOf<Playlist>()
+        val searchResultsYoutubePlaylists = mutableStateListOf<Playlist>()
+        val searchResultsYoutubeArtists = mutableStateListOf<User>()
         val searchResultsSpotify = mutableStateListOf<Track>()
         val searchResultsSpotifyAlbums = mutableStateListOf<com.alananasss.kittytune.data.spotify.SpotifyAlbum>()
         val searchResultsSpotifyPlaylists = mutableStateListOf<com.alananasss.kittytune.data.spotify.SpotifyPlaylist>()
@@ -393,6 +396,7 @@
 
         private fun clearSearchResults() {
             searchResultsTracks.clear(); searchResultsArtists.clear(); searchResultsPlaylists.clear(); searchResultsYoutube.clear()
+            searchResultsYoutubeAlbums.clear(); searchResultsYoutubePlaylists.clear(); searchResultsYoutubeArtists.clear()
             searchResultsSpotify.clear(); searchResultsSpotifyAlbums.clear(); searchResultsSpotifyPlaylists.clear(); searchResultsSpotifyArtists.clear()
             searchResultsVk.clear()
             searchResultsDeezerTracks.clear(); searchResultsDeezerAlbums.clear(); searchResultsDeezerPlaylists.clear(); searchResultsDeezerArtists.clear()
@@ -593,47 +597,12 @@
         private suspend fun performYoutubeSearch(query: String) {
             withContext(Dispatchers.IO) {
                 try {
-                    val result = YouTube.search(query, YouTube.SearchFilter.FILTER_VIDEO).getOrNull()
-
-                    val mappedTracks = result?.items?.mapNotNull { item ->
-                        if (item is SongItem) {
-                            Track(
-                                id = kotlin.math.abs(item.id.hashCode().toLong()),
-                                title = item.title,
-                                user = User(0L, item.artists.firstOrNull()?.name ?: "YouTube", null),
-                                artworkUrl = item.thumbnail,
-                                durationMs = (item.duration ?: 0) * 1000L,
-                                permalinkUrl = "https://youtube.com/watch?v=${item.id}",
-                                source = "youtube"
-                            )
-                        } else {
-                            try {
-                                val id = (item as? Any)?.let {
-                                    it.javaClass.getMethod("getId").invoke(it) as? String
-                                } ?: return@mapNotNull null
-
-                                val title = (item as? Any)?.let {
-                                    it.javaClass.getMethod("getTitle").invoke(it) as? String
-                                } ?: return@mapNotNull null
-
-                                Track(
-                                    id = kotlin.math.abs(id.hashCode().toLong()),
-                                    title = title,
-                                    user = User(0L, "YouTube", null),
-                                    artworkUrl = null,
-                                    durationMs = 0L,
-                                    permalinkUrl = "https://youtube.com/watch?v=$id",
-                                    source = "youtube"
-                                )
-                            } catch (e: Exception) {
-                                null
-                            }
-                        }
-                    } ?: emptyList()
-
+                    val result = com.alananasss.kittytune.data.youtube.YoutubeSearchRepository.search(query)
                     withContext(Dispatchers.Main) {
-                        searchResultsYoutube.clear()
-                        searchResultsYoutube.addAll(mappedTracks)
+                        searchResultsYoutube.clear(); searchResultsYoutube.addAll(result.tracks)
+                        searchResultsYoutubeAlbums.clear(); searchResultsYoutubeAlbums.addAll(result.albums)
+                        searchResultsYoutubePlaylists.clear(); searchResultsYoutubePlaylists.addAll(result.playlists)
+                        searchResultsYoutubeArtists.clear(); searchResultsYoutubeArtists.addAll(result.artists)
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()

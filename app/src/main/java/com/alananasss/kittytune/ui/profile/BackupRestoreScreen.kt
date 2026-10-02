@@ -14,6 +14,7 @@
     import androidx.compose.material.icons.rounded.Info
     import androidx.compose.material.icons.rounded.Restore
     import androidx.compose.material3.*
+import com.alananasss.kittytune.ui.icons.Icon
     import androidx.compose.runtime.*
     import androidx.compose.ui.Alignment
     import androidx.compose.ui.Modifier

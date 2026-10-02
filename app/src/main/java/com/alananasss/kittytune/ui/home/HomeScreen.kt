@@ -40,6 +40,7 @@ import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
+import com.alananasss.kittytune.ui.icons.Icon
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
@@ -363,6 +364,11 @@ fun HomeScreen(
                             .fillMaxWidth()
                             .padding(horizontal = searchBarPadding)
                             .padding(bottom = 8.dp),
+                        shape = if (com.alananasss.kittytune.ui.theme.LocalPixelTheme.current) {
+                            com.alananasss.kittytune.ui.theme.PixelCapsuleShape()
+                        } else {
+                            SearchBarDefaults.inputFieldShape
+                        },
                         colors = SearchBarDefaults.colors(
                             containerColor = searchContainerColor,
                             dividerColor = Color.Transparent
@@ -379,6 +385,7 @@ fun HomeScreen(
                                     AnimatedVisibility(
                                         visible = homeViewModel.activeSearchSource in listOf(
                                             SearchSource.SOUNDCLOUD,
+                                            SearchSource.YOUTUBE,
                                             SearchSource.SPOTIFY,
                                             SearchSource.DEEZER,
                                             SearchSource.TIDAL,
@@ -393,7 +400,7 @@ fun HomeScreen(
                                             onFilterSelected = homeViewModel::onFilterChanged
                                         )
                                     }
-                                    if (homeViewModel.activeSearchSource == SearchSource.YOUTUBE || homeViewModel.activeSearchSource == SearchSource.VK) {
+                                    if (homeViewModel.activeSearchSource == SearchSource.VK) {
                                         Spacer(Modifier.weight(1f))
                                     }
                                     Spacer(Modifier.width(8.dp))
@@ -1803,32 +1810,18 @@ fun SearchResultsList(
     var selectedPlaylistForMenu by remember { mutableStateOf<Playlist?>(null) }
     when (homeViewModel.activeSearchSource) {
         SearchSource.YOUTUBE -> {
-            val listState = rememberLazyListState()
-            if (homeViewModel.searchResultsYoutube.isEmpty()) Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) { Text(stringResource(R.string.no_results), color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            else LazyColumn(
-                state = listState,
-                contentPadding = PaddingValues(bottom = 180.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                val isScrolling = listState.isScrollInProgress
-                itemsIndexed(homeViewModel.searchResultsYoutube) { index, track ->
-                    StaggeredItem(index, key = homeViewModel.searchQuery, isScrolling = isScrolling) {
-                        val isDownloaded = downloadedIds.contains(track.id)
-                        TrackListItem(
-                            track = track,
-                            currentlyPlayingTrack = playerViewModel.currentTrack,
-                            index = index,
-                            isDownloading = false,
-                            isDownloaded = isDownloaded,
-                            downloadProgress = 0,
-                            onClick = { playerViewModel.playPlaylist(listOf(track), 0) },
-                            onOptionClick = { playerViewModel.showTrackOptions(track) })
-                    }
-                }
-            }
+            ProviderSearchResults(
+                tracks = homeViewModel.searchResultsYoutube,
+                artists = homeViewModel.searchResultsYoutubeArtists,
+                albums = homeViewModel.searchResultsYoutubeAlbums,
+                playlists = homeViewModel.searchResultsYoutubePlaylists,
+                homeViewModel = homeViewModel,
+                playerViewModel = playerViewModel,
+                downloadedIds = downloadedIds,
+                activeFilter = activeFilter,
+                onNavigate = onNavigate,
+                onPlaylistOptionClick = { selectedPlaylistForMenu = it }
+            )
         }
 
         SearchSource.VK -> {

@@ -33,7 +33,8 @@ fun AccountsSettingsScreen(
     onNavigateToProviderOrder: () -> Unit,
     onNavigateToQobuz: () -> Unit,
     onNavigateToTidal: () -> Unit,
-    onNavigateToDeezer: () -> Unit
+    onNavigateToDeezer: () -> Unit,
+    onNavigateToYoutubeMusic: () -> Unit
 ) {
     val context = LocalContext.current
     val tokenManager = remember { TokenManager(context) }
@@ -129,6 +130,21 @@ fun AccountsSettingsScreen(
                                 subtitle = vkSubtitle,
                                 iconRes = R.drawable.ic_vk,
                                 onClick = onNavigateToVk
+                            )
+                        },
+                        { shape ->
+                            SettingsItem(
+                                shape = shape,
+                                title = stringResource(R.string.ytm_title),
+                                subtitle = if (com.alananasss.kittytune.data.ytmusic.YtmSession.isLoggedIn(context)) {
+                                    val ytmName = com.alananasss.kittytune.data.ytmusic.YtmSession.accountName(context)
+                                    if (!ytmName.isNullOrBlank()) stringResource(R.string.ytm_subtitle_connected, ytmName)
+                                    else stringResource(R.string.account_connected_status)
+                                } else {
+                                    stringResource(R.string.ytm_subtitle_guest)
+                                },
+                                iconRes = R.drawable.ic_logo_youtube_music,
+                                onClick = onNavigateToYoutubeMusic
                             )
                         },
                         { shape ->

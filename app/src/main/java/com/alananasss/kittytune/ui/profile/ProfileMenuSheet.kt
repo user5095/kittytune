@@ -16,6 +16,7 @@
     import androidx.compose.material.icons.rounded.Mail
     import androidx.compose.material.icons.rounded.Settings
     import androidx.compose.material3.*
+import com.alananasss.kittytune.ui.icons.Icon
     import androidx.compose.runtime.Composable
     import androidx.compose.ui.Alignment
     import androidx.compose.ui.Modifier

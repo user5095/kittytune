@@ -5100,7 +5100,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
         playJob?.cancel()
         playJob = viewModelScope.launch(Dispatchers.IO) {
-            val bitmap = loadBitmap(trackToPlay.fullResArtwork)
+            // Artwork and stream resolution are independent network calls; loading the bitmap
+            // first used to serialize them ahead of every playback, adding its full duration to
+            // the time-to-first-sound. Run them side by side and only join back up for buildMediaItem.
+            val bitmapDeferred = async { loadBitmap(trackToPlay.fullResArtwork) }
 
             var resolvedUrl: String? = null
             var offlineKeySetId: ByteArray? = null
@@ -5187,7 +5190,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 return@launch
             }
 
-            val newMediaItem = buildMediaItem(trackToPlay, bitmap, resolvedUrl, offlineKeySetId, resolvedMimeType)
+            val newMediaItem = buildMediaItem(trackToPlay, bitmapDeferred.await(), resolvedUrl, offlineKeySetId, resolvedMimeType)
 
             withContext(Dispatchers.Main) {
                 try {

@@ -31,6 +31,7 @@ class KittyTuneApp : Application(), ImageLoaderFactory {
         )
 
         com.alananasss.kittytune.data.network.ProxyManager.init(this)
+        com.alananasss.kittytune.data.ytmusic.YtmSession.init(this)
 
         // Paired once, in step from then on. Costs nothing until something is paired: no port is opened
         // and no timer runs on an install that has never paired (issue #33).
