@@ -107,7 +107,9 @@ jobs:
           # the in-app update popup renders the release body, so reuse upstream's changelog for this base version
           printf 'Custom build based on upstream v%s.\n\n' "${{ steps.ver.outputs.base }}" > notes.md
           gh api repos/$UPSTREAM/releases/tags/v${{ steps.ver.outputs.base }} --jq .body >> notes.md || true
+          # --repo is mandatory: the `upstream` remote added above makes gh target the original repo otherwise
           gh release create "v${{ steps.ver.outputs.version }}" app/build/outputs/apk/release/*.apk \
+            --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "KittyTune ${{ steps.ver.outputs.version }}" \
             --notes-file notes.md
