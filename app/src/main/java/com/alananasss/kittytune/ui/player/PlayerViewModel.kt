@@ -3598,10 +3598,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 cleanTracks.filterIndexed { index, _ -> index != effectiveStartIndex }.shuffled()
             _queue.add(clickedTrack)
             _queue.addAll(rest)
-            playTrackAtIndex(0, addToHistory = (context == null || isHistoryContext), autoPlay = true)
+            playTrackAtIndex(0, addToHistory = true, autoPlay = true)
         } else {
             _queue.addAll(cleanTracks)
-            playTrackAtIndex(effectiveStartIndex, addToHistory = (context == null || isHistoryContext), autoPlay = true)
+            playTrackAtIndex(effectiveStartIndex, addToHistory = true, autoPlay = true)
         }
 
         updateQueueState(); saveStateAsync(saveQueue = true)
@@ -3648,7 +3648,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun skipToQueueItem(index: Int, autoPlay: Boolean = true) {
         playTrackAtIndex(
             index,
-            addToHistory = false,
+            addToHistory = true,
             autoPlay = autoPlay
         ); AchievementManager.trackSkipped(); AchievementManager.increment("skipper_100"); AchievementManager.increment(
             "skipper_1000"
@@ -3922,10 +3922,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
 
         if (nextIndex < _queue.size) {
-            playTrackAtIndex(nextIndex, addToHistory = false, isCrossfade = isCrossfade, autoPlay = true)
+            playTrackAtIndex(nextIndex, addToHistory = true, isCrossfade = isCrossfade, autoPlay = true)
         } else {
             if (repeatMode == RepeatMode.ALL) {
-                playTrackAtIndex(0, addToHistory = false, isCrossfade = isCrossfade, autoPlay = true)
+                playTrackAtIndex(0, addToHistory = true, isCrossfade = isCrossfade, autoPlay = true)
             } else {
                 val autoPlayEnabled = playerPrefs.getAutoplayEnabled()
                 val isSpotify = currentTrack?.let {
@@ -4131,9 +4131,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
         val prevIndex = currentQueueIndex - 1
         if (prevIndex >= 0) {
-            playTrackAtIndex(prevIndex, addToHistory = false, isCrossfade = isCrossfade, autoPlay = true)
+            playTrackAtIndex(prevIndex, addToHistory = true, isCrossfade = isCrossfade, autoPlay = true)
         } else {
-            playTrackAtIndex(0, addToHistory = false, isCrossfade = isCrossfade, autoPlay = true)
+            playTrackAtIndex(0, addToHistory = true, isCrossfade = isCrossfade, autoPlay = true)
         }
     }
 
