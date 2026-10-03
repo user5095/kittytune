@@ -72,6 +72,7 @@ fun MiscSettingsScreen(
                     LanguageRadioButton(stringResource(R.string.lang_russian), AppLanguage.RUSSIAN, appLanguage, onSelected)
                     LanguageRadioButton(stringResource(R.string.lang_hungarian), AppLanguage.HUNGARIAN, appLanguage, onSelected)
                     LanguageRadioButton(stringResource(R.string.lang_vietnamese), AppLanguage.VIETNAMESE, appLanguage, onSelected)
+                    LanguageRadioButton(stringResource(R.string.lang_italian), AppLanguage.ITALIAN, appLanguage, onSelected)
                 }
             },
             confirmButton = {}
@@ -137,6 +138,7 @@ fun MiscSettingsScreen(
                                     AppLanguage.HUNGARIAN -> stringResource(R.string.lang_hungarian)
                                     AppLanguage.RUSSIAN -> stringResource(R.string.lang_russian)
                                     AppLanguage.VIETNAMESE -> stringResource(R.string.lang_vietnamese)
+                                    AppLanguage.ITALIAN -> stringResource(R.string.lang_italian)
                                 },
                                 icon = Icons.Rounded.Translate,
                                 onClick = { showLanguageDialog = true },
