@@ -41,9 +41,21 @@
 
 ### ~ what is this
 
-KittyTune is an open-source Android music player built around **SoundCloud**, with optional login, a real **guest mode**, and a **YouTube search / stream fallback** for tracks that are restricted, missing, or annoying to access normally.
+KittyTune is a free, open-source Android music player created by [alan7383](https://github.com/alan7383/kittytune). SoundCloud is its main source: you can sign in or just use it as a guest, and when a track is region-locked, missing or hard to reach, it can search and stream it from YouTube instead.
 
-It also pulls in the things a lot of music apps either skip or hide behind rough UX: **offline downloads**, **local folder scanning**, **lyrics**, **audio recognition**, **audio effects**, **Discord Rich Presence**, **widgets**, **listening stats**, **achievements**, and **Android Auto** support.
+On top of playback it bundles what many players leave out or bury in menus: offline downloads, local folder scanning, synced lyrics, song recognition, audio effects, Discord Rich Presence, home-screen widgets, listening stats, achievements and Android Auto.
+
+> [!IMPORTANT]
+> **This is a personal fork** of the upstream project, kept in sync with it (currently based on upstream v2.68.0). Everything above is upstream's work; the section below lists what this fork adds.
+
+### + what this fork adds
+
+- **YouTube Music account**: sign in with Google (OAuth device flow, in your default browser), two-way sync of likes and artists, and import of your listening history.
+- **Faster YouTube playback**: InnerTube fast path with up-to-date ANDROID/IOS clients, and a parallel race between providers so the first stream that resolves wins.
+- **SoundCloud likes as a playlist**, plus recently played now also records tracks played from inside playlists.
+- **Pixel theme**: pixel font, pixel icons and pixel-style switches, toggled from the Themes settings.
+- **Italian translation** and language option.
+- **In-app updates from this fork's releases**, with an automated workflow that merges upstream releases and publishes builds with the upstream changelog.
 
 <p align="center">
   <img src="docs/screenshots/homescreen.png" width="31%" alt="Home Screen">
