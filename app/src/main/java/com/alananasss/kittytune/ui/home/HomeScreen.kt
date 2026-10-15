@@ -2497,14 +2497,21 @@ fun SearchResultsList(
 
                         if (tracks.isNotEmpty()) {
                             kotlinx.coroutines.withContext(Dispatchers.Main) {
+                                val playbackContext = com.alananasss.kittytune.ui.player.PlaybackContext(
+                                    context.getString(R.string.context_playlist, playlist.title ?: ""),
+                                    playlist.id.toString(),
+                                    playlist.artworkUrl,
+                                    artistName = playlist.user?.username,
+                                    isVerified = playlist.user?.verified == true
+                                )
                                 if (shuffle) {
-                                    playerViewModel.playPlaylist(tracks.shuffled(), 0)
+                                    playerViewModel.playPlaylist(tracks.shuffled(), 0, playbackContext)
                                 } else if (insertNext) {
                                     playerViewModel.insertNext(tracks)
                                 } else if (addToQueue) {
                                     playerViewModel.addToQueue(tracks)
                                 } else {
-                                    playerViewModel.playPlaylist(tracks, 0)
+                                    playerViewModel.playPlaylist(tracks, 0, playbackContext)
                                 }
                             }
                         }

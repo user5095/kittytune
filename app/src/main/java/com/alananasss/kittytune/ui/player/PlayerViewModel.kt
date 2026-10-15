@@ -3796,12 +3796,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
             prefetchWaveformsForQueue(index)
 
-            if (addToHistory && currentContext?.navigationId?.startsWith("station:") != true && currentContext?.navigationId?.startsWith(
-                    "yt_radio:"
-                ) != true
-            ) {
-                HistoryRepository.addToHistory(finalTrack)
-            }
+            if (addToHistory) HistoryRepository.addToHistory(finalTrack)
         }
     }
 
@@ -3952,7 +3947,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         if (newNextIndex < _queue.size) {
                             playTrackAtIndex(
                                 newNextIndex,
-                                addToHistory = false,
+                                addToHistory = true,
                                 isCrossfade = isCrossfade,
                                 autoPlay = true
                             )
