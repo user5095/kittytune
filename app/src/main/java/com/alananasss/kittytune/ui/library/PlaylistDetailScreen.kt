@@ -541,9 +541,11 @@ fun PlaylistDetailScreen(
         }
     }
 
-    val tracksToDisplay = if (playlistSearchQuery.isEmpty() && playlistSortBy == TrackSortBy.RECENTLY_ADDED) {
+    // derivedStateOf: `tracks` is a mutable state list, so the instance never changes as it fills.
+    val tracksToDisplay by remember(tracksFilteredByVibe, playlistSearchQuery, playlistSortBy) { derivedStateOf {
+      if (playlistSearchQuery.isEmpty() && playlistSortBy == TrackSortBy.RECENTLY_ADDED) {
         tracksFilteredByVibe
-    } else {
+      } else {
         val filtered = tracksFilteredByVibe.filter {
             it.title?.contains(playlistSearchQuery, ignoreCase = true) == true ||
                     it.user?.username?.contains(playlistSearchQuery, ignoreCase = true) == true
@@ -554,7 +556,8 @@ fun PlaylistDetailScreen(
             TrackSortBy.TITLE_AZ -> filtered.sortedBy { it.title?.lowercase() ?: "" }
             TrackSortBy.ARTIST_AZ -> filtered.sortedBy { it.user?.username?.lowercase() ?: "" }
         }
-    }
+      }
+    } }
 
 
     val downloadedCount = remember(tracks.size, tracksToDisplay.size, downloadedIds) {
@@ -652,35 +655,32 @@ fun PlaylistDetailScreen(
                     playlistTitle = context.getString(R.string.lib_downloads)
                     defaultIcon = Icons.Rounded.Folder
                     isLocalPlaylist = false
-                    val localPlaylists = db.getDownloadedPlaylists().first()
-                    newDownloadedPlaylists.addAll(localPlaylists.mapNotNull { local ->
-                        val tracksInPlaylist = db.getTracksForPlaylistSync(local.id)
-                        val realDownloadedCount = tracksInPlaylist.count { it.localAudioPath.isNotEmpty() }
-                        if (realDownloadedCount == 0) return@mapNotNull null
-                        val firstTrackArt =
-                            tracksInPlaylist.firstOrNull { it.localArtworkPath.isNotEmpty() || it.artworkUrl.isNotEmpty() }
-                                ?.let {
-                                    it.localArtworkPath.ifEmpty { it.artworkUrl }
-                                }
-                        val finalArt = local.localCoverPath ?: local.artworkUrl.ifEmpty { firstTrackArt ?: "" }
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        val localPlaylists = db.getDownloadedPlaylists().first()
+                        val stats = db.getPlaylistDownloadStats().associateBy { it.playlistId }
+                        newDownloadedPlaylists.addAll(localPlaylists.mapNotNull { local ->
+                            val realDownloadedCount = stats[local.id]?.downloadedCount ?: 0
+                            if (realDownloadedCount == 0) return@mapNotNull null
+                            val finalArt = local.localCoverPath ?: local.artworkUrl.ifEmpty { stats[local.id]?.firstArt ?: "" }
 
-                        Playlist(
-                            id = local.id,
-                            title = local.title,
-                            artworkUrl = finalArt,
-                            calculatedArtworkUrl = local.localCoverPath,
-                            trackCount = realDownloadedCount,
-                            user = User(0, local.artist, null),
-                            tracks = null
-                        )
-                    })
-                    val allDownloadedTracks = db.getAllTracksList().filter { it.localAudioPath.isNotEmpty() }
-                    newTracks.addAll(allDownloadedTracks.map { local ->
-                        local.toTrack(
-                            artworkOverride = local.localArtworkPath.ifEmpty { local.artworkUrl },
-                            isLiked = true
-                        )
-                    })
+                            Playlist(
+                                id = local.id,
+                                title = local.title,
+                                artworkUrl = finalArt,
+                                calculatedArtworkUrl = local.localCoverPath,
+                                trackCount = realDownloadedCount,
+                                user = User(0, local.artist, null),
+                                tracks = null
+                            )
+                        })
+                        // getAllTracksList already returns only tracks with audio on disk.
+                        newTracks.addAll(db.getAllTracksList().map { local ->
+                            local.toTrack(
+                                artworkOverride = local.localArtworkPath.ifEmpty { local.artworkUrl },
+                                isLiked = true
+                            )
+                        })
+                    }
                 }
 
                 playlistId == "local_files" -> {

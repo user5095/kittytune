@@ -52,6 +52,9 @@
         val addedAt: Long = System.currentTimeMillis()
     )
 
+    /** Query result (not a table): see DownloadDao.getPlaylistDownloadStats. */
+    data class PlaylistDownloadStat(val playlistId: Long, val downloadedCount: Int, val firstArt: String?)
+
     @Entity(tableName = "saved_artists")
     data class LocalArtist(
         @PrimaryKey val id: Long,

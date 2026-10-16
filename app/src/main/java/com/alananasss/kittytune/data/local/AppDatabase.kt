@@ -179,6 +179,10 @@
         @Insert(onConflict = OnConflictStrategy.REPLACE)
         suspend fun insertHistoryList(items: List<HistoryItem>)
 
+        /** Adds only rows that are not there yet, so a re-import never bumps an existing play's timestamp. */
+        @Insert(onConflict = OnConflictStrategy.IGNORE)
+        suspend fun insertHistoryListIfMissing(items: List<HistoryItem>)
+
         @Query("SELECT * FROM play_history ORDER BY timestamp DESC LIMIT 1000")
         fun getHistory(): Flow<List<HistoryItem>>
 
@@ -198,6 +202,21 @@
                 ORDER BY playlist_track_cross_ref.addedAt ASC
             """)
         suspend fun getTracksForPlaylistSync(playlistId: Long): List<LocalTrack>
+
+        /** One row per playlist: how many tracks are really on disk and the first usable cover. Replaces a query per playlist. */
+        @Query("""
+            SELECT R.playlistId AS playlistId,
+                   SUM(CASE WHEN T.localAudioPath != '' THEN 1 ELSE 0 END) AS downloadedCount,
+                   (SELECT CASE WHEN T2.localArtworkPath != '' THEN T2.localArtworkPath ELSE T2.artworkUrl END
+                      FROM playlist_track_cross_ref R2
+                      INNER JOIN downloaded_tracks T2 ON T2.id = R2.trackId
+                      WHERE R2.playlistId = R.playlistId AND (T2.localArtworkPath != '' OR T2.artworkUrl != '')
+                      ORDER BY R2.addedAt ASC LIMIT 1) AS firstArt
+            FROM playlist_track_cross_ref R
+            INNER JOIN downloaded_tracks T ON T.id = R.trackId
+            GROUP BY R.playlistId
+        """)
+        suspend fun getPlaylistDownloadStats(): List<PlaylistDownloadStat>
 
         @Query("DELETE FROM play_history")
         suspend fun clearHistory()

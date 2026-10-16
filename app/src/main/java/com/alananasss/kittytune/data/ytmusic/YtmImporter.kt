@@ -69,7 +69,9 @@ object YtmImporter {
 
         onStep(Step.HISTORY)
         val history = YouTube.history().getOrThrow()
-        dao.insertHistoryList(history.mapIndexed { i, s ->
+        // IfMissing: auto-sync re-runs this on every resume, and REPLACE would stamp the whole YouTube history
+        // as "just played", burying what was actually played in the app.
+        dao.insertHistoryListIfMissing(history.mapIndexed { i, s ->
             val t = s.toTrack()
             HistoryItem(
                 id = "track:${t.id}",

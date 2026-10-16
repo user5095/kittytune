@@ -67,13 +67,18 @@ object LikeRepository {
 
     private lateinit var playerPrefs: com.alananasss.kittytune.data.local.PlayerPreferences
 
+    @Volatile private var initialized = false
+
     fun init(context: Context) {
+        // Called from both MainActivity and PlaybackService: parse the likes file only once.
+        if (initialized) return
+        initialized = true
         appContext = context.applicationContext
         prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
         api = RetrofitClient.create(context)
         playerPrefs = com.alananasss.kittytune.data.local.PlayerPreferences(context)
-        loadFromStorage()
         scope.launch {
+            loadFromStorage()
             com.alananasss.kittytune.data.sync.SyncLikes.seedMissing()
             com.alananasss.kittytune.data.sync.SyncLikes.seedMissingPlaylists()
         }
@@ -623,16 +628,23 @@ object LikeRepository {
 
         if (loadedList != null) {
             val now = System.currentTimeMillis()
+            var migrated = false
             val migratedList = loadedList.mapIndexed { index, track ->
                 if (track.likedAt == null || track.likedAt == 0L) {
+                    migrated = true
                     track.copy(likedAt = now - (index * 1000))
                 } else {
                     track
                 }
             }
             val blacklist = getBlacklist()
-            _likedTracks.value = migratedList.filter { !blacklist.contains(it.id) }
-            saveLikedTracks()
+            val loaded = migratedList.filter { !blacklist.contains(it.id) }
+            // Runs off the main thread: keep anything liked while the file was still being read.
+            _likedTracks.update { current ->
+                if (current.isEmpty()) loaded
+                else current + loaded.filter { l -> current.none { it.id == l.id } }
+            }
+            if (migrated || loaded.size != migratedList.size || file.exists().not()) saveLikedTracks()
         }
 
         val savedPlaylistIds =

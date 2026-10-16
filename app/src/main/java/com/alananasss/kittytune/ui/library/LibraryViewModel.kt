@@ -401,6 +401,18 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             }
         }
 
+        // Show last session's online playlists immediately; loadOnlineData replaces them once the network answers.
+        prefs.getString(ONLINE_CACHE_KEY, null)?.let { json ->
+            try {
+                val type = object : com.google.gson.reflect.TypeToken<List<CachedOnlineItem>>() {}.type
+                val cached: List<CachedOnlineItem> = gson.fromJson(json, type)
+                onlineItemsCache = cached.map { LibraryItem.PlaylistItem(it.playlist, it.timestamp) }
+                rebuildAllItems()
+            } catch (e: Exception) {
+                Log.w("LibraryVM", "ignoring unreadable online cache", e)
+            }
+        }
+
         viewModelScope.launch {
             snapshotFlow { isGridLayout }.collect { isGrid ->
                 prefs.edit().putBoolean("is_grid_layout", isGrid).apply()
@@ -820,13 +832,16 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             if (NetworkUtils.isInternetAvailable(getApplication())) {
                 try {
                     isOfflineMode = false
+                    val pPrefs = com.alananasss.kittytune.data.local.PlayerPreferences(app)
+                    // The library only needs the user id: start loading with the cached one instead of waiting for getMe().
+                    val cachedId = pPrefs.getCachedUserId()
+                    if (cachedId != 0L) loadOnlineData(User(cachedId, pPrefs.getCachedUsername(), null))
                     val user = api.getMe()
                     userProfile = user
-                    val pPrefs = com.alananasss.kittytune.data.local.PlayerPreferences(app)
                     pPrefs.setCachedUserId(user.id)
                     pPrefs.setCachedUsername(user.username)
                     pPrefs.rememberSoundCloudTier(user)
-                    loadOnlineData(user)
+                    if (cachedId != user.id) loadOnlineData(user)
                 } catch (e: Exception) {
                     Log.e("LibraryVM", "online error or not connected", e)
                     isLoading = false
@@ -948,31 +963,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                     val createdResponse = createdPlaylistsDeferred.await()
                     val repostedResponse = repostedPlaylistsDeferred.await()
                     val libraryAllResponse = libraryAllDeferred.await()
-                    val followingsResponse = followedArtistsDeferred.await()
-                    val uploadedResponse = uploadedTracksDeferred.await()
-                    uploadedTracks.clear()
-                    uploadedTracks.addAll(uploadedResponse)
-                    prefs.edit().putString("cached_user_uploads", gson.toJson(uploadedResponse)).apply()
-                    Log.d("LibraryVM", "Followings fetched count: ${followingsResponse.size}, Uploaded tracks count: ${uploadedResponse.size}")
-
-                    if (followingsResponse.isNotEmpty()) {
-                        try {
-                            val validArtists = followingsResponse.filter { it.numericId != 0L }
-                            val now = System.currentTimeMillis()
-                            val localArtists = validArtists.mapIndexed { index, u ->
-                                LocalArtist(
-                                    id = u.numericId,
-                                    username = u.username ?: "Artist",
-                                    avatarUrl = u.avatarUrl ?: "",
-                                    trackCount = u.trackCount,
-                                    savedAt = now - (index * 1000L)
-                                )
-                            }
-                            db.insertArtists(localArtists)
-                        } catch (e: Exception) {
-                            Log.e("LibraryVM", "Failed to save artists to DB", e)
-                        }
-                    }
+                    // One query instead of one per playlist inside the loops below.
+                    val localById = try { db.getAllPlaylistsList().associateBy { it.id } } catch (_: Exception) { emptyMap() }
 
                     val newOnlineItems = mutableListOf<LibraryItem>()
                     val addedPlaylistIds = mutableSetOf<Long>()
@@ -990,7 +982,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                                 0L
                             }
                             val localCoverFile = java.io.File(app.filesDir, "playlist_cover_${pl.id}.jpg")
-                            val localInDb = try { db.getPlaylist(pl.id) } catch (_: Exception) { null }
+                            val localInDb = localById[pl.id]
                             val effectiveCover = localInDb?.localCoverPath ?: if (localCoverFile.exists()) localCoverFile.absolutePath else null
                             val adjustedPlaylist = if (!effectiveCover.isNullOrEmpty()) {
                                 pl.copy(artworkUrl = effectiveCover)
@@ -1034,7 +1026,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                                 0L
                             }
                             val localCoverFile = java.io.File(app.filesDir, "playlist_cover_${playlist.id}.jpg")
-                            val localInDb = try { db.getPlaylist(playlist.id) } catch (_: Exception) { null }
+                            val localInDb = localById[playlist.id]
                             val effectiveCover = localInDb?.localCoverPath ?: if (localCoverFile.exists()) localCoverFile.absolutePath else null
                             val adjustedPlaylist = if (!effectiveCover.isNullOrEmpty()) {
                                 playlist.copy(artworkUrl = effectiveCover)
@@ -1083,7 +1075,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                                 0L
                             }
                             val localCoverFile = java.io.File(app.filesDir, "playlist_cover_${playlist.id}.jpg")
-                            val localInDb = try { db.getPlaylist(playlist.id) } catch (_: Exception) { null }
+                            val localInDb = localById[playlist.id]
                             val effectiveCover = localInDb?.localCoverPath ?: if (localCoverFile.exists()) localCoverFile.absolutePath else null
                             val adjustedPlaylist = if (!effectiveCover.isNullOrEmpty()) {
                                 playlist.copy(artworkUrl = effectiveCover)
@@ -1125,6 +1117,17 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
                     onlineItemsCache = newOnlineItems
                     rebuildAllItems()
+                    // Playlists are on screen now; followings and uploads (many pages) keep loading below.
+                    isLoading = false
+                    launch(Dispatchers.IO) {
+                        try {
+                            val toCache = newOnlineItems.filterIsInstance<LibraryItem.PlaylistItem>()
+                                .map { CachedOnlineItem(it.playlist.copy(tracks = null, trackCount = it.playlist.trackCount ?: it.playlist.tracks?.size), it.timestamp) }
+                            prefs.edit().putString(ONLINE_CACHE_KEY, gson.toJson(toCache)).apply()
+                        } catch (e: Exception) {
+                            Log.w("LibraryVM", "could not cache online library", e)
+                        }
+                    }
 
                     if (!isHydratingLikes) {
                         isHydratingLikes = true
@@ -1176,6 +1179,32 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                     } else {
                         isLoading = false
                     }
+
+                    val followingsResponse = followedArtistsDeferred.await()
+                    val uploadedResponse = uploadedTracksDeferred.await()
+                    uploadedTracks.clear()
+                    uploadedTracks.addAll(uploadedResponse)
+                    prefs.edit().putString("cached_user_uploads", gson.toJson(uploadedResponse)).apply()
+                    Log.d("LibraryVM", "Followings fetched count: ${followingsResponse.size}, Uploaded tracks count: ${uploadedResponse.size}")
+
+                    if (followingsResponse.isNotEmpty()) {
+                        try {
+                            val validArtists = followingsResponse.filter { it.numericId != 0L }
+                            val now = System.currentTimeMillis()
+                            val localArtists = validArtists.mapIndexed { index, u ->
+                                LocalArtist(
+                                    id = u.numericId,
+                                    username = u.username ?: "Artist",
+                                    avatarUrl = u.avatarUrl ?: "",
+                                    trackCount = u.trackCount,
+                                    savedAt = now - (index * 1000L)
+                                )
+                            }
+                            db.insertArtists(localArtists)
+                        } catch (e: Exception) {
+                            Log.e("LibraryVM", "Failed to save artists to DB", e)
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -1194,6 +1223,10 @@ enum class LibraryFilter(val stringRes: Int) {
 }
 
 enum class OwnershipFilter { ALL, CREATED, LIKED }
+
+private const val ONLINE_CACHE_KEY = "cached_online_library"
+
+private data class CachedOnlineItem(val playlist: Playlist, val timestamp: Long)
 
 enum class StationFilter(val stringRes: Int) {
     ALL(R.string.filter_all),
