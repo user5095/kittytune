@@ -1426,13 +1426,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                                 ) == true
                             if (autoPlayEnabled || isYoutube) {
                                 viewModelScope.launch {
-                                    val youtubeFallback = playerPrefs.getYouTubeFallbackEnabled()
                                     if (isSpotify) {
                                         fetchAndQueueSpotifyRadio()
-                                    } else if (isYoutube || (currentTrack?.source == "soundcloud" && youtubeFallback)) {
-                                        fetchAndPlayYoutubeRadio()
                                     } else {
-                                        fetchAndQueueRadio()
+                                        fetchAndPlayYoutubeRadio()
                                     }
                                 }
                             } else {
@@ -3933,14 +3930,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
                 if (autoPlayEnabled || isYoutube) {
                     viewModelScope.launch {
-                        val youtubeFallback = playerPrefs.getYouTubeFallbackEnabled()
 
                         if (isSpotify) {
                             fetchAndQueueSpotifyRadio()
-                        } else if (isYoutube || (currentTrack?.source == "soundcloud" && youtubeFallback)) {
-                            fetchAndPlayYoutubeRadio()
                         } else {
-                            fetchAndQueueRadio()
+                            fetchAndPlayYoutubeRadio()
                         }
 
                         val newNextIndex = currentQueueIndex + 1
@@ -3967,16 +3961,35 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    // YouTube tracks carry their id; any other source is matched once via YT Music search to seed the mix
+    private suspend fun resolveYoutubeVideoId(track: Track): String? {
+        track.permalinkUrl?.takeIf { it.contains("youtube.com") || it.contains("youtu.be") }?.let { url ->
+            return url.substringAfter("v=", url.substringAfterLast('/')).substringBefore("&")
+        }
+        return withContext(Dispatchers.IO) {
+            com.zionhuang.innertube.YouTube.search(
+                "${track.title.orEmpty()} ${track.displayArtist}".trim(),
+                com.zionhuang.innertube.YouTube.SearchFilter.FILTER_SONG
+            ).getOrNull()?.items?.filterIsInstance<com.zionhuang.innertube.models.SongItem>()?.firstOrNull()?.id
+        }
+    }
+
     private suspend fun fetchAndPlayYoutubeRadio() {
         val lastTrack = currentTrack ?: return
         isAutoplayRadioLoading = true
         try {
-            val videoId = lastTrack.permalinkUrl?.substringAfter("v=")?.substringBefore("&") ?: return
+            val videoId = resolveYoutubeVideoId(lastTrack)
+            if (videoId == null) {
+                // no YouTube match: keep the old per-source radio
+                isAutoplayRadioLoading = false
+                fetchAndQueueRadio()
+                return
+            }
 
             withContext(Dispatchers.Main) {
                 val ctx = PlaybackContext(
                     displayText = "YouTube Mix • ${lastTrack.title}",
-                    navigationId = "yt_radio:${Uri.encode(lastTrack.permalinkUrl)}",
+                    navigationId = "yt_radio:${Uri.encode("https://youtube.com/watch?v=$videoId")}",
                     imageUrl = lastTrack.fullResArtwork,
                     artistName = lastTrack.displayArtist.ifBlank { lastTrack.user?.username.orEmpty() },
                     isVerified = false
