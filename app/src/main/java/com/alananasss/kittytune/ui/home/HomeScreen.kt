@@ -2736,7 +2736,7 @@ fun ProviderSearchResults(
                             isDownloading = false,
                             isDownloaded = isDownloaded,
                             downloadProgress = 0,
-                            onClick = { playerViewModel.playPlaylist(tracks, index) },
+                            onClick = { playerViewModel.playPlaylist(listOf(track), 0) },
                             onOptionClick = { playerViewModel.showTrackOptions(track) }
                         )
                     }
