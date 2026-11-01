@@ -692,23 +692,26 @@ fun PlaylistDetailScreen(
         }
     }
 
-    // derivedStateOf: `tracks` is a mutable state list, so the instance never changes as it fills.
-    val tracksToDisplay by remember(tracksFilteredByVibe, playlistSearchQuery, playlistSortBy) { derivedStateOf {
-      if (playlistSearchQuery.isEmpty() && playlistSortBy == TrackSortBy.RECENTLY_ADDED) {
-        tracksFilteredByVibe
-      } else {
-        val filtered = tracksFilteredByVibe.filter {
-            it.title?.contains(playlistSearchQuery, ignoreCase = true) == true ||
-                    it.user?.username?.contains(playlistSearchQuery, ignoreCase = true) == true
+    val tracksToDisplay = remember(tracksFilteredByVibe, playlistSearchQuery, playlistSortBy) {
+        if (playlistSearchQuery.isEmpty() && playlistSortBy == TrackSortBy.RECENTLY_ADDED) {
+            tracksFilteredByVibe
+        } else {
+            val filtered = if (playlistSearchQuery.isEmpty()) {
+                tracksFilteredByVibe
+            } else {
+                tracksFilteredByVibe.filter {
+                    it.title?.contains(playlistSearchQuery, ignoreCase = true) == true ||
+                            it.user?.username?.contains(playlistSearchQuery, ignoreCase = true) == true
+                }
+            }
+            when (playlistSortBy) {
+                TrackSortBy.RECENTLY_ADDED -> filtered
+                TrackSortBy.FIRST_ADDED -> filtered.reversed()
+                TrackSortBy.TITLE_AZ -> filtered.sortedBy { it.title?.lowercase() ?: "" }
+                TrackSortBy.ARTIST_AZ -> filtered.sortedBy { it.user?.username?.lowercase() ?: "" }
+            }
         }
-        when (playlistSortBy) {
-            TrackSortBy.RECENTLY_ADDED -> filtered
-            TrackSortBy.FIRST_ADDED -> filtered.reversed()
-            TrackSortBy.TITLE_AZ -> filtered.sortedBy { it.title?.lowercase() ?: "" }
-            TrackSortBy.ARTIST_AZ -> filtered.sortedBy { it.user?.username?.lowercase() ?: "" }
-        }
-      }
-    } }
+    }
 
     val totalDurationMs = remember(tracksToDisplay, playlistDurationMs, playlistSearchQuery, showTotalDuration) {
         if (!showTotalDuration) 0L

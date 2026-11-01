@@ -327,11 +327,10 @@ class PlayerPreferences(context: Context) {
         private const val KEY_QUEUE_PRESERVE_UPCOMING_ON_JUMP = "queue_preserve_upcoming_on_jump"
         private const val KEY_QUEUE_AUTO_ARCHIVE = "queue_auto_archive"
         private const val KEY_START_DESTINATION = "start_destination_pref"
-        private const val KEY_DYNAMIC_THEME = "dynamic_theme_enabled"
-        private const val KEY_TRACK_DYNAMIC_THEME = "track_dynamic_theme_enabled"
-        private const val KEY_THEME_MODE = "app_theme_mode"
-        private const val KEY_PURE_BLACK = "pure_black_enabled"
-        private const val KEY_PIXEL_THEME = "pixel_theme_enabled"
+        const val KEY_DYNAMIC_THEME = "dynamic_theme_enabled"
+        const val KEY_TRACK_DYNAMIC_THEME = "track_dynamic_theme_enabled"
+        const val KEY_THEME_MODE = "app_theme_mode"
+        const val KEY_PURE_BLACK = "pure_black_enabled"
         const val KEY_PLAYER_STYLE = "player_background_style"
         private const val KEY_LOCAL_MEDIA_ENABLED = "local_media_enabled"
         private const val KEY_LOCAL_MEDIA_URIS_SET = "local_media_uris_set_v2"
@@ -557,6 +556,7 @@ class PlayerPreferences(context: Context) {
         const val KEY_SHOW_PLAYLIST_TOTAL_DURATION = "show_playlist_total_duration"
         const val KEY_FULL_PLAYER_SOURCE_INDICATOR_ENABLED = "full_player_source_indicator_enabled"
         const val KEY_TRACK_SOURCE_BADGE_STYLE = "track_source_badge_style"
+        private const val KEY_PIXEL_THEME = "pixel_theme_enabled"
     }
 
     private fun getSafeFloat(key: String, default: Float): Float {

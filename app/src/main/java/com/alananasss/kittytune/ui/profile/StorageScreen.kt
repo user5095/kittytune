@@ -1,41 +1,58 @@
 package com.alananasss.kittytune.ui.profile
 
-    import android.net.Uri
-    import android.text.format.Formatter
-    import androidx.activity.compose.rememberLauncherForActivityResult
-    import androidx.activity.result.contract.ActivityResultContracts
-    import androidx.compose.animation.core.FastOutSlowInEasing
-    import androidx.compose.animation.core.animateFloatAsState
-    import androidx.compose.animation.core.tween
-    import androidx.compose.foundation.background
-    import androidx.compose.foundation.clickable
-    import androidx.compose.foundation.layout.*
-    import androidx.compose.foundation.lazy.LazyColumn
-    import androidx.compose.foundation.shape.CircleShape
-    import androidx.compose.foundation.shape.RoundedCornerShape
-    import androidx.compose.material.icons.Icons
-    import androidx.compose.material.icons.outlined.*
-    import androidx.compose.material.icons.rounded.Folder
-    import androidx.compose.material.icons.rounded.SdStorage
-    import androidx.compose.material3.*
-import com.alananasss.kittytune.ui.icons.Icon
-    import androidx.compose.runtime.*
-    import androidx.compose.ui.Alignment
-    import androidx.compose.ui.Modifier
-    import androidx.compose.ui.draw.clip
-    import androidx.compose.ui.graphics.Color
-    import androidx.compose.ui.graphics.Shape
-    import androidx.compose.ui.graphics.vector.ImageVector
-    import androidx.compose.ui.platform.LocalContext
-    import androidx.compose.ui.res.stringResource
-    import androidx.compose.ui.text.font.FontWeight
-    import androidx.compose.ui.text.style.TextAlign
-    import androidx.compose.ui.text.style.TextOverflow
-    import androidx.compose.ui.unit.dp
-    import androidx.lifecycle.viewmodel.compose.viewModel
-    import com.alananasss.kittytune.R
-    import com.alananasss.kittytune.ui.common.SettingsGroup
-    import com.alananasss.kittytune.ui.common.SettingsScaffold
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.MusicOff
+import androidx.compose.material.icons.rounded.SdStorage
+import androidx.compose.material.icons.rounded.SearchOff
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.data.DownloadManager
+import com.alananasss.kittytune.data.local.LocalPlaylist
+import com.alananasss.kittytune.data.local.LocalTrack
+import com.alananasss.kittytune.ui.common.ExpressiveConnectedButtonGroup
+import com.alananasss.kittytune.ui.common.SettingsGroup
+import com.alananasss.kittytune.ui.common.SettingsItem
+import com.alananasss.kittytune.ui.common.SettingsScaffold
 
 data class DeleteAction(val message: String, val action: () -> Unit)
 

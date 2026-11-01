@@ -1,28 +1,41 @@
 package com.alananasss.kittytune.ui.navigation
 
-    import android.os.Build
-    import android.view.RoundedCorner
-    import androidx.compose.animation.AnimatedVisibilityScope
-    import androidx.compose.animation.EnterExitState
-    import androidx.compose.animation.core.animateDp
-    import androidx.compose.animation.core.keyframes
-    import androidx.compose.animation.core.tween
-    import androidx.compose.foundation.layout.Box
-    import androidx.compose.foundation.layout.fillMaxSize
-    import androidx.compose.foundation.shape.RoundedCornerShape
-    import androidx.compose.runtime.Composable
-    import androidx.compose.runtime.getValue
-    import androidx.compose.runtime.remember
-    import androidx.compose.ui.Modifier
-    import androidx.compose.ui.graphics.graphicsLayer
-    import androidx.compose.ui.platform.LocalContext
-    import androidx.compose.ui.platform.LocalDensity
-    import androidx.compose.ui.unit.Dp
-    import androidx.compose.ui.unit.dp
-    import androidx.navigation.NamedNavArgument
-    import androidx.navigation.NavBackStackEntry
-    import androidx.navigation.NavGraphBuilder
-    import androidx.navigation.compose.composable
+import android.os.Build
+import android.view.RoundedCorner
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.EnterExitState
+import androidx.compose.animation.core.animateDp
+import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.navigation.NamedNavArgument
+import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavGraphBuilder
+import androidx.navigation.compose.composable
 
 /**
  * The device's real rounded-corner radius in pixels, or `0f` when there is none.
@@ -182,10 +195,39 @@ fun AnimatedVisibilityScope.ClippedScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                // Read in the draw phase: no per-frame recomposition, and no clip once the radius reaches 0.
                 .graphicsLayer {
-                    shape = RoundedCornerShape(cornerRadius)
-                    clip = cornerRadius > 0.dp
+                    if (animated) {
+                        translationX = frame.translationX
+                        translationY = frame.translationY
+                        scaleX = frame.scale
+                        scaleY = frame.scale
+                        transformOrigin = if (frame.centerPivot) {
+                            TransformOrigin.Center
+                        } else {
+                            TransformOrigin(0f, 0f)
+                        }
+                        alpha = frame.alpha
+                        val radius = if (frame.clip) frame.cornerRadius else 0f
+                        clip = radius > 0f
+                        shape = if (role == AyuScreenRole.PushEntering && isRtl) {
+                            pushEnteringShape(
+                                radius,
+                                AyuBack.pushRtlLeftFactor(density.density, frame.translationX)
+                            )
+                        } else {
+                            roundedShape(radius)
+                        }
+                        if ((role == AyuScreenRole.Closing && frame.scale < 1f) ||
+                            (role == AyuScreenRole.PushEntering && frame.translationX > 0f)
+                        ) {
+                            shadowElevation = with(density) { 8.dp.toPx() }
+                            spotShadowColor = Color.Black.copy(alpha = 0.5f)
+                            ambientShadowColor = Color.Black.copy(alpha = 0.5f)
+                        }
+                    } else {
+                        clip = restRadiusPx > 0f
+                        shape = roundedShape(restRadiusPx)
+                    }
                 }
         ) {
             content()

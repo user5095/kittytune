@@ -3297,7 +3297,7 @@ fun SearchResultsList(
                                     isVerified = playlist.user?.verified == true
                                 )
                                 if (shuffle) {
-                                    playerViewModel.playPlaylist(tracks.shuffled(), 0, playbackContext)
+                                    playerViewModel.playPlaylistShuffled(tracks)
                                 } else if (insertNext) {
                                     playerViewModel.insertNext(tracks)
                                 } else if (addToQueue) {
@@ -3533,7 +3533,10 @@ fun ProviderSearchResults(
                             isDownloading = false,
                             isDownloaded = isDownloaded,
                             downloadProgress = 0,
-                            onClick = { playerViewModel.playPlaylist(listOf(track), 0) },
+                            onClick = {
+                                homeViewModel.noteOpenedTrack(track)
+                                playerViewModel.playPlaylist(listOf(track), 0)
+                            },
                             onOptionClick = { playerViewModel.showTrackOptions(track) }
                         )
                     }

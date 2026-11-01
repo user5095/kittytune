@@ -1,50 +1,66 @@
 package com.alananasss.kittytune.ui.home
 
-    import android.net.Uri
-    import android.view.HapticFeedbackConstants
-    import androidx.compose.foundation.ExperimentalFoundationApi
-    import androidx.compose.foundation.background
-    import androidx.compose.foundation.clickable
-    import androidx.compose.foundation.combinedClickable
-    import androidx.compose.ui.platform.LocalView
-    import androidx.compose.foundation.layout.*
-    import androidx.compose.foundation.lazy.LazyColumn
-    import androidx.compose.foundation.lazy.LazyRow
-    import androidx.compose.foundation.lazy.items
-    import androidx.compose.foundation.lazy.itemsIndexed
-    import androidx.compose.foundation.shape.CircleShape
-    import androidx.compose.foundation.shape.RoundedCornerShape
-    import androidx.compose.material.icons.Icons
-    import androidx.compose.material.icons.automirrored.filled.ArrowBack
-    import androidx.compose.material.icons.filled.Add
-    import androidx.compose.material.icons.filled.MoreVert
-    import androidx.compose.material.icons.rounded.GraphicEq
-    import androidx.compose.material.icons.rounded.KeyboardArrowDown
-    import androidx.compose.material.icons.rounded.Check
-    import androidx.compose.material.icons.rounded.Favorite
-    import androidx.compose.material3.*
-import com.alananasss.kittytune.ui.icons.Icon
-    import androidx.compose.runtime.*
-    import androidx.compose.ui.Alignment
-    import androidx.compose.ui.Modifier
-    import androidx.compose.ui.draw.clip
-    import androidx.compose.ui.graphics.Color
-    import androidx.compose.ui.input.nestedscroll.nestedScroll
-    import androidx.compose.ui.layout.ContentScale
-    import androidx.compose.ui.res.stringResource
-    import androidx.compose.ui.text.font.FontWeight
-    import androidx.compose.ui.text.style.TextOverflow
-    import androidx.compose.ui.unit.dp
-    import androidx.lifecycle.viewmodel.compose.viewModel
-    import coil.compose.AsyncImage
-    import com.alananasss.kittytune.R
-    import com.alananasss.kittytune.data.OfficialPlaylistsData
-    import com.alananasss.kittytune.domain.Track
-    import com.alananasss.kittytune.ui.common.TrackListItemShimmer
-    import com.alananasss.kittytune.ui.player.PlayerViewModel
-    import com.alananasss.kittytune.ui.profile.SquareCard
-    import com.alananasss.kittytune.ui.profile.SectionTitle
-    import java.util.Locale
+import android.net.Uri
+import android.view.HapticFeedbackConstants
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import com.alananasss.kittytune.audio.haptics.performAppHaptic
+import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.data.CategoryKind
+import com.alananasss.kittytune.data.GenreData
+import com.alananasss.kittytune.data.OfficialPlaylistsData
+import com.alananasss.kittytune.domain.Playlist
+import com.alananasss.kittytune.domain.Track
+import com.alananasss.kittytune.domain.User
+import com.alananasss.kittytune.ui.common.TrackListItemShimmer
+import com.alananasss.kittytune.ui.player.PlayerViewModel
+import com.alananasss.kittytune.ui.profile.SectionTitle
+import com.alananasss.kittytune.ui.profile.SquareCard
+import java.util.Locale
 
 
 @OptIn(ExperimentalMaterial3Api::class)

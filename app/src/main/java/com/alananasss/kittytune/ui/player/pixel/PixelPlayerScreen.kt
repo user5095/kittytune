@@ -697,26 +697,26 @@ fun PixelPlayerScreen(
                     horizontalArrangement = Arrangement.Center,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                 ) {
-                    Text(
-                        text = track.displayArtist.ifBlank {
-                            track.user?.username ?: stringResource(R.string.unknown_artist)
-                        },
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontFamily = if (LocalPixelTheme.current) PixelFontFamily else GoogleSansRounded,
-                            color = subTextColor
-                        ),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center
-                    )
-                    val isAnyVerified = track.user?.verified == true || track.artists?.any { it.verified } == true
-                    if (isAnyVerified) {
-                        Spacer(Modifier.width(4.dp))
-                        Icon(
-                            imageVector = Icons.Rounded.Verified,
-                            contentDescription = "Verified",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .clip(RoundedCornerShape(8.dp))
+                            .hapticClickable { viewModel.navigateToTrackArtist(track) }
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = track.displayArtist.ifBlank {
+                                track.user?.username ?: stringResource(R.string.unknown_artist)
+                            },
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontFamily = GoogleSansRounded,
+                                color = subTextColor
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.weight(1f, fill = false)
                         )
                         val isAnyVerified = track.user?.verified == true || track.artists?.any { it.verified } == true
                         if (isAnyVerified) {

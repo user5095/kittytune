@@ -18,7 +18,7 @@ import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.*
-import com.alananasss.kittytune.ui.icons.Icon
+import com.alananasss.kittytune.audio.haptics.performAppHaptic
 import com.alananasss.kittytune.ui.common.KittyOutlinedTextField
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment

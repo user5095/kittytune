@@ -849,12 +849,7 @@
     <string name="pref_theme_track_dynamic_sub">Match currently playing track artwork</string>
     <string name="pref_theme_pure_black">Pure Black (AMOLED)</string>
     <string name="pref_theme_pure_black_sub">Saves battery on OLED screens</string>
-    <string name="pref_pixel_theme_title">Pixel Theme (YTMusicPixelated)</string>
-    <string name="pref_pixel_theme_sub">Square corners, pixel font, retro iPod colors everywhere</string>
-    <string name="settings_cat_player">Player</string>
-    <string name="pref_new_player_design">New player design</string>
-    <string name="pref_waveform_comments">Waveform with comments</string>
-    <string name="pref_waveform_comments_desc">Show SoundCloud-style waveform with comment avatars instead of a classic slider</string>
+    
     <string name="pref_player_style">Player Style</string>
     <string name="pref_language">Language</string>
     
@@ -3564,4 +3559,6 @@
     <string name="pref_lyrics_autoscroll_speed">Plain lyrics scroll speed</string>
     <string name="pref_lyrics_speed_this_track">Speed for this track</string>
     <string name="pref_lyrics_speed_this_track_sub">Save custom scroll speed specifically for this song</string>
+    <string name="pref_pixel_theme_title">Pixel Theme (YTMusicPixelated)</string>
+    <string name="pref_pixel_theme_sub">Square corners, pixel font, retro iPod colors everywhere</string>
 </resources>

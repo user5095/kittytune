@@ -1281,30 +1281,32 @@ fun MainScreen(
                             )
                         }
 
-                    clippedComposable("accounts_settings") {
-                        AccountsSettingsScreen(
-                            currentUser = homeViewModel.userProfile,
-                            onBackClick = { navController.popBackStack() },
-                            onNavigateToSoundCloud = { navController.navigate("soundcloud_account_settings") },
-                            onNavigateToVk = { navController.navigate("vk_account_settings") },
-                            onNavigateToDiscord = { navController.navigate("discord_settings") },
-                            onNavigateToProviderOrder = { navController.navigate("provider_order_settings") },
-                            onNavigateToQobuz = { navController.navigate("qobuz_settings") },
-                            onNavigateToTidal = { navController.navigate("tidal_settings") },
-                            onNavigateToDeezer = { navController.navigate("deezer_settings") },
-                            onNavigateToYoutubeMusic = { navController.navigate("ytmusic_account") }
-                        )
-                    }
+                        clippedComposable(
+                            route = "playlist_fans/{playlistId}?tab={tabIndex}",
+                            arguments = listOf(
+                                navArgument("playlistId") { type = NavType.StringType },
+                                navArgument("tabIndex") { type = NavType.IntType; defaultValue = 0 }
+                            )
+                        ) { entry ->
+                            PlaylistFansScreen(
+                                playlistId = entry.arguments?.getString("playlistId") ?: "",
+                                initialTab = entry.arguments?.getInt("tabIndex") ?: 0,
+                                onBackClick = { navController.popBackStack() },
+                                onNavigate = { id ->
+                                    if (id.startsWith("profile:")) navController.navigate("profile/${id.removePrefix("profile:")}")
+                                }
+                            )
+                        }
 
-                    clippedComposable("ytmusic_account") {
-                        YoutubeMusicScreen(onBackClick = { navController.popBackStack() })
-                    }
-
-                    clippedComposable("provider_order_settings") {
-                        ProviderOrderScreen(
-                            onBackClick = { navController.popBackStack() }
-                        )
-                    }
+                        clippedComposable("notifications") {
+                            NotificationsScreen(
+                                onBackClick = { navController.popBackStack() },
+                                onNavigate = { id ->
+                                    if (id.startsWith("profile:")) navController.navigate("profile/${id.removePrefix("profile:")}")
+                                    else navController.navigate(id)
+                                }
+                            )
+                        }
 
                         clippedComposable("conversations") {
                             ConversationsScreen(
@@ -1824,8 +1826,13 @@ fun MainScreen(
                                 onNavigateToProviderOrder = { navController.navigate("provider_order_settings") },
                                 onNavigateToQobuz = { navController.navigate("qobuz_settings") },
                                 onNavigateToTidal = { navController.navigate("tidal_settings") },
-                                onNavigateToDeezer = { navController.navigate("deezer_settings") }
+                                onNavigateToDeezer = { navController.navigate("deezer_settings") },
+                                onNavigateToYoutubeMusic = { navController.navigate("ytmusic_account") }
                             )
+                        }
+
+                        clippedComposable("ytmusic_account") {
+                            YoutubeMusicScreen(onBackClick = { navController.popBackStack() })
                         }
 
                         clippedComposable("provider_order_settings") {

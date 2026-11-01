@@ -12,7 +12,10 @@ import com.zionhuang.innertube.models.SearchSuggestions
 import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.models.WatchEndpoint
 import com.zionhuang.innertube.models.WatchEndpoint.WatchEndpointMusicSupportedConfigs.WatchEndpointMusicConfig.Companion.MUSIC_VIDEO_TYPE_ATV
+import com.zionhuang.innertube.models.YTItem
 import com.zionhuang.innertube.models.YouTubeClient.Companion.ANDROID
+import com.zionhuang.innertube.models.YouTubeClient.Companion.ANDROID_MUSIC
+import com.zionhuang.innertube.models.YouTubeClient.Companion.TVHTML5
 import com.zionhuang.innertube.models.YouTubeClient.Companion.WEB
 import com.zionhuang.innertube.models.YouTubeClient.Companion.WEB_REMIX
 import com.zionhuang.innertube.models.YouTubeLocale
@@ -147,17 +150,11 @@ object YouTube {
         val shelf = contents?.mapNotNull { it.musicShelfRenderer }?.firstOrNull()
             ?: contents?.lastOrNull()?.musicShelfRenderer
         val items: List<YTItem> = shelf?.contents?.mapNotNull {
-            SearchPage.toYTItem(it.musicResponsiveListItemRenderer)
+            SearchPage.toYTItem(it.musicResponsiveListItemRenderer ?: return@mapNotNull null)
         }.orEmpty()
         SearchResult(
-            items = response.contents?.tabbedSearchResultsRenderer?.tabs?.firstOrNull()
-                ?.tabRenderer?.content?.sectionListRenderer?.contents?.lastOrNull()
-                ?.musicShelfRenderer?.contents?.mapNotNull {
-                    SearchPage.toYTItem(it.musicResponsiveListItemRenderer ?: return@mapNotNull null)
-                }.orEmpty(),
-            continuation = response.contents?.tabbedSearchResultsRenderer?.tabs?.firstOrNull()
-                ?.tabRenderer?.content?.sectionListRenderer?.contents?.lastOrNull()
-                ?.musicShelfRenderer?.continuations?.getContinuation()
+            items = items,
+            continuation = shelf?.continuations?.getContinuation()
         )
     }
 

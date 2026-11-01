@@ -1783,10 +1783,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
                             val isYoutube = radioKind == RadioEligibility.Kind.YOUTUBE
                             if ((autoPlayEnabled || isYoutube) && radioKind != RadioEligibility.Kind.NONE) {
                                 viewModelScope.launch {
-                                    if (isSpotify) {
-                                        fetchAndQueueSpotifyRadio()
-                                    } else {
-                                        fetchAndPlayYoutubeRadio()
+                                    // every source except Spotify seeds a YouTube Music radio (genre mix, not the artist's catalogue)
+                                    when (radioKind) {
+                                        RadioEligibility.Kind.SPOTIFY -> fetchAndQueueSpotifyRadio()
+                                        RadioEligibility.Kind.NONE -> Unit
+                                        else -> fetchAndPlayYoutubeRadio()
                                     }
                                 }
                             } else {
@@ -4556,10 +4557,10 @@ query CommentsWithReactions(
                 cleanTracks.filterIndexed { index, _ -> index != effectiveStartIndex }.shuffled()
             _queue.add(clickedTrack)
             _queue.addAll(rest)
-            playTrackAtIndex(0, addToHistory = true, autoPlay = true)
+            playTrackAtIndex(0, addToHistory = (context == null || isHistoryContext), autoPlay = autoPlay)
         } else {
             _queue.addAll(cleanTracks)
-            playTrackAtIndex(effectiveStartIndex, addToHistory = true, autoPlay = true)
+            playTrackAtIndex(effectiveStartIndex, addToHistory = (context == null || isHistoryContext), autoPlay = autoPlay)
         }
 
         updateQueueState(); saveStateAsync(saveQueue = true)
@@ -4610,13 +4611,98 @@ query CommentsWithReactions(
             true
     }
 
-    fun skipToQueueItem(index: Int, autoPlay: Boolean = true) {
-        playTrackAtIndex(
-            index,
-            addToHistory = true,
-            autoPlay = autoPlay
-        ); AchievementManager.trackSkipped(); AchievementManager.increment("skipper_100"); AchievementManager.increment(
-            "skipper_1000"
+    /**
+     * A collection's Shuffle button. It turns shuffle mode on rather than handing over a pre-shuffled copy:
+     * with the copy, the original order was lost and shuffle stayed off, so the next tap on a track of the
+     * same list played straight down from it instead of jumping in ahead of a shuffled queue (issue #66).
+     */
+    fun playPlaylistShuffled(tracks: List<Track>, context: PlaybackContext? = null) {
+        if (tracks.isEmpty()) return
+        com.alananasss.kittytune.audio.haptics.HapticUtil.performHeavyHaptic(getApplication<Application>())
+        if (!shuffleEnabled) {
+            shuffleEnabled = true
+        }
+        playPlaylist(tracks, startIndex = tracks.indices.random(), context = context)
+    }
+
+    private fun areTrackListsEquivalent(list1: List<Track>, list2: List<Track>): Boolean {
+        if (list1.size != list2.size) return false
+        for (i in list1.indices) {
+            if (list1[i].id != list2[i].id) return false
+        }
+        return true
+    }
+
+    private fun archiveQueueIfNeeded(incomingTracks: List<Track>) {
+        if (!playerPrefs.getQueueAutoArchiveEnabled()) return
+        val currentTracks = if (_queue.isNotEmpty()) _queue.toList() else _originalQueue.toList()
+        if (currentTracks.isNotEmpty() && !areTrackListsEquivalent(currentTracks, incomingTracks)) {
+            if (currentTracks.size >= 2 || currentContext != null) {
+                com.alananasss.kittytune.data.QueueHistoryRepository.saveQueue(
+                    queue = currentTracks,
+                    currentIndex = currentQueueIndex,
+                    currentPositionMs = currentPosition,
+                    context = currentContext
+                ) { savedId ->
+                    triggerQueueArchivedUndoBar(savedId)
+                }
+            }
+        }
+    }
+
+    fun restoreQueueFromHistory(historyId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val entry = com.alananasss.kittytune.data.QueueHistoryRepository.getQueueById(historyId) ?: return@launch
+            val tracks = com.alananasss.kittytune.data.QueueHistoryRepository.deserializeTracks(entry.tracksJson)
+            val cleanTracks = BlockManager.filterBlocked(tracks)
+            if (cleanTracks.isEmpty()) return@launch
+            val context = com.alananasss.kittytune.data.QueueHistoryRepository.deserializeContext(entry.contextJson)
+            val targetIndex = entry.currentIndex.coerceIn(0, cleanTracks.lastIndex)
+            val targetPosition = entry.currentPositionMs
+
+            withContext(Dispatchers.Main) {
+                val currentTracks = if (_queue.isNotEmpty()) _queue.toList() else _originalQueue.toList()
+                if (currentTracks.isNotEmpty() && !areTrackListsEquivalent(currentTracks, cleanTracks)) {
+                    if (currentTracks.size >= 2 || currentContext != null) {
+                        com.alananasss.kittytune.data.QueueHistoryRepository.saveQueue(
+                            queue = currentTracks,
+                            currentIndex = currentQueueIndex,
+                            currentPositionMs = currentPosition,
+                            context = currentContext
+                        )
+                    }
+                }
+
+                SoundCloudTelemetryTracker.onQueueReset()
+                _originalQueue.clear()
+                _originalQueue.addAll(cleanTracks)
+                _queue.clear()
+                _queue.addAll(cleanTracks)
+                playedTrackIds = emptySet()
+                currentContext = context
+                MusicManager.updateContext(context)
+
+                playTrackAtIndex(targetIndex, addToHistory = false, autoPlay = true)
+                if (targetPosition > 0L) {
+                    pendingSeekPosition = targetPosition
+                    seekTo(targetPosition)
+                }
+                updateQueueState()
+                saveStateAsync(saveQueue = true)
+                showQueueHistorySheet = false
+            }
+        }
+    }
+
+    fun saveCurrentQueueToHistory(customTitle: String? = null) {
+        val tracks = if (_queue.isNotEmpty()) _queue.toList() else _originalQueue.toList()
+        if (tracks.isEmpty()) return
+        com.alananasss.kittytune.data.QueueHistoryRepository.saveQueue(
+            queue = tracks,
+            currentIndex = currentQueueIndex,
+            currentPositionMs = currentPosition,
+            context = currentContext,
+            customTitle = customTitle
         )
     }
 
@@ -4802,6 +4888,9 @@ query CommentsWithReactions(
 
             prefetchWaveformsForQueue(index)
 
+            // The host's song changed: the shared playlist wants to know at once, not at the next tick.
+            com.alananasss.kittytune.data.together.Together.onHostPlaybackChanged()
+
             if (addToHistory) HistoryRepository.addToHistory(finalTrack)
         }
     }
@@ -4948,10 +5037,11 @@ query CommentsWithReactions(
                 if ((autoPlayEnabled || isYoutube) && radioKind != RadioEligibility.Kind.NONE) {
                     viewModelScope.launch {
 
-                        if (isSpotify) {
-                            fetchAndQueueSpotifyRadio()
-                        } else {
-                            fetchAndPlayYoutubeRadio()
+                        // every source except Spotify seeds a YouTube Music radio (genre mix, not the artist's catalogue)
+                        when (radioKind) {
+                            RadioEligibility.Kind.SPOTIFY -> fetchAndQueueSpotifyRadio()
+                            RadioEligibility.Kind.NONE -> Unit
+                            else -> fetchAndPlayYoutubeRadio()
                         }
 
                         val newNextIndex = currentQueueIndex + 1

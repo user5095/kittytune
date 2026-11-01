@@ -89,6 +89,8 @@ object LikeRepository {
         prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
         api = RetrofitClient.create(context)
         playerPrefs = com.alananasss.kittytune.data.local.PlayerPreferences(context)
+        loadFromStorage()
+        _likedTrackIds.value = _likedTracks.value.mapTo(HashSet(_likedTracks.value.size)) { it.id }
         scope.launch {
             loadFromStorage()
             com.alananasss.kittytune.data.sync.SyncLikes.seedMissing()
@@ -658,13 +660,9 @@ object LikeRepository {
                 }
             }
             val blacklist = getBlacklist()
-            val loaded = migratedList.filter { !blacklist.contains(it.id) }
-            // Runs off the main thread: keep anything liked while the file was still being read.
-            _likedTracks.update { current ->
-                if (current.isEmpty()) loaded
-                else current + loaded.filter { l -> current.none { it.id == l.id } }
-            }
-            if (migrated || loaded.size != migratedList.size || file.exists().not()) saveLikedTracks()
+            _likedTracks.value = migratedList.filter { !blacklist.contains(it.id) }
+            _likedTrackIds.value = _likedTracks.value.mapTo(HashSet(_likedTracks.value.size)) { it.id }
+            saveLikedTracks()
         }
 
         val savedPlaylistIds =
