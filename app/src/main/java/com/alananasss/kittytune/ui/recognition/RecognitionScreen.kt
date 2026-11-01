@@ -20,11 +20,8 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.ChatBubble
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
@@ -36,13 +33,11 @@ import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material3.*
 import com.alananasss.kittytune.ui.icons.Icon
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
@@ -68,7 +63,6 @@ import com.airbnb.lottie.compose.rememberLottieComposition
 import com.airbnb.lottie.compose.rememberLottieDynamicProperties
 import com.airbnb.lottie.compose.rememberLottieDynamicProperty
 import com.alananasss.kittytune.R
-import com.alananasss.kittytune.audio.haptics.HapticUtil
 import com.alananasss.kittytune.data.AchievementManager
 import com.alananasss.kittytune.data.LikeRepository
 import com.alananasss.kittytune.music.recognition.AudioCaptureManager
@@ -85,7 +79,6 @@ fun RecognitionScreen(
     onNavigate: (String) -> Unit
 ) {
     val context = LocalContext.current
-    val haptics = rememberAppHaptics()
     val viewModel: RecognitionViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
         factory = object : androidx.lifecycle.ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -97,8 +90,12 @@ fun RecognitionScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val audioSource by viewModel.audioSource.collectAsStateWithLifecycle()
 
-    BackHandler(enabled = state is RecognitionState.Searching) {
-        viewModel.cancelRecognition()
+    BackHandler {
+        if (state is RecognitionState.Searching) {
+            viewModel.cancelRecognition()
+        } else {
+            onBackClick()
+        }
     }
 
     var hasPermission by remember {
@@ -167,6 +164,7 @@ fun RecognitionScreen(
 
     val isErrorOrSuccess = state is RecognitionState.Error || state is RecognitionState.Success
     val isSearching = state is RecognitionState.Searching
+    // Matches original: idle = secondaryContainer, searching = primaryContainer, result = surface
     val bgColor = when {
         isErrorOrSuccess -> MaterialTheme.colorScheme.surface
         isSearching -> MaterialTheme.colorScheme.primaryContainer
@@ -184,6 +182,7 @@ fun RecognitionScreen(
             .background(animatedBgColor)
     ) {
         val bgComposition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.background_animation))
+        // Original HomeFragment.java: lottie scales 1→5 on motionEasingEmphasizedDecelerate over 1000ms when listening starts.
         val lottieScale = remember { androidx.compose.animation.core.Animatable(1f) }
         LaunchedEffect(isSearching) {
             if (isSearching) {
@@ -195,10 +194,17 @@ fun RecognitionScreen(
                 lottieScale.snapTo(1f)
             }
         }
+        // From HomeFragment.java lines 89-149 (exact reverse-engineered code):
+        //   private static final fdy aw = new fdy("**", ".primary", "**");    → COLOR + OPACITY 95
+        //   private static final fdy ax = new fdy("**", ".secondary", "**");  → COLOR + OPACITY 95
+        //   private static final fdy ay = new fdy("**", ".tertiary", "**");   → COLOR + OPACITY 90
+        //   fav.a = 1 = LottieProperty.COLOR; fav.d = 4 = LottieProperty.OPACITY
+        //   Colors: colorPrimary, colorSecondary, colorTertiary
         val lottiePrimary   = MaterialTheme.colorScheme.primary.copy(alpha = 1f).toArgb()
         val lottieSecondary = MaterialTheme.colorScheme.secondary.copy(alpha = 1f).toArgb()
         val lottieTertiary  = MaterialTheme.colorScheme.tertiary.copy(alpha = 1f).toArgb()
         val bgDynamicProps = rememberLottieDynamicProperties(
+            // .primary layers: colorPrimary fill, 95% opacity
             rememberLottieDynamicProperty(
                 property = LottieProperty.COLOR,
                 value = lottiePrimary,
@@ -209,6 +215,7 @@ fun RecognitionScreen(
                 value = 95,
                 keyPath = arrayOf("**", ".primary", "**"),
             ),
+            // .secondary layers: colorSecondary fill, 95% opacity
             rememberLottieDynamicProperty(
                 property = LottieProperty.COLOR,
                 value = lottieSecondary,
@@ -219,6 +226,7 @@ fun RecognitionScreen(
                 value = 95,
                 keyPath = arrayOf("**", ".secondary", "**"),
             ),
+            // .tertiary layer: colorTertiary fill, 90% opacity
             rememberLottieDynamicProperty(
                 property = LottieProperty.COLOR,
                 value = lottieTertiary,
@@ -261,6 +269,48 @@ fun RecognitionScreen(
                     .fillMaxWidth()
                     .height(160.dp),
                 color = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        FilledTonalIconButton(
+            onClick = {
+                if (state is RecognitionState.Searching) {
+                    viewModel.cancelRecognition()
+                } else {
+                    onBackClick()
+                }
+            },
+            shapes = IconButtonDefaults.shapes(),
+            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+            ),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .statusBarsPadding()
+                .padding(8.dp)
+        ) {
+            Icon(
+                Icons.AutoMirrored.Rounded.ArrowBack,
+                contentDescription = "Retour"
+            )
+        }
+
+        FilledTonalIconButton(
+            onClick = { onNavigate("recognition_history") },
+            shapes = IconButtonDefaults.shapes(),
+            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+            ),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(8.dp)
+        ) {
+            Icon(
+                Icons.Rounded.History,
+                contentDescription = "Historique"
             )
         }
 
@@ -307,54 +357,6 @@ fun RecognitionScreen(
                 }
             }
         }
-
-        FilledTonalIconButton(
-            onClick = {
-                haptics.perform(HapticKind.LIGHT)
-                if (state is RecognitionState.Searching) {
-                    viewModel.cancelRecognition()
-                } else {
-                    onBackClick()
-                }
-            },
-            shapes = IconButtonDefaults.shapes(),
-            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-            ),
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .statusBarsPadding()
-                .padding(8.dp)
-                .zIndex(2f)
-        ) {
-            Icon(
-                Icons.AutoMirrored.Rounded.ArrowBack,
-                contentDescription = "Retour"
-            )
-        }
-
-        FilledTonalIconButton(
-            onClick = {
-                haptics.perform(HapticKind.LIGHT)
-                onNavigate("recognition_history")
-            },
-            shapes = IconButtonDefaults.shapes(),
-            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-            ),
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .statusBarsPadding()
-                .padding(8.dp)
-                .zIndex(2f)
-        ) {
-            Icon(
-                Icons.Rounded.History,
-                contentDescription = "Historique"
-            )
-        }
     }
 }
 
@@ -378,13 +380,13 @@ private fun RecognitionHomeView(
     val btnScale by animateFloatAsState(targetValue = if (isPressed && !isSearching) 0.92f else 1f, label = "scale")
 
     val buttonColor = if (isSearching)
-        MaterialTheme.colorScheme.onPrimaryContainer
+        MaterialTheme.colorScheme.onPrimaryContainer  // dark blob on primaryContainer bg
     else
-        MaterialTheme.colorScheme.secondary
+        MaterialTheme.colorScheme.secondary           // circle on secondaryContainer bg
     val iconTint = if (isSearching)
-        MaterialTheme.colorScheme.primaryContainer
+        MaterialTheme.colorScheme.primaryContainer    // light icon on dark blob
     else
-        MaterialTheme.colorScheme.onSecondary
+        MaterialTheme.colorScheme.onSecondary         // icon on secondary circle
 
     val labelColor by animateColorAsState(
         targetValue = if (isSearching)
@@ -415,7 +417,6 @@ private fun RecognitionHomeView(
                     interactionSource = interactionSource,
                     indication = null,
                     onClick = {
-                        HapticUtil.performHeavyHaptic(context)
                         if (isSearching) {
                             onCancel()
                         } else {
@@ -424,6 +425,8 @@ private fun RecognitionHomeView(
                     }
                 ),
         ) {
+            // Original: button src = avd_nowplaying_searching (animated 3-bar icon) when searching,
+            // or gs_mic_off_64 (mic-off icon, which is the music note) when idle.
             if (isSearching) {
                 SearchingBarsIcon(
                     color = iconTint,
@@ -439,6 +442,9 @@ private fun RecognitionHomeView(
             }
         }
 
+        // Official Pixel Now Playing label animation (gow.java lines 1331-1336 & 1580-1586):
+        // HomeLabelTopPadding oscillates between -31dp (idle) and +21dp (searching), sliding 52dp down
+        // over 1000ms with CubicBezierEasing(0.2f, 0.0f, 0.0f, 1.0f) as the button blooms.
         val homeLabelTopPadding by animateDpAsState(
             targetValue = if (isSearching) 21.dp else (-31).dp,
             animationSpec = tween(1000, easing = CubicBezierEasing(0.2f, 0.0f, 0.0f, 1.0f)),
@@ -451,6 +457,7 @@ private fun RecognitionHomeView(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.offset { IntOffset(x = 0, y = homeLabelTopPadding.roundToPx()) }
         ) {
+            // Title: fades smoothly matching official 300ms transition (ggp.java case 13)
             AnimatedContent(
                 targetState = if (isSearching) {
                     stringResource(R.string.recognition_listening)
@@ -473,6 +480,7 @@ private fun RecognitionHomeView(
                 )
             }
 
+            // Subtitle: fades smoothly via alpha so layout height remains stable with zero reflow
             val subtitleAlpha by animateFloatAsState(
                 targetValue = if (isSearching) 0f else 1f,
                 animationSpec = tween(250),
@@ -493,6 +501,8 @@ private fun RecognitionHomeView(
             )
         }
 
+        // Connected buttons right under the text: fades out and slightly slides down via graphicsLayer,
+        // preserving its layout height so the Column NEVER collapses and the top items NEVER jump!
         val controlsAlpha by animateFloatAsState(
             targetValue = if (isSearching) 0f else 1f,
             animationSpec = tween(250, easing = FastOutSlowInEasing),
@@ -571,252 +581,184 @@ private fun RecognitionHomeView(
     }
 }
 
-/**
- * What was heard, as a card to act on: the cover first, then the song, the one artist Shazam credits
- * with how many people listen to them, where it comes from and when it came out, the track's numbers on
- * SoundCloud, and the way to play it here.
- */
 @Composable
 private fun SuccessView(
     state: RecognitionState.Success,
     onPlayClick: () -> Unit,
     onRetry: () -> Unit
 ) {
-    val context = LocalContext.current
     val shazamResult = state.result
     val soundcloudTrack = state.soundcloudTrack
-    val imageUrl = shazamResult.coverArtHqUrl ?: soundcloudTrack?.fullResArtwork ?: shazamResult.coverArtUrl
-    val title = shazamResult.title.ifBlank { soundcloudTrack?.title.orEmpty() }
-    val artist = shazamResult.artist.ifBlank { soundcloudTrack?.displayArtist.orEmpty() }
-    val leadArtist = remember(artist) { GeniusVoices.splitNames(artist).firstOrNull() ?: artist }
-    val recognizedAt = remember(state) {
-        java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
-    }
-    val released = remember(shazamResult, soundcloudTrack) {
-        (shazamResult.releaseDate ?: soundcloudTrack?.releaseDate)?.takeIf { it.isNotBlank() }
-    }
+    val imageUrl = soundcloudTrack?.fullResArtwork ?: shazamResult.coverArtHqUrl ?: shazamResult.coverArtUrl
+    val title = soundcloudTrack?.title ?: shazamResult.title
+    val artist = soundcloudTrack?.user?.username ?: shazamResult.artist
 
     val likedTracks by LikeRepository.likedTracks.collectAsStateWithLifecycle()
     val isLiked = soundcloudTrack?.let { track -> likedTracks.any { it.id == track.id } } == true
 
-    BoxWithConstraints(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-        val minScreenHeight = maxHeight
+    Box(modifier = Modifier.fillMaxSize()) {
+
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+            modifier = Modifier.fillMaxSize()
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
+            Spacer(modifier = Modifier.statusBarsPadding())
+            Spacer(modifier = Modifier.height(72.dp))
+
+            Text(
+                text = title,
+                style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 24.dp)
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = artist,
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 24.dp)
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Row(
                 modifier = Modifier
-                    .widthIn(max = 520.dp)
-                    .fillMaxWidth()
-                    .defaultMinSize(minHeight = minScreenHeight)
                     .padding(horizontal = 24.dp)
-                    .padding(top = 72.dp, bottom = 48.dp)
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                ElevatedCard(
-                shape = RoundedCornerShape(28.dp),
-                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 18.dp),
-                modifier = Modifier.size(240.dp)
-            ) {
-                if (imageUrl != null) {
-                    AsyncImage(
-                        model = imageUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Box(
+                if (soundcloudTrack != null) {
+                    Button(
+                        onClick = onPlayClick,
                         modifier = Modifier
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center
+                            .weight(1f)
+                            .height(52.dp),
+                        shapes = ButtonDefaults.shapes(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
                     ) {
-                        Icon(
-                            Icons.Rounded.MusicNote,
-                            null,
-                            Modifier.size(64.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        Icon(Icons.Rounded.PlayArrow, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            stringResource(R.string.recognition_listen_on_kittytune),
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                } else {
+                    Button(
+                        onClick = onRetry,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(52.dp),
+                        shapes = ButtonDefaults.shapes(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    ) {
+                        Icon(Icons.Rounded.Refresh, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            stringResource(R.string.btn_retry),
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(24.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = artist,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            MonthlyListenersText(
-                artistName = leadArtist,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-
-            val facts = listOfNotNull(
-                shazamResult.album?.takeIf { it.isNotBlank() && !it.equals(title, ignoreCase = true) },
-                released?.let { stringResource(R.string.recognition_released, formatReleaseDate(it)) },
-                shazamResult.genre?.takeIf { it.isNotBlank() },
-            )
-            if (facts.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = facts.joinToString("  ·  "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-
-            if (soundcloudTrack != null) {
-                Spacer(modifier = Modifier.height(20.dp))
-                TrackStatsRow(soundcloudTrack)
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
                 Button(
-                    shapes = ButtonDefaults.shapes(),
-                    onClick = hapticAction(HapticKind.HEAVY) {
-                        if (soundcloudTrack != null) onPlayClick() else onRetry()
-                    },
-                    modifier = Modifier.weight(1f).height(56.dp),
-                ) {
-                    Icon(if (soundcloudTrack != null) Icons.Rounded.PlayArrow else Icons.Rounded.Refresh, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        stringResource(if (soundcloudTrack != null) R.string.recognition_listen_on_kittytune else R.string.btn_retry),
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                if (soundcloudTrack != null) {
-                    FilledTonalIconButton(
-                        shapes = IconButtonDefaults.shapes(),
-                        onClick = {
-                            HapticUtil.performConfirmHaptic(context)
+                    onClick = {
+                        soundcloudTrack?.let { track ->
                             if (isLiked) {
-                                LikeRepository.removeLike(soundcloudTrack.id)
+                                LikeRepository.removeLike(track.id)
                             } else {
-                                LikeRepository.addLike(soundcloudTrack)
+                                LikeRepository.addLike(track)
                                 AchievementManager.increment("liker_50")
                                 AchievementManager.increment("liker_1000")
                                 AchievementManager.increment("liker_5000")
                             }
-                        },
-                        modifier = Modifier.size(56.dp),
-                    ) {
-                        Icon(
-                            imageVector = if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                            contentDescription = stringResource(R.string.player_like_action),
-                            tint = if (isLiked) MaterialTheme.colorScheme.primary else LocalContentColor.current
-                        )
-                    }
-                    FilledTonalIconButton(
-                        shapes = IconButtonDefaults.shapes(),
-                        onClick = hapticAction(HapticKind.LIGHT, onRetry),
-                        modifier = Modifier.size(56.dp),
-                    ) {
-                        Icon(Icons.Rounded.Refresh, contentDescription = stringResource(R.string.btn_retry))
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = stringResource(R.string.recognition_recognized_at, recognizedAt),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline,
-            )
-        }
-    }
-}
-}
-
-/** The track's plays, likes, reposts and comments on SoundCloud, each a small tile with its icon. */
-@Composable
-private fun TrackStatsRow(track: com.alananasss.kittytune.domain.Track) {
-    val stats = listOf(
-        Triple(Icons.Rounded.PlayArrow, track.playbackCount, stringResource(R.string.stat_plays)),
-        Triple(Icons.Rounded.Favorite, track.likesCount, stringResource(R.string.stat_likes)),
-        Triple(Icons.Rounded.Repeat, track.repostsCount, stringResource(R.string.stat_reposts)),
-        Triple(Icons.Rounded.ChatBubble, track.commentCount, stringResource(R.string.stat_comments)),
-    ).filter { it.second > 0 }
-    if (stats.isEmpty()) return
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        stats.forEach { (icon, count, label) ->
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                modifier = Modifier.weight(1f),
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(vertical = 12.dp, horizontal = 6.dp),
+                        }
+                    },
+                    modifier = Modifier.height(52.dp),
+                    shapes = ButtonDefaults.shapes(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    ),
+                    contentPadding = PaddingValues(0.dp)
                 ) {
-                    Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        formatCompactNumber(count),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                    )
-                    Text(
-                        label,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                    Icon(
+                        imageVector = if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                        contentDescription = stringResource(R.string.player_like_action), 
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                        tint = if (isLiked) MaterialTheme.colorScheme.primary else LocalContentColor.current
                     )
                 }
+
+                if (soundcloudTrack != null) {
+                    Button(
+                        onClick = onRetry,
+                        modifier = Modifier.height(52.dp),
+                        shapes = ButtonDefaults.shapes(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        ),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Icon(Icons.Rounded.Refresh, contentDescription = stringResource(R.string.btn_retry), modifier = Modifier.padding(horizontal = 24.dp))
+                    }
+                }
             }
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                ElevatedCard(
+                    shape = RoundedCornerShape(24.dp),
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 18.dp),
+                    modifier = Modifier.size(260.dp)
+                ) {
+                    if (imageUrl != null) {
+                        AsyncImage(
+                            model = imageUrl,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Rounded.MusicNote, null,
+                                Modifier.size(64.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(120.dp))
         }
     }
-}
-
-private fun formatCompactNumber(count: Int): String {
-    return when {
-        count >= 1_000_000 -> String.format(java.util.Locale.getDefault(), "%.1fM", count / 1_000_000.0)
-        count >= 1_000 -> String.format(java.util.Locale.getDefault(), "%.1fK", count / 1_000.0)
-        else -> java.text.NumberFormat.getNumberInstance(java.util.Locale.getDefault()).format(count)
-    }
-}
-
-private fun formatReleaseDate(raw: String?): String {
-    if (raw.isNullOrBlank()) return ""
-    val date = runCatching { java.time.Instant.parse(raw).let { java.util.Date.from(it) } }.getOrNull()
-        ?: runCatching { java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).parse(raw) }.getOrNull()
-        ?: runCatching { java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).parse(raw) }.getOrNull()
-        ?: runCatching { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).parse(raw) }.getOrNull()
-        ?: return raw
-    return java.text.SimpleDateFormat("d MMMM yyyy", java.util.Locale.getDefault()).format(date)
 }
 
 @Composable
@@ -826,6 +768,7 @@ private fun ErrorView(error: String, onRetry: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        // Faithful reproduction of home_not_found_illustration from Google Pixel Now Playing
         Box(
             modifier = Modifier
                 .size(72.dp)
@@ -853,7 +796,7 @@ private fun ErrorView(error: String, onRetry: () -> Unit) {
         Spacer(Modifier.height(48.dp))
 
         FilledTonalButton(
-            onClick = hapticAction(HapticKind.UI, onRetry),
+            onClick = onRetry,
             shapes = ButtonDefaults.shapes(),
             modifier = Modifier
                 .height(56.dp)

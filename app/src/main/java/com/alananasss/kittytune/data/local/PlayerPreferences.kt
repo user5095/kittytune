@@ -12,12 +12,9 @@ import androidx.core.content.edit
 import com.alananasss.kittytune.domain.Track
 import com.alananasss.kittytune.ui.player.AudioEffectsState
 import com.alananasss.kittytune.ui.player.EqualizerState
-import com.alananasss.kittytune.data.audio.SavedEqProfile
 import com.alananasss.kittytune.ui.player.PlaybackContext
 import com.alananasss.kittytune.ui.player.RepeatMode
-import com.alananasss.kittytune.ui.player.NormalizationLevel
 import com.google.gson.Gson
-import com.google.gson.annotations.SerializedName
 import com.google.gson.reflect.TypeToken
 import java.io.File
 import java.io.FileReader
@@ -26,7 +23,6 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import com.alananasss.kittytune.data.lyrics.providers.PreferredLyricsProvider
-import com.alananasss.kittytune.data.lyrics.providers.DefaultDataSaverLyricsProviders
 import com.alananasss.kittytune.data.lyrics.providers.DefaultLyricsProviderOrder
 import com.alananasss.kittytune.data.lyrics.providers.deserializeLyricsProviderOrder
 import com.alananasss.kittytune.data.lyrics.providers.serializeLyricsProviderOrder
@@ -50,27 +46,6 @@ enum class LyricsUiStyle {
         }
     }
 }
-enum class LyricsDisplayStyle {
-    STANDARD,
-    SCALE,
-    FOCUS,
-    SCALE_FOCUS;
-
-    companion object {
-        fun fromString(name: String?): LyricsDisplayStyle = when (name) {
-            "SCALE" -> SCALE
-            "FOCUS" -> FOCUS
-            "SCALE_FOCUS" -> SCALE_FOCUS
-            else -> STANDARD
-        }
-    }
-}
-
-enum class FullPlayerBgStyle { APPLE_MUSIC, BLUR, GRADIENT, PURE_BLACK }
-enum class FullPlayerLayout { LYRICS_RIGHT, LYRICS_LEFT, LYRICS_CENTRED, COVER_AND_LINE }
-enum class FullPlayerInfoAlign { START, CENTER, END }
-enum class FullPlayerHeartSide { START, END }
-
 enum class LyricsFont { APPLE, APP_DEFAULT }
 enum class DiscordStatusDisplay { ACTIVITY, SOUNDCLOUD, ARTIST, SONG }
 
@@ -86,24 +61,6 @@ enum class MiniPlayerSwipeAction {
         fun fromString(name: String?): MiniPlayerSwipeAction = when (name) {
             "DISMISS" -> DISMISS
             else -> CHANGE_TRACK
-        }
-    }
-}
-
-enum class TrackSourceBadgeStyle(
-    @StringRes val titleRes: Int
-) {
-    ICON_AND_TEXT(R.string.pref_track_source_badge_both),
-    ICON_ONLY(R.string.pref_track_source_badge_icon),
-    TEXT_ONLY(R.string.pref_track_source_badge_text),
-    HIDDEN(R.string.pref_track_source_badge_hidden);
-
-    companion object {
-        fun fromString(name: String?): TrackSourceBadgeStyle = when (name) {
-            "ICON_AND_TEXT" -> ICON_AND_TEXT
-            "TEXT_ONLY" -> TEXT_ONLY
-            "HIDDEN" -> HIDDEN
-            else -> ICON_ONLY
         }
     }
 }
@@ -146,10 +103,7 @@ enum class PlayerActionButtonSlot(@StringRes val titleRes: Int) {
     FULLSCREEN_LYRICS(R.string.slot_fullscreen_lyrics),
     SLEEP_TIMER(R.string.slot_sleep_timer),
     HAPTICS(R.string.slot_haptics),
-    CONNECT(R.string.slot_connect),
     MORE(R.string.slot_more),
-    @Deprecated("Use CONNECT instead")
-    DEVICES(R.string.slot_connect),
     NONE(R.string.slot_none)
 }
 
@@ -218,10 +172,10 @@ enum class AiDetectionWindow(
 }
 
 data class FloatingBarLook(
-    @SerializedName("cornerDp") val cornerDp: Int,
-    @SerializedName("widthPercent") val widthPercent: Int,
-    @SerializedName("marginDp") val marginDp: Int,
-    @SerializedName("isTranslucent") val isTranslucent: Boolean
+    val cornerDp: Int,
+    val widthPercent: Int,
+    val marginDp: Int,
+    val isTranslucent: Boolean
 ) {
     companion object {
         val DEFAULT = FloatingBarLook(cornerDp = 20, widthPercent = 94, marginDp = 12, isTranslucent = true)
@@ -278,11 +232,6 @@ class PlayerPreferences(context: Context) {
         const val KEY_MIX_PRIORITIZE_TRUSTED = "mix_prioritize_trusted"
         const val KEY_SHOW_HOME_LISTENING_STATS = "show_home_listening_stats"
         const val KEY_SHOW_HOME_YOUR_MIX = "show_home_your_mix"
-        const val KEY_SHOW_DEVICES_BUTTON_TOP_BAR = "show_devices_button_top_bar"
-        const val KEY_SHOW_DEVICES_BUTTON_MINI_PLAYER = "show_devices_button_mini_player"
-        const val KEY_SHOW_DEVICES_BUTTON_BOTTOM_BAR = "show_devices_button_bottom_bar"
-        const val KEY_SHOW_HOME_MY_WAVE = "show_home_my_wave"
-        const val KEY_SHOW_HOME_CHARTS = "show_home_charts"
 
         const val PLAYER_BAR_BUTTON_LIKE = "like"
         const val PLAYER_BAR_BUTTON_LYRICS = "lyrics"
@@ -324,8 +273,6 @@ class PlayerPreferences(context: Context) {
         private const val KEY_AUTOPLAY_STATION = "autoplay_station_enabled"
         private const val KEY_AUDIO_QUALITY = "audio_quality_pref"
         private const val KEY_PERSISTENT_QUEUE = "persistent_queue_enabled"
-        private const val KEY_QUEUE_PRESERVE_UPCOMING_ON_JUMP = "queue_preserve_upcoming_on_jump"
-        private const val KEY_QUEUE_AUTO_ARCHIVE = "queue_auto_archive"
         private const val KEY_START_DESTINATION = "start_destination_pref"
         private const val KEY_DYNAMIC_THEME = "dynamic_theme_enabled"
         private const val KEY_TRACK_DYNAMIC_THEME = "track_dynamic_theme_enabled"
@@ -345,7 +292,6 @@ class PlayerPreferences(context: Context) {
         private const val KEY_AUTO_UPDATE = "auto_update_enabled"
         private const val KEY_REMEMBER_SEARCH_FILTER = "remember_search_filter"
         private const val KEY_LAST_SEARCH_FILTER = "last_search_filter"
-        private const val KEY_VERIFIED_FILTER_ENABLED = "verified_filter_enabled"
         private const val KEY_RECOGNITION_AUDIO_SOURCE = "recognition_audio_source"
         private const val KEY_YOUTUBE_FALLBACK = "youtube_fallback_enabled"
         private const val KEY_HIDE_YOUTUBE_VIDEOS = "hide_youtube_videos_and_shorts"
@@ -356,7 +302,7 @@ class PlayerPreferences(context: Context) {
         private const val KEY_INLINE_LYRICS = "inline_lyrics_enabled"
         private const val KEY_LYRICS_UNDER_COVER_ENABLED = "lyrics_under_cover_enabled"
         private const val KEY_LYRICS_MULTI_STATE_TOGGLE = "lyrics_multi_state_toggle"
-        const val KEY_LYRICS_UNDER_COVER_PLACEMENT = "lyrics_under_cover_placement"
+        private const val KEY_LYRICS_UNDER_COVER_PLACEMENT = "lyrics_under_cover_placement"
         private const val KEY_LYRICS_UNDER_COVER_ALWAYS_VISIBLE = "lyrics_under_cover_always_visible"
         private const val KEY_DISCORD_TOKEN = "discord_token"
         private const val KEY_DISCORD_USERNAME = "discord_username"
@@ -390,24 +336,7 @@ class PlayerPreferences(context: Context) {
         private const val KEY_LYRICS_LINE_SPACING = "lyrics_line_spacing"
         private const val KEY_LYRICS_FONT = "lyrics_font"
         private const val KEY_LYRICS_DUET_VIEW = "lyrics_duet_view"
-        private const val KEY_LYRICS_SPLIT_BACKING_VOCALS = "lyrics_split_backing_vocals"
-        private const val KEY_LYRICS_REVEAL_WORDS = "lyrics_reveal_words"
         private const val KEY_LYRICS_DUET_BLACKLIST = "lyrics_duet_blacklist"
-        private const val KEY_WAVE_MODE = "wave_mode"
-        private const val KEY_ONE_LINE_LYRICS = "one_line_lyrics"
-        private const val KEY_FULL_PLAYER_COVER_FEATHER = "full_player_cover_feather"
-        private const val KEY_FULL_PLAYER_COVER_FEATHER_AMOUNT = "full_player_cover_feather_amount"
-        private const val KEY_FULL_PLAYER_COVER_SCALE = "full_player_cover_scale"
-        const val KEY_FULL_PLAYER_BG_STYLE = "full_player_bg_style"
-        private const val KEY_FULL_PLAYER_LAYOUT = "full_player_layout"
-        private const val KEY_FULL_PLAYER_INFO_ALIGN = "full_player_info_align"
-        private const val KEY_FULL_PLAYER_HEART_SIDE = "full_player_heart_side"
-        private const val KEY_LYRICS_DISPLAY_STYLE = "lyrics_display_style"
-        private const val KEY_LYRICS_HORIZONTAL_MARGIN = "lyrics_horizontal_margin"
-        private const val KEY_LYRICS_VERTICAL_OFFSET = "lyrics_vertical_offset"
-        private const val KEY_LYRICS_ACTIVE_SCALE = "lyrics_active_scale"
-        private const val KEY_LYRICS_WHEEL_LINES = "lyrics_wheel_lines"
-        private const val KEY_QUICK_LYRICS_TAB = "quick_lyrics_tab"
 
         private const val KEY_DISCORD_ASSET_LOGO = "discord_asset_logo"
         private const val KEY_DISCORD_STATUS_DISPLAY = "discord_status_display"
@@ -430,13 +359,7 @@ class PlayerPreferences(context: Context) {
         private const val KEY_AUTOMIX_HARMONIC_MIX = "automix_harmonic_mix"
         private const val KEY_AUTOMIX_DYNAMIC_MIX_POINTS = "automix_dynamic_mix_points"
         private const val KEY_AUTOMIX_BASS_DUCKING = "automix_bass_ducking"
-        const val AUTOMIX_OVERLAP_AUTO = 0
-        const val AUTOMIX_OVERLAP_2BARS = 1
-        const val AUTOMIX_OVERLAP_4BARS = 2
-        const val AUTOMIX_OVERLAP_8BARS = 3
-        const val AUTOMIX_OVERLAP_CUSTOM = 4
         private const val KEY_AUTOMIX_OVERLAP_MODE = "automix_overlap_mode"
-        private const val KEY_AUTOMIX_OVERLAP_CUSTOM_SEC = "automix_overlap_custom_sec"
         private const val KEY_DJ_FLOW_ENABLED = "dj_flow_enabled"
         private const val KEY_DJ_FLOW_ENERGY_MODE = "dj_flow_energy_mode"
         private const val KEY_DJ_FLOW_AUTONOMOUS_ENABLED = "dj_flow_autonomous_enabled"
@@ -457,16 +380,13 @@ class PlayerPreferences(context: Context) {
         private const val KEY_AUTOMIX_START_OFFSET_CUSTOM_SEC = "automix_start_offset_custom_sec"
         private const val KEY_CACHED_USER_ID = "cached_user_id"
         private const val KEY_CACHED_USERNAME = "cached_username"
-        const val KEY_KEY_COLOR = "key_color"
-        const val KEY_COLOR_STYLE = "color_style"
-        const val KEY_COLOR_SPEC = "color_spec"
+        private const val KEY_KEY_COLOR = "key_color"
+        private const val KEY_COLOR_STYLE = "color_style"
+        private const val KEY_COLOR_SPEC = "color_spec"
         private const val KEY_SYNC_LIKES = "sync_likes_enabled"
-        private const val KEY_BETA_UPDATES_ENABLED = "beta_updates_enabled"
         private const val KEY_SLEEP_TIMER_FADE_DURATION = "sleep_timer_fade_duration"
         private const val KEY_SLEEP_TIMER_FADE_ENABLED = "sleep_timer_fade_enabled"
         const val KEY_EQUALIZER_STATE = "equalizer_state_json"
-        private const val KEY_EQ_AUTO_APPLY = "eq_auto_apply"
-        private const val KEY_EQ_DEVICE_PROFILES = "eq_device_profiles"
 
         const val KEY_PROXY_ENABLED = "proxy_enabled"
         const val KEY_PROXY_TYPE = "proxy_type"
@@ -478,12 +398,6 @@ class PlayerPreferences(context: Context) {
         const val KEY_PROXY_PROFILES = "saved_proxy_profiles_json"
         const val KEY_SELECTED_PROXY_PROFILE_ID = "selected_proxy_profile_id"
 
-        // Zapret: in-app DPI bypass (no folder, no VPN, no proxy)
-        const val KEY_ZAPRET_ENABLED = "zapret_enabled"
-        const val KEY_ZAPRET_STRATEGY = "zapret_strategy"
-        const val KEY_ZAPRET_DOMAINS = "zapret_domains_csv"
-        const val KEY_ZAPRET_AUTO_CHECKED = "zapret_auto_checked"
-
         const val SLEEP_TIMER_FADE_DURATION_MIN = 0
         const val SLEEP_TIMER_FADE_DURATION_MAX = 30
         const val SLEEP_TIMER_FADE_DURATION_DEFAULT = 30
@@ -491,7 +405,6 @@ class PlayerPreferences(context: Context) {
 
         private const val KEY_BOTTOM_MENU_STYLE = "bottom_menu_style"
         private const val KEY_BOTTOM_MENU_ITEMS = "bottom_menu_items_csv"
-        const val DEFAULT_BOTTOM_MENU_ITEMS = "home,search,genres,library"
         private const val KEY_BOTTOM_MENU_ORDER = "bottom_menu_order_csv"
         private const val KEY_BOTTOM_MENU_FAB = "bottom_menu_fab"
         private const val KEY_BOTTOM_MENU_BLUR = "bottom_menu_blur_enabled"
@@ -502,7 +415,6 @@ class PlayerPreferences(context: Context) {
         private const val KEY_WAVEFORM_COMMENTS = "waveform_comments_enabled"
         private const val KEY_TRACK_REMOVAL_METHOD = "track_removal_method"
 
-        const val KEY_APP_HAPTIC_MODE = "app_haptics_mode"
         const val KEY_HAPTICS_ENABLED = "haptics_enabled"
         const val KEY_HAPTICS_CONTRAST = "haptics_contrast"
         const val KEY_HAPTICS_STRENGTH = "haptics_strength"
@@ -510,23 +422,14 @@ class PlayerPreferences(context: Context) {
         const val KEY_HAPTICS_SEEK = "haptics_seek"
         const val KEY_HAPTICS_LIKE = "haptics_like"
         const val KEY_HAPTICS_QUEUE = "haptics_queue"
-        const val KEY_HAPTICS_BUTTONS = "haptics_buttons"
-        const val KEY_HAPTICS_SLIDERS = "haptics_sliders"
 
         const val KEY_AUDIO_PROVIDER_ORDER = "audio_provider_order"
         const val KEY_DISABLED_AUDIO_PROVIDERS = "disabled_audio_providers"
         const val KEY_DISABLE_PROVIDERS_ON_METERED = "disable_providers_on_metered"
         const val KEY_DATA_SAVER = "data_saver_enabled"
         const val KEY_DATA_SAVER_METERED_ONLY = "data_saver_metered_only"
-        const val KEY_DATA_SAVER_LYRICS_RESTRICT = "data_saver_lyrics_restrict"
-        const val KEY_DATA_SAVER_LYRICS_PROVIDERS = "data_saver_lyrics_providers"
         const val KEY_QOBUZ_COUNTRY = "qobuz_country"
         const val KEY_QOBUZ_CUSTOM_INSTANCES = "qobuz_custom_instances"
-        const val KEY_QOBUZ_USER_AUTH_TOKEN = "qobuz_user_auth_token"
-        const val KEY_QOBUZ_GOOGLE_CLIENT_ID = "qobuz_google_client_id"
-        const val KEY_QOBUZ_GOOGLE_REDIRECT = "qobuz_google_redirect"
-        const val KEY_QOBUZ_FACEBOOK_CLIENT_ID = "qobuz_facebook_client_id"
-        const val KEY_QOBUZ_FACEBOOK_REDIRECT = "qobuz_facebook_redirect"
         const val KEY_QOBUZ_QUALITY = "qobuz_quality"
         const val KEY_TIDAL_RESOLVER_ENDPOINTS = "tidal_resolver_endpoints"
         const val KEY_TIDAL_AUDIO_QUALITY = "tidal_audio_quality"
@@ -545,7 +448,7 @@ class PlayerPreferences(context: Context) {
         private const val KEY_AI_AUTO_SKIP = "ai_auto_skip_enabled"
         private const val KEY_AI_AUTO_BLOCK = "ai_auto_block_enabled"
         private const val KEY_AI_SPARE_FAVORITES = "ai_spare_favorites"
-        const val KEY_AI_SCORE_THRESHOLD = "ai_score_threshold"
+        private const val KEY_AI_SCORE_THRESHOLD = "ai_score_threshold"
         private const val KEY_AI_DETECTION_WINDOW = "ai_detection_window"
         const val KEY_AI_SHOW_BADGE = "ai_show_badge"
         const val KEY_AI_SHOW_HUMAN_BADGE = "ai_show_human_badge"
@@ -553,10 +456,6 @@ class PlayerPreferences(context: Context) {
         // Settings search history
         private const val KEY_SETTINGS_RECENT_SEARCHES = "settings_recent_searches_json"
         const val SETTINGS_RECENT_SEARCHES_MAX = 10
-
-        const val KEY_SHOW_PLAYLIST_TOTAL_DURATION = "show_playlist_total_duration"
-        const val KEY_FULL_PLAYER_SOURCE_INDICATOR_ENABLED = "full_player_source_indicator_enabled"
-        const val KEY_TRACK_SOURCE_BADGE_STYLE = "track_source_badge_style"
     }
 
     private fun getSafeFloat(key: String, default: Float): Float {
@@ -579,10 +478,7 @@ class PlayerPreferences(context: Context) {
     fun getSyncLikesEnabled(): Boolean = prefs.getBoolean(KEY_SYNC_LIKES, true)
     fun setSyncLikesEnabled(enabled: Boolean) = prefs.edit { putBoolean(KEY_SYNC_LIKES, enabled) }
 
-    fun getBetaUpdatesEnabled(): Boolean = prefs.getBoolean(KEY_BETA_UPDATES_ENABLED, false)
-    fun setBetaUpdatesEnabled(enabled: Boolean) = prefs.edit { putBoolean(KEY_BETA_UPDATES_ENABLED, enabled) }
-
-    fun getCrossfadeEnabled(): Boolean = prefs.getBoolean(KEY_CROSSFADE_ENABLED, false) || getAutomixEnabled()
+    fun getCrossfadeEnabled(): Boolean = prefs.getBoolean(KEY_CROSSFADE_ENABLED, false)
     fun setCrossfadeEnabled(enabled: Boolean) = prefs.edit { putBoolean(KEY_CROSSFADE_ENABLED, enabled) }
 
     fun getExplorerGridLayout(): Boolean = prefs.getBoolean(KEY_EXPLORER_GRID_LAYOUT, true)
@@ -628,19 +524,19 @@ class PlayerPreferences(context: Context) {
         get() = prefs.getBoolean(KEY_AI_SPARE_FAVORITES, true)
         set(value) = prefs.edit { putBoolean(KEY_AI_SPARE_FAVORITES, value) }
 
-    /** P(AI) threshold above which a track is considered AI-generated. Range [0.5, 0.95]. Default: 0.85 (85% Strict). */
+    /** P(AI) threshold above which a track is considered AI-generated. Range [0.5, 0.95]. */
     var aiScoreThreshold: Float
-        get() = getSafeFloat(KEY_AI_SCORE_THRESHOLD, 0.85f).coerceIn(0.5f, 0.95f)
+        get() = getSafeFloat(KEY_AI_SCORE_THRESHOLD, 0.5f).coerceIn(0.5f, 0.95f)
         set(value) = prefs.edit { putFloat(KEY_AI_SCORE_THRESHOLD, value.coerceIn(0.5f, 0.95f)) }
 
-    /** Show AI detection badge in the player during playback. Default: false. */
+    /** Show AI detection badge in the player during playback. Default: true. */
     var aiShowBadge: Boolean
-        get() = prefs.getBoolean(KEY_AI_SHOW_BADGE, false)
+        get() = prefs.getBoolean(KEY_AI_SHOW_BADGE, true)
         set(value) = prefs.edit { putBoolean(KEY_AI_SHOW_BADGE, value) }
 
-    /** Also show the badge when track is classified as human music. Default: true. */
+    /** Also show the badge when track is classified as human music. Default: false. */
     var aiShowHumanBadge: Boolean
-        get() = prefs.getBoolean(KEY_AI_SHOW_HUMAN_BADGE, true)
+        get() = prefs.getBoolean(KEY_AI_SHOW_HUMAN_BADGE, false)
         set(value) = prefs.edit { putBoolean(KEY_AI_SHOW_HUMAN_BADGE, value) }
 
     /** Audio duration analyzed before classifying AI music (1s or 4s). Default: ACCURATE (4s). */
@@ -658,21 +554,10 @@ class PlayerPreferences(context: Context) {
     fun setCrossfadeIndicatorEnabled(enabled: Boolean) = prefs.edit { putBoolean(KEY_CROSSFADE_INDICATOR, enabled) }
 
     fun getAutomixEnabled(): Boolean = prefs.getBoolean(KEY_AUTOMIX_ENABLED, false)
-    fun setAutomixEnabled(enabled: Boolean) {
-        prefs.edit {
-            putBoolean(KEY_AUTOMIX_ENABLED, enabled)
-            if (enabled) {
-                putBoolean(KEY_CROSSFADE_ENABLED, true)
-            } else {
-                putBoolean(KEY_AUTOMIX_DEBUG_OVERLAY, false)
-            }
-        }
-    }
+    fun setAutomixEnabled(enabled: Boolean) = prefs.edit { putBoolean(KEY_AUTOMIX_ENABLED, enabled) }
 
-    fun getAutomixDebugOverlayEnabled(): Boolean =
-        getAutomixEnabled() && prefs.getBoolean(KEY_AUTOMIX_DEBUG_OVERLAY, false)
-    fun setAutomixDebugOverlayEnabled(enabled: Boolean) =
-        prefs.edit { putBoolean(KEY_AUTOMIX_DEBUG_OVERLAY, enabled && getAutomixEnabled()) }
+    fun getAutomixDebugOverlayEnabled(): Boolean = prefs.getBoolean(KEY_AUTOMIX_DEBUG_OVERLAY, false)
+    fun setAutomixDebugOverlayEnabled(enabled: Boolean) = prefs.edit { putBoolean(KEY_AUTOMIX_DEBUG_OVERLAY, enabled) }
 
     fun getAutomixTempoMatchEnabled(): Boolean = prefs.getBoolean(KEY_AUTOMIX_TEMPO_MATCH, true)
     fun setAutomixTempoMatchEnabled(enabled: Boolean) = prefs.edit { putBoolean(KEY_AUTOMIX_TEMPO_MATCH, enabled) }
@@ -686,11 +571,8 @@ class PlayerPreferences(context: Context) {
     fun getAutomixBassDuckingEnabled(): Boolean = prefs.getBoolean(KEY_AUTOMIX_BASS_DUCKING, true)
     fun setAutomixBassDuckingEnabled(enabled: Boolean) = prefs.edit { putBoolean(KEY_AUTOMIX_BASS_DUCKING, enabled) }
 
-    fun getAutomixOverlapMode(): Int = prefs.getInt(KEY_AUTOMIX_OVERLAP_MODE, AUTOMIX_OVERLAP_AUTO)
+    fun getAutomixOverlapMode(): Int = prefs.getInt(KEY_AUTOMIX_OVERLAP_MODE, 0)
     fun setAutomixOverlapMode(mode: Int) = prefs.edit { putInt(KEY_AUTOMIX_OVERLAP_MODE, mode) }
-
-    fun getAutomixOverlapCustomSec(): Int = prefs.getInt(KEY_AUTOMIX_OVERLAP_CUSTOM_SEC, 8)
-    fun setAutomixOverlapCustomSec(seconds: Int) = prefs.edit { putInt(KEY_AUTOMIX_OVERLAP_CUSTOM_SEC, seconds.coerceIn(1, 30)) }
 
     fun getAutomixStartOffsetMode(): Int = prefs.getInt(KEY_AUTOMIX_START_OFFSET_MODE, AUTOMIX_START_OFFSET_AUTO)
     fun setAutomixStartOffsetMode(mode: Int) = prefs.edit { putInt(KEY_AUTOMIX_START_OFFSET_MODE, mode) }
@@ -848,19 +730,6 @@ class PlayerPreferences(context: Context) {
     fun getDownloadDrmStreamsEnabled(): Boolean = prefs.getBoolean(KEY_DOWNLOAD_DRM_STREAMS, true)
     fun setDownloadDrmStreamsEnabled(enabled: Boolean) = prefs.edit { putBoolean(KEY_DOWNLOAD_DRM_STREAMS, enabled) }
 
-    fun getAppHapticMode(): com.alananasss.kittytune.audio.haptics.AppHapticMode {
-        val raw = prefs.getString(KEY_APP_HAPTIC_MODE, null)
-        if (raw != null) return runCatching { com.alananasss.kittytune.audio.haptics.AppHapticMode.valueOf(raw) }.getOrDefault(com.alananasss.kittytune.audio.haptics.AppHapticMode.ENABLED)
-        return com.alananasss.kittytune.audio.haptics.AppHapticMode.ENABLED
-    }
-    fun setAppHapticMode(mode: com.alananasss.kittytune.audio.haptics.AppHapticMode) = prefs.edit { putString(KEY_APP_HAPTIC_MODE, mode.name) }
-
-    fun getHapticsButtons(): Boolean = prefs.getBoolean(KEY_HAPTICS_BUTTONS, true)
-    fun setHapticsButtons(enabled: Boolean) = prefs.edit { putBoolean(KEY_HAPTICS_BUTTONS, enabled) }
-
-    fun getHapticsSliders(): Boolean = prefs.getBoolean(KEY_HAPTICS_SLIDERS, true)
-    fun setHapticsSliders(enabled: Boolean) = prefs.edit { putBoolean(KEY_HAPTICS_SLIDERS, enabled) }
-
     fun getHapticsEnabled(): Boolean = prefs.getBoolean(KEY_HAPTICS_ENABLED, false)
     fun setHapticsEnabled(enabled: Boolean) = prefs.edit { putBoolean(KEY_HAPTICS_ENABLED, enabled) }
 
@@ -893,20 +762,6 @@ class PlayerPreferences(context: Context) {
 
     fun getLastSearchFilter(): String = prefs.getString(KEY_LAST_SEARCH_FILTER, "ALL") ?: "ALL"
     fun setLastSearchFilter(filterName: String) = prefs.edit { putString(KEY_LAST_SEARCH_FILTER, filterName) }
-
-    fun getVerifiedFilterEnabled(): Boolean = prefs.getBoolean(KEY_VERIFIED_FILTER_ENABLED, false)
-    fun setVerifiedFilterEnabled(enabled: Boolean) = prefs.edit { putBoolean(KEY_VERIFIED_FILTER_ENABLED, enabled) }
-
-    fun verifiedFilterEnabledFlow(): Flow<Boolean> = callbackFlow {
-        trySend(getVerifiedFilterEnabled())
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == KEY_VERIFIED_FILTER_ENABLED) {
-                trySend(getVerifiedFilterEnabled())
-            }
-        }
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
-    }
 
     fun getRecognitionAudioSource(): String = prefs.getString(KEY_RECOGNITION_AUDIO_SOURCE, "MIC") ?: "MIC"
     fun setRecognitionAudioSource(source: String) = prefs.edit { putString(KEY_RECOGNITION_AUDIO_SOURCE, source) }
@@ -1119,20 +974,6 @@ class PlayerPreferences(context: Context) {
     fun getLyricsDuetViewEnabled(): Boolean = prefs.getBoolean(KEY_LYRICS_DUET_VIEW, true)
     fun setLyricsDuetViewEnabled(enabled: Boolean) = prefs.edit { putBoolean(KEY_LYRICS_DUET_VIEW, enabled) }
 
-    fun getLyricsSplitBackingVocalsEnabled(): Boolean = prefs.getBoolean(KEY_LYRICS_SPLIT_BACKING_VOCALS, true)
-    fun setLyricsSplitBackingVocalsEnabled(enabled: Boolean) = prefs.edit { putBoolean(KEY_LYRICS_SPLIT_BACKING_VOCALS, enabled) }
-
-    fun getLyricsRevealWordsEnabled(): Boolean = prefs.getBoolean(KEY_LYRICS_REVEAL_WORDS, true)
-    fun setLyricsRevealWordsEnabled(enabled: Boolean) = prefs.edit { putBoolean(KEY_LYRICS_REVEAL_WORDS, enabled) }
-
-    fun getWaveMode(): com.alananasss.kittytune.data.wave.MyWave.WaveMode =
-        prefs.getString(KEY_WAVE_MODE, null)
-            ?.let { mode -> com.alananasss.kittytune.data.wave.MyWave.WaveMode.entries.find { it.name == mode } }
-            ?: com.alananasss.kittytune.data.wave.MyWave.WaveMode.BALANCED
-
-    fun setWaveMode(mode: com.alananasss.kittytune.data.wave.MyWave.WaveMode) =
-        prefs.edit { putString(KEY_WAVE_MODE, mode.name) }
-
     fun getLyricsDuetBlacklist(): Set<String> = prefs.getStringSet(KEY_LYRICS_DUET_BLACKLIST, emptySet()) ?: emptySet()
     fun setLyricsDuetBlacklist(blacklist: Set<String>) = prefs.edit { putStringSet(KEY_LYRICS_DUET_BLACKLIST, blacklist) }
     fun isTrackDuetBlacklisted(trackId: Long): Boolean = getLyricsDuetBlacklist().contains(trackId.toString())
@@ -1145,81 +986,6 @@ class PlayerPreferences(context: Context) {
         }
         setLyricsDuetBlacklist(current)
     }
-
-    fun getOneLineLyricsEnabled(): Boolean = prefs.getBoolean(KEY_ONE_LINE_LYRICS, false)
-    fun setOneLineLyricsEnabled(enabled: Boolean) = prefs.edit { putBoolean(KEY_ONE_LINE_LYRICS, enabled) }
-
-    fun getFullPlayerCoverFeather(): Boolean = prefs.getBoolean(KEY_FULL_PLAYER_COVER_FEATHER, false)
-    fun setFullPlayerCoverFeather(enabled: Boolean) = prefs.edit { putBoolean(KEY_FULL_PLAYER_COVER_FEATHER, enabled) }
-
-    fun getFullPlayerCoverFeatherAmount(): Float = getSafeFloat(KEY_FULL_PLAYER_COVER_FEATHER_AMOUNT, 0.6f).coerceIn(0f, 1f)
-    fun setFullPlayerCoverFeatherAmount(amount: Float) = prefs.edit { putFloat(KEY_FULL_PLAYER_COVER_FEATHER_AMOUNT, amount.coerceIn(0f, 1f)) }
-
-    fun getFullPlayerCoverScale(): Float = getSafeFloat(KEY_FULL_PLAYER_COVER_SCALE, 1f)
-    fun setFullPlayerCoverScale(scale: Float) = prefs.edit { putFloat(KEY_FULL_PLAYER_COVER_SCALE, scale) }
-
-    fun getFullPlayerBgStyle(): FullPlayerBgStyle {
-        val name = prefs.getString(KEY_FULL_PLAYER_BG_STYLE, null)
-        if (name != null) {
-            return runCatching { FullPlayerBgStyle.valueOf(name) }.getOrDefault(FullPlayerBgStyle.APPLE_MUSIC)
-        }
-        return when (getPlayerStyle()) {
-            PlayerBackgroundStyle.APPLE_MUSIC -> FullPlayerBgStyle.APPLE_MUSIC
-            PlayerBackgroundStyle.BLUR -> FullPlayerBgStyle.BLUR
-            PlayerBackgroundStyle.GRADIENT -> FullPlayerBgStyle.GRADIENT
-            PlayerBackgroundStyle.THEME -> FullPlayerBgStyle.PURE_BLACK
-        }
-    }
-    fun setFullPlayerBgStyle(style: FullPlayerBgStyle) {
-        prefs.edit {
-            putString(KEY_FULL_PLAYER_BG_STYLE, style.name)
-            when (style) {
-                FullPlayerBgStyle.APPLE_MUSIC -> putString(KEY_PLAYER_STYLE, PlayerBackgroundStyle.APPLE_MUSIC.name)
-                FullPlayerBgStyle.BLUR -> putString(KEY_PLAYER_STYLE, PlayerBackgroundStyle.BLUR.name)
-                FullPlayerBgStyle.GRADIENT -> putString(KEY_PLAYER_STYLE, PlayerBackgroundStyle.GRADIENT.name)
-                FullPlayerBgStyle.PURE_BLACK -> putString(KEY_PLAYER_STYLE, PlayerBackgroundStyle.THEME.name)
-            }
-        }
-    }
-
-    fun getFullPlayerLayout(): FullPlayerLayout {
-        val name = prefs.getString(KEY_FULL_PLAYER_LAYOUT, FullPlayerLayout.LYRICS_RIGHT.name)
-        return runCatching { FullPlayerLayout.valueOf(name!!) }.getOrDefault(FullPlayerLayout.LYRICS_RIGHT)
-    }
-    fun setFullPlayerLayout(layout: FullPlayerLayout) = prefs.edit { putString(KEY_FULL_PLAYER_LAYOUT, layout.name) }
-
-    fun getFullPlayerInfoAlign(): FullPlayerInfoAlign {
-        val name = prefs.getString(KEY_FULL_PLAYER_INFO_ALIGN, FullPlayerInfoAlign.START.name)
-        return runCatching { FullPlayerInfoAlign.valueOf(name!!) }.getOrDefault(FullPlayerInfoAlign.START)
-    }
-    fun setFullPlayerInfoAlign(align: FullPlayerInfoAlign) = prefs.edit { putString(KEY_FULL_PLAYER_INFO_ALIGN, align.name) }
-
-    fun getFullPlayerHeartSide(): FullPlayerHeartSide {
-        val name = prefs.getString(KEY_FULL_PLAYER_HEART_SIDE, FullPlayerHeartSide.START.name)
-        return runCatching { FullPlayerHeartSide.valueOf(name!!) }.getOrDefault(FullPlayerHeartSide.START)
-    }
-    fun setFullPlayerHeartSide(side: FullPlayerHeartSide) = prefs.edit { putString(KEY_FULL_PLAYER_HEART_SIDE, side.name) }
-
-    fun getLyricsDisplayStyle(): LyricsDisplayStyle {
-        val name = prefs.getString(KEY_LYRICS_DISPLAY_STYLE, LyricsDisplayStyle.STANDARD.name)
-        return LyricsDisplayStyle.fromString(name)
-    }
-    fun setLyricsDisplayStyle(style: LyricsDisplayStyle) = prefs.edit { putString(KEY_LYRICS_DISPLAY_STYLE, style.name) }
-
-    fun getLyricsHorizontalMargin(): Float = getSafeFloat(KEY_LYRICS_HORIZONTAL_MARGIN, 0f)
-    fun setLyricsHorizontalMargin(margin: Float) = prefs.edit { putFloat(KEY_LYRICS_HORIZONTAL_MARGIN, margin) }
-
-    fun getLyricsVerticalOffset(): Float = getSafeFloat(KEY_LYRICS_VERTICAL_OFFSET, 0.38f)
-    fun setLyricsVerticalOffset(offset: Float) = prefs.edit { putFloat(KEY_LYRICS_VERTICAL_OFFSET, offset) }
-
-    fun getLyricsActiveScale(): Float = getSafeFloat(KEY_LYRICS_ACTIVE_SCALE, 1f)
-    fun setLyricsActiveScale(scale: Float) = prefs.edit { putFloat(KEY_LYRICS_ACTIVE_SCALE, scale) }
-
-    fun getLyricsWheelLines(): Float = getSafeFloat(KEY_LYRICS_WHEEL_LINES, 3f)
-    fun setLyricsWheelLines(lines: Float) = prefs.edit { putFloat(KEY_LYRICS_WHEEL_LINES, lines) }
-
-    fun getQuickLyricsTab(): Int = prefs.getInt(KEY_QUICK_LYRICS_TAB, 0)
-    fun setQuickLyricsTab(index: Int) = prefs.edit { putInt(KEY_QUICK_LYRICS_TAB, index) }
 
     fun getLocalMediaEnabled(): Boolean = prefs.getBoolean(KEY_LOCAL_MEDIA_ENABLED, false)
     fun setLocalMediaEnabled(enabled: Boolean) = prefs.edit { putBoolean(KEY_LOCAL_MEDIA_ENABLED, enabled) }
@@ -1271,17 +1037,7 @@ class PlayerPreferences(context: Context) {
         }
     }
 
-    fun setPlayerStyle(style: PlayerBackgroundStyle) {
-        prefs.edit {
-            putString(KEY_PLAYER_STYLE, style.name)
-            when (style) {
-                PlayerBackgroundStyle.APPLE_MUSIC -> putString(KEY_FULL_PLAYER_BG_STYLE, FullPlayerBgStyle.APPLE_MUSIC.name)
-                PlayerBackgroundStyle.BLUR -> putString(KEY_FULL_PLAYER_BG_STYLE, FullPlayerBgStyle.BLUR.name)
-                PlayerBackgroundStyle.GRADIENT -> putString(KEY_FULL_PLAYER_BG_STYLE, FullPlayerBgStyle.GRADIENT.name)
-                PlayerBackgroundStyle.THEME -> putString(KEY_FULL_PLAYER_BG_STYLE, FullPlayerBgStyle.PURE_BLACK.name)
-            }
-        }
-    }
+    fun setPlayerStyle(style: PlayerBackgroundStyle) = prefs.edit { putString(KEY_PLAYER_STYLE, style.name) }
     fun getAutoplayEnabled(): Boolean = prefs.getBoolean(KEY_AUTOPLAY_STATION, true)
     fun setAutoplayEnabled(enabled: Boolean) = prefs.edit { putBoolean(KEY_AUTOPLAY_STATION, enabled) }
     fun getListeningStatsEnabled(): Boolean = prefs.getBoolean(KEY_LISTENING_STATS_ENABLED, true)
@@ -1292,10 +1048,6 @@ class PlayerPreferences(context: Context) {
     fun setAudioQuality(quality: String) = prefs.edit { putString(KEY_AUDIO_QUALITY, quality) }
     fun getPersistentQueueEnabled(): Boolean = prefs.getBoolean(KEY_PERSISTENT_QUEUE, true)
     fun setPersistentQueueEnabled(enabled: Boolean) = prefs.edit { putBoolean(KEY_PERSISTENT_QUEUE, enabled) }
-    fun getQueuePreserveUpcomingOnJump(): Boolean = prefs.getBoolean(KEY_QUEUE_PRESERVE_UPCOMING_ON_JUMP, true)
-    fun setQueuePreserveUpcomingOnJump(enabled: Boolean) = prefs.edit { putBoolean(KEY_QUEUE_PRESERVE_UPCOMING_ON_JUMP, enabled) }
-    fun getQueueAutoArchiveEnabled(): Boolean = prefs.getBoolean(KEY_QUEUE_AUTO_ARCHIVE, false)
-    fun setQueueAutoArchiveEnabled(enabled: Boolean) = prefs.edit { putBoolean(KEY_QUEUE_AUTO_ARCHIVE, enabled) }
 
     fun getKeyColor(): Int = prefs.getInt(KEY_KEY_COLOR, 0)
     fun setKeyColor(color: Int) = prefs.edit { putInt(KEY_KEY_COLOR, color) }
@@ -1350,7 +1102,8 @@ class PlayerPreferences(context: Context) {
     }
 
     fun getBottomMenuItems(): List<String> {
-        val csv = prefs.getString(KEY_BOTTOM_MENU_ITEMS, DEFAULT_BOTTOM_MENU_ITEMS) ?: DEFAULT_BOTTOM_MENU_ITEMS
+        val defaultItems = "home,search,genres,library"
+        val csv = prefs.getString(KEY_BOTTOM_MENU_ITEMS, defaultItems) ?: defaultItems
         return csv.split(",").filter { it.isNotBlank() }
     }
 
@@ -1367,7 +1120,7 @@ class PlayerPreferences(context: Context) {
     }
 
     fun getBottomMenuOrder(): List<String> {
-        val allTabKeys = listOf("home", "search", "genres", "library", "queue")
+        val allTabKeys = listOf("home", "search", "genres", "library")
         val csv = prefs.getString(KEY_BOTTOM_MENU_ORDER, null)
         if (csv.isNullOrBlank()) {
             val currentItems = getBottomMenuItems()
@@ -1717,20 +1470,18 @@ class PlayerPreferences(context: Context) {
             return
         }
 
-        val safeQueue = (queue as? List<*>)?.filterIsInstance<Track>() ?: emptyList()
-        if (safeQueue.isNotEmpty()) {
+        if (queue.isNotEmpty()) {
             try {
                 FileWriter(queueFile).use { writer ->
-                    gson.toJson(safeQueue, writer)
+                    gson.toJson(queue, writer)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
             }
         }
 
-        val safeTrack = if (track is Track && track.id != 0L) track else null
         prefs.edit {
-            if (safeTrack != null) putString(KEY_TRACK_JSON, gson.toJson(safeTrack)) else remove(KEY_TRACK_JSON)
+            track?.let { putString(KEY_TRACK_JSON, gson.toJson(it)) }
             putString(KEY_CONTEXT_JSON, gson.toJson(context))
             if (getSavePositionEnabled()) putLong(KEY_POSITION, position) else remove(KEY_POSITION)
             putBoolean(KEY_SHUFFLE_MODE, shuffleEnabled)
@@ -1745,22 +1496,7 @@ class PlayerPreferences(context: Context) {
     fun getEqualizerState(): EqualizerState {
         val json = prefs.getString(KEY_EQUALIZER_STATE, null) ?: return EqualizerState()
         return try {
-            val state = gson.fromJson(json, EqualizerState::class.java)
-            if (state == null || (state.bandGainsDb as List<Float>?) == null || (state.selectedPreset as String?) == null) {
-                EqualizerState(
-                    isEnabled = state?.isEnabled ?: false,
-                    preampDb = state?.preampDb ?: 0f,
-                    bandGainsDb = state?.bandGainsDb ?: List(16) { 0f },
-                    selectedPreset = state?.selectedPreset ?: "Flat",
-                    autoProfileId = state?.autoProfileId,
-                    autoProfileName = state?.autoProfileName,
-                    autoProfileSource = state?.autoProfileSource,
-                    autoProfileDeviceKey = state?.autoProfileDeviceKey,
-                    autoProfileDeviceName = state?.autoProfileDeviceName
-                )
-            } else {
-                state
-            }
+            gson.fromJson(json, EqualizerState::class.java) ?: EqualizerState()
         } catch (_: Exception) {
             EqualizerState()
         }
@@ -1768,40 +1504,6 @@ class PlayerPreferences(context: Context) {
 
     fun saveEqualizerState(state: EqualizerState) {
         prefs.edit { putString(KEY_EQUALIZER_STATE, gson.toJson(state)) }
-    }
-
-    /** Whether a profile remembered for a headphone is restored when it is connected again. */
-    fun getAutoEqAutoApply(): Boolean = prefs.getBoolean(KEY_EQ_AUTO_APPLY, false)
-
-    fun setAutoEqAutoApply(enabled: Boolean) = prefs.edit { putBoolean(KEY_EQ_AUTO_APPLY, enabled) }
-
-    fun getSavedEqProfileForDevice(deviceKey: String): SavedEqProfile? {
-        if (deviceKey.isBlank()) return null
-        return readSavedEqProfiles()[deviceKey]
-    }
-
-    fun saveEqProfileForDevice(profile: SavedEqProfile) {
-        if (profile.deviceKey.isBlank()) return
-        val current = readSavedEqProfiles().toMutableMap()
-        current[profile.deviceKey] = profile
-        prefs.edit { putString(KEY_EQ_DEVICE_PROFILES, gson.toJson(current)) }
-    }
-
-    fun clearSavedEqProfileForDevice(deviceKey: String) {
-        if (deviceKey.isBlank()) return
-        val current = readSavedEqProfiles().toMutableMap()
-        current.remove(deviceKey)
-        prefs.edit { putString(KEY_EQ_DEVICE_PROFILES, gson.toJson(current)) }
-    }
-
-    private fun readSavedEqProfiles(): Map<String, SavedEqProfile> {
-        val raw = prefs.getString(KEY_EQ_DEVICE_PROFILES, null) ?: return emptyMap()
-        return try {
-            val type = object : TypeToken<Map<String, SavedEqProfile>>() {}.type
-            gson.fromJson<Map<String, SavedEqProfile>>(raw, type) ?: emptyMap()
-        } catch (_: Exception) {
-            emptyMap()
-        }
     }
 
     fun saveDownloadLocation(uriString: String?) {
@@ -1814,11 +1516,9 @@ class PlayerPreferences(context: Context) {
 
     fun getDownloadLocation(): String? = prefs.getString(KEY_DOWNLOAD_DIR, null)
     fun getLastTrack(): Track? {
-        if (!getPersistentQueueEnabled()) return null
-        val json = prefs.getString(KEY_TRACK_JSON, null) ?: return null
-        return try {
-            val track = gson.fromJson(json, Track::class.java)
-            if (track != null && track.id != 0L) track else null
+        if (!getPersistentQueueEnabled()) return null;
+        val json = prefs.getString(KEY_TRACK_JSON, null) ?: return null; return try {
+            gson.fromJson(json, Track::class.java)
         } catch (_: Exception) {
             null
         }
@@ -1827,37 +1527,29 @@ class PlayerPreferences(context: Context) {
     fun getLastPosition(): Long = if (getSavePositionEnabled()) prefs.getLong(KEY_POSITION, 0L) else 0L
     fun getLastQueue(): List<Track> {
         if (!getPersistentQueueEnabled()) return emptyList()
-        // Deliberately parse a concrete Track[] instead of using TypeToken<List<Track>>.
-        // The queue is the one persisted structure whose corruption used to reach the
-        // player's save path (LinkedTreeMap cannot be cast to Track), so it must not
-        // depend on reflective generic signatures surviving R8.
         if (queueFile.exists()) {
             return try {
+                val type = object : TypeToken<List<Track>>() {}.type
                 FileReader(queueFile).use { reader ->
-                    gson.fromJson<Array<Track>>(reader, Array<Track>::class.java)?.filterNotNull() ?: emptyList()
+                    gson.fromJson(reader, type) ?: emptyList()
                 }
             } catch (_: Exception) {
                 emptyList()
             }
         }
         val json = prefs.getString("last_queue_full_json", null) ?: return emptyList()
+        val type = object : TypeToken<List<Track>>() {}.type
         return try {
-            gson.fromJson<Array<Track>>(json, Array<Track>::class.java)?.filterNotNull() ?: emptyList()
+            gson.fromJson(json, type) ?: emptyList()
         } catch (_: Exception) {
             emptyList()
         }
     }
 
     fun getLastContext(): PlaybackContext? {
-        if (!getPersistentQueueEnabled()) return null
-        val json = prefs.getString(KEY_CONTEXT_JSON, null) ?: return null
-        return try {
-            val ctx = gson.fromJson(json, PlaybackContext::class.java)
-            if (ctx == null || (ctx.displayText as String?) == null || (ctx.navigationId as String?) == null) {
-                null
-            } else {
-                ctx
-            }
+        if (!getPersistentQueueEnabled()) return null;
+        val json = prefs.getString(KEY_CONTEXT_JSON, null) ?: return null; return try {
+            gson.fromJson(json, PlaybackContext::class.java)
         } catch (_: Exception) {
             null
         }
@@ -1873,111 +1565,8 @@ class PlayerPreferences(context: Context) {
     }
 
     fun getLastEffects(): AudioEffectsState {
-        val json = prefs.getString(KEY_EFFECTS, null) ?: return AudioEffectsState()
-        return try {
-            val state = gson.fromJson(json, AudioEffectsState::class.java)
-            if (state == null || (state.ambientType as String?) == null || (state.normalizationLevel as NormalizationLevel?) == null) {
-                AudioEffectsState(
-                    speed = state?.speed ?: 1f,
-                    isPitchEnabled = state?.isPitchEnabled ?: true,
-                    is8DEnabled = state?.is8DEnabled ?: false,
-                    isMuffledEnabled = state?.isMuffledEnabled ?: false,
-                    isBassBoostEnabled = state?.isBassBoostEnabled ?: false,
-                    isReverbEnabled = state?.isReverbEnabled ?: false,
-                    isRainEnabled = state?.isRainEnabled ?: false,
-                    rainVolume = state?.rainVolume ?: 1.0f,
-                    bassBoostIntensity = state?.bassBoostIntensity ?: 0.5f,
-                    eightDSpeed = state?.eightDSpeed ?: 0.5f,
-                    reverbIntensity = state?.reverbIntensity ?: 0.5f,
-                    muffledIntensity = state?.muffledIntensity ?: 0.5f,
-                    isEarrapeEnabled = state?.isEarrapeEnabled ?: false,
-                    earrapeIntensity = state?.earrapeIntensity ?: 1.0f,
-                    isMonoEnabled = state?.isMonoEnabled ?: false,
-                    isNormalizationEnabled = state?.isNormalizationEnabled ?: false,
-                    normalizationLevel = state?.normalizationLevel ?: NormalizationLevel.NORMAL,
-                    isVintageMp3Enabled = state?.isVintageMp3Enabled ?: false,
-                    vintageMp3Compression = state?.vintageMp3Compression ?: 0.75f,
-                    isVocalRemoverEnabled = state?.isVocalRemoverEnabled ?: false,
-                    vocalRemoverLevel = state?.vocalRemoverLevel ?: 1.0f,
-                    isVocalBoostEnabled = state?.isVocalBoostEnabled ?: false,
-                    vocalBoostIntensity = state?.vocalBoostIntensity ?: 0.75f,
-                    isFlangerEnabled = state?.isFlangerEnabled ?: false,
-                    flangerIntensity = state?.flangerIntensity ?: 0.75f,
-                    flangerSpeed = state?.flangerSpeed ?: 0.50f,
-                    isPartyNextDoorEnabled = state?.isPartyNextDoorEnabled ?: false,
-                    partyNextDoorIsolation = state?.partyNextDoorIsolation ?: 0.60f,
-                    partyNextDoorReverb = state?.partyNextDoorReverb ?: 0.50f,
-                    partyNextDoorBassRumble = state?.partyNextDoorBassRumble ?: 0.70f,
-                    isSuperWideEnabled = state?.isSuperWideEnabled ?: false,
-                    superWideWidth = state?.superWideWidth ?: 0.70f,
-                    superWideDepth = state?.superWideDepth ?: 0.50f,
-                    isVinylLoFiEnabled = state?.isVinylLoFiEnabled ?: false,
-                    vinylCrackles = state?.vinylCrackles ?: 0.65f,
-                    vinylFlutter = state?.vinylFlutter ?: 0.50f,
-                    isPhaserEnabled = state?.isPhaserEnabled ?: false,
-                    phaserSpeed = state?.phaserSpeed ?: 0.50f,
-                    phaserFeedback = state?.phaserFeedback ?: 0.65f,
-                    isMegaphoneEnabled = state?.isMegaphoneEnabled ?: false,
-                    megaphoneTone = state?.megaphoneTone ?: 0.50f,
-                    megaphoneDrive = state?.megaphoneDrive ?: 0.60f,
-                    isRobotVocoderEnabled = state?.isRobotVocoderEnabled ?: false,
-                    robotFrequency = state?.robotFrequency ?: 0.40f,
-                    robotMix = state?.robotMix ?: 0.75f,
-                    isChorusEnabled = state?.isChorusEnabled ?: false,
-                    chorusRate = state?.chorusRate ?: 0.30f,
-                    chorusDepth = state?.chorusDepth ?: 0.70f,
-                    isUnderwaterEnabled = state?.isUnderwaterEnabled ?: false,
-                    underwaterDepth = state?.underwaterDepth ?: 0.60f,
-                    underwaterBubbles = state?.underwaterBubbles ?: 0.40f,
-                    isTranceGateEnabled = state?.isTranceGateEnabled ?: false,
-                    tranceGateSpeed = state?.tranceGateSpeed ?: 0.50f,
-                    tranceGatePattern = state?.tranceGatePattern ?: 0.85f,
-                    tranceGateMix = state?.tranceGateMix ?: 0.90f,
-                    isPingPongDelayEnabled = state?.isPingPongDelayEnabled ?: false,
-                    pingPongDelayTime = state?.pingPongDelayTime ?: 0.45f,
-                    pingPongFeedback = state?.pingPongFeedback ?: 0.60f,
-                    isChiptuneEnabled = state?.isChiptuneEnabled ?: false,
-                    chiptuneBits = state?.chiptuneBits ?: 0.50f,
-                    chiptuneSampleRate = state?.chiptuneSampleRate ?: 0.55f,
-                    isShimmerReverbEnabled = state?.isShimmerReverbEnabled ?: false,
-                    shimmerSize = state?.shimmerSize ?: 0.65f,
-                    shimmerMix = state?.shimmerMix ?: 0.60f,
-                    isRotarySpeakerEnabled = state?.isRotarySpeakerEnabled ?: false,
-                    rotarySpeed = state?.rotarySpeed ?: 0.40f,
-                    rotaryDepth = state?.rotaryDepth ?: 0.75f,
-                    isTapeSaturationEnabled = state?.isTapeSaturationEnabled ?: false,
-                    tapeWarmth = state?.tapeWarmth ?: 0.65f,
-                    tapeExciter = state?.tapeExciter ?: 0.50f,
-                    isSubOctaverEnabled = state?.isSubOctaverEnabled ?: false,
-                    subOctaverLevel = state?.subOctaverLevel ?: 0.70f,
-                    subOctaverCutoff = state?.subOctaverCutoff ?: 0.50f,
-                    isEmptyMallEnabled = state?.isEmptyMallEnabled ?: false,
-                    emptyMallDistance = state?.emptyMallDistance ?: 0.65f,
-                    emptyMallReverb = state?.emptyMallReverb ?: 0.55f,
-                    isGramophoneEnabled = state?.isGramophoneEnabled ?: false,
-                    gramophoneAge = state?.gramophoneAge ?: 0.65f,
-                    gramophoneHorn = state?.gramophoneHorn ?: 0.60f,
-                    isReverseEchoEnabled = state?.isReverseEchoEnabled ?: false,
-                    reverseEchoTime = state?.reverseEchoTime ?: 0.50f,
-                    reverseEchoFeedback = state?.reverseEchoFeedback ?: 0.55f,
-                    isStadiumEnabled = state?.isStadiumEnabled ?: false,
-                    stadiumSize = state?.stadiumSize ?: 0.65f,
-                    stadiumAtmosphere = state?.stadiumAtmosphere ?: 0.60f,
-                    isWalkmanEnabled = state?.isWalkmanEnabled ?: false,
-                    walkmanDrive = state?.walkmanDrive ?: 0.65f,
-                    walkmanHiss = state?.walkmanHiss ?: 0.40f,
-                    isAsmrVocalEnabled = state?.isAsmrVocalEnabled ?: false,
-                    asmrProximity = state?.asmrProximity ?: 0.70f,
-                    asmrAir = state?.asmrAir ?: 0.65f,
-                    isNightDriveEnabled = state?.isNightDriveEnabled ?: false,
-                    nightDriveCabin = state?.nightDriveCabin ?: 0.65f,
-                    nightDriveRoad = state?.nightDriveRoad ?: 0.45f,
-                    ambientType = state?.ambientType ?: "rain",
-                    isEqualizerEnabled = state?.isEqualizerEnabled ?: false
-                )
-            } else {
-                state
-            }
+        val json = prefs.getString(KEY_EFFECTS, null) ?: return AudioEffectsState(); return try {
+            gson.fromJson(json, AudioEffectsState::class.java)
         } catch (_: Exception) {
             AudioEffectsState()
         }
@@ -2080,36 +1669,6 @@ class PlayerPreferences(context: Context) {
         }
     }
 
-    // Zapret: in-app DPI bypass (no folder, no VPN, no proxy)
-    fun getZapretEnabled(): Boolean = prefs.getBoolean(KEY_ZAPRET_ENABLED, false)
-
-    fun setZapretEnabled(enabled: Boolean) {
-        prefs.edit { putBoolean(KEY_ZAPRET_ENABLED, enabled) }
-    }
-
-    fun getZapretStrategy(): String =
-        prefs.getString(KEY_ZAPRET_STRATEGY, "split2") ?: "split2"
-
-    fun setZapretStrategy(strategyId: String) {
-        prefs.edit { putString(KEY_ZAPRET_STRATEGY, strategyId) }
-    }
-
-    fun getZapretDomains(): Set<String> {
-        val raw = prefs.getString(KEY_ZAPRET_DOMAINS, "") ?: ""
-        if (raw.isBlank()) return emptySet()
-        return raw.split(",", ";", "\n").map { it.trim().lowercase() }.filter { it.isNotBlank() }.toSet()
-    }
-
-    fun setZapretDomains(domains: Set<String>) {
-        prefs.edit { putString(KEY_ZAPRET_DOMAINS, domains.sorted().joinToString(",")) }
-    }
-
-    fun getZapretAutoChecked(): Boolean = prefs.getBoolean(KEY_ZAPRET_AUTO_CHECKED, false)
-
-    fun setZapretAutoChecked(checked: Boolean) {
-        prefs.edit { putBoolean(KEY_ZAPRET_AUTO_CHECKED, checked) }
-    }
-
     fun getLikedSpotifyArtists(): Set<String> {
         return prefs.getStringSet("liked_spotify_artists", emptySet()) ?: emptySet()
     }
@@ -2159,17 +1718,6 @@ class PlayerPreferences(context: Context) {
         } catch (_: Exception) {
             TrackRemovalMethod.SWIPE_AND_MENU
         }
-    }
-
-    fun getTrackRemovalMethodFlow(): kotlinx.coroutines.flow.Flow<TrackRemovalMethod> = kotlinx.coroutines.flow.callbackFlow {
-        trySend(getTrackRemovalMethod())
-        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == KEY_TRACK_REMOVAL_METHOD) {
-                trySend(getTrackRemovalMethod())
-            }
-        }
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
 
     fun setTrackRemovalMethod(method: TrackRemovalMethod) {
@@ -2237,54 +1785,12 @@ class PlayerPreferences(context: Context) {
 
     fun setDataSaverMeteredOnly(enabled: Boolean) = prefs.edit { putBoolean(KEY_DATA_SAVER_METERED_ONLY, enabled) }
 
-    /**
-     * When true, lyrics lookups are limited to [getDataSaverLyricsProviders] while the
-     * data saver is in effect. Off by default: the saver alone keeps the previous
-     * behaviour of asking every enabled provider.
-     */
-    fun getDataSaverLyricsRestrictEnabled(): Boolean =
-        prefs.getBoolean(KEY_DATA_SAVER_LYRICS_RESTRICT, false)
-
-    fun setDataSaverLyricsRestrictEnabled(enabled: Boolean) =
-        prefs.edit { putBoolean(KEY_DATA_SAVER_LYRICS_RESTRICT, enabled) }
-
-    /**
-     * The allowlist used while [getDataSaverLyricsRestrictEnabled] is on. An empty or
-     * unreadable value falls back to Musixmatch + LrcLib, the two sources that cover
-     * most tracks without the heavier provider fan-out.
-     */
-    fun getDataSaverLyricsProviders(): List<PreferredLyricsProvider> {
-        val raw = prefs.getString(KEY_DATA_SAVER_LYRICS_PROVIDERS, null)
-        if (raw.isNullOrBlank()) return DefaultDataSaverLyricsProviders
-        return raw.split(",")
-            .mapNotNull { PreferredLyricsProvider.fromName(it.trim()) }
-            .distinct()
-            .ifEmpty { DefaultDataSaverLyricsProviders }
-    }
-
-    fun setDataSaverLyricsProviders(providers: List<PreferredLyricsProvider>) {
-        val serialized = providers.distinct().joinToString(",") { it.name }
-        prefs.edit { putString(KEY_DATA_SAVER_LYRICS_PROVIDERS, serialized) }
-    }
-
     // Qobuz
     fun getQobuzCountry(): String = prefs.getString(KEY_QOBUZ_COUNTRY, "US") ?: "US"
     fun setQobuzCountry(country: String) = prefs.edit { putString(KEY_QOBUZ_COUNTRY, country.trim().uppercase(java.util.Locale.US)) }
 
     fun getQobuzCustomInstances(): String = prefs.getString(KEY_QOBUZ_CUSTOM_INSTANCES, com.alananasss.kittytune.audio.providers.qobuz.QobuzAudioProvider.DEFAULT_INSTANCE) ?: com.alananasss.kittytune.audio.providers.qobuz.QobuzAudioProvider.DEFAULT_INSTANCE
     fun setQobuzCustomInstances(instances: String) = prefs.edit { putString(KEY_QOBUZ_CUSTOM_INSTANCES, instances.trim()) }
-
-    fun getQobuzUserAuthToken(): String? = prefs.getString(KEY_QOBUZ_USER_AUTH_TOKEN, null)?.takeIf { it.isNotBlank() }
-    fun setQobuzUserAuthToken(token: String?) = prefs.edit { if (token.isNullOrBlank()) remove(KEY_QOBUZ_USER_AUTH_TOKEN) else putString(KEY_QOBUZ_USER_AUTH_TOKEN, token.trim()) }
-
-    fun getQobuzGoogleClientId(): String = prefs.getString(KEY_QOBUZ_GOOGLE_CLIENT_ID, "") ?: ""
-    fun setQobuzGoogleClientId(value: String) = prefs.edit { putString(KEY_QOBUZ_GOOGLE_CLIENT_ID, value.trim()) }
-    fun getQobuzGoogleRedirect(): String = prefs.getString(KEY_QOBUZ_GOOGLE_REDIRECT, "") ?: ""
-    fun setQobuzGoogleRedirect(value: String) = prefs.edit { putString(KEY_QOBUZ_GOOGLE_REDIRECT, value.trim()) }
-    fun getQobuzFacebookClientId(): String = prefs.getString(KEY_QOBUZ_FACEBOOK_CLIENT_ID, "") ?: ""
-    fun setQobuzFacebookClientId(value: String) = prefs.edit { putString(KEY_QOBUZ_FACEBOOK_CLIENT_ID, value.trim()) }
-    fun getQobuzFacebookRedirect(): String = prefs.getString(KEY_QOBUZ_FACEBOOK_REDIRECT, "") ?: ""
-    fun setQobuzFacebookRedirect(value: String) = prefs.edit { putString(KEY_QOBUZ_FACEBOOK_REDIRECT, value.trim()) }
 
     fun getQobuzQuality(): Int = prefs.getInt(KEY_QOBUZ_QUALITY, 27)
     fun setQobuzQuality(quality: Int) = prefs.edit { putInt(KEY_QOBUZ_QUALITY, quality) }
@@ -2471,7 +1977,7 @@ class PlayerPreferences(context: Context) {
         prefs.edit { putString(KEY_NOTIF_EXTRA_BUTTON, button.id) }
     }
 
-    fun getLastUsedPlaylistId(): Long = prefs.getLong(KEY_LAST_USED_PLAYLIST_ID, LastUsedPlaylist.NO_PLAYLIST)
+    fun getLastUsedPlaylistId(): Long = prefs.getLong(KEY_LAST_USED_PLAYLIST_ID, -1L)
     fun setLastUsedPlaylistId(id: Long) {
         prefs.edit { putLong(KEY_LAST_USED_PLAYLIST_ID, id) }
     }
@@ -2481,29 +1987,6 @@ class PlayerPreferences(context: Context) {
         prefs.edit { putString(KEY_LAST_USED_PLAYLIST_TITLE, title) }
     }
 
-    /**
-     * Bookmarks the playlist the user just used, with the name the notification action shows.
-     *
-     * The two are written together: storing only the id left the notification's "Add to last
-     * playlist" action without a destination to name, and it gave up instead of adding the track.
-     */
-    fun setLastUsedPlaylist(playlistId: Long, title: String?) {
-        prefs.edit {
-            putLong(KEY_LAST_USED_PLAYLIST_ID, playlistId)
-            if (title.isNullOrBlank()) remove(KEY_LAST_USED_PLAYLIST_TITLE)
-            else putString(KEY_LAST_USED_PLAYLIST_TITLE, title)
-        }
-    }
-
-    fun getShowDevicesButtonTopBar(): Boolean = prefs.getBoolean(KEY_SHOW_DEVICES_BUTTON_TOP_BAR, false)
-    fun setShowDevicesButtonTopBar(enabled: Boolean) = prefs.edit { putBoolean(KEY_SHOW_DEVICES_BUTTON_TOP_BAR, enabled) }
-
-    fun getShowDevicesButtonMiniPlayer(): Boolean = prefs.getBoolean(KEY_SHOW_DEVICES_BUTTON_MINI_PLAYER, false)
-    fun setShowDevicesButtonMiniPlayer(enabled: Boolean) = prefs.edit { putBoolean(KEY_SHOW_DEVICES_BUTTON_MINI_PLAYER, enabled) }
-
-    fun getShowDevicesButtonBottomBar(): Boolean = prefs.getBoolean(KEY_SHOW_DEVICES_BUTTON_BOTTOM_BAR, false)
-    fun setShowDevicesButtonBottomBar(enabled: Boolean) = prefs.edit { putBoolean(KEY_SHOW_DEVICES_BUTTON_BOTTOM_BAR, enabled) }
-
     // ─── Settings search history ──────────────────────────────────────────────
 
     /**
@@ -2511,12 +1994,12 @@ class PlayerPreferences(context: Context) {
      * Stored as a JSON array in SharedPreferences.
      */
     data class RecentSettingsEntry(
-        @SerializedName("title") val title: String,
-        @SerializedName("subtitle") val subtitle: String? = null,
-        @SerializedName("categoryName") val categoryName: String,
-        @SerializedName("route") val route: String? = null,
-        @SerializedName("highlightKey") val highlightKey: String? = null,
-        @SerializedName("iconRes") val iconRes: Int? = null
+        val title: String,
+        val subtitle: String? = null,
+        val categoryName: String,
+        val route: String? = null,
+        val highlightKey: String? = null,
+        val iconRes: Int? = null
     )
 
     fun getSettingsRecentSearches(): List<RecentSettingsEntry> {
@@ -2604,77 +2087,6 @@ class PlayerPreferences(context: Context) {
         val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             if (key == KEY_SHOW_HOME_YOUR_MIX) {
                 trySend(getShowHomeYourMix())
-            }
-        }
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
-    }
-
-    fun getShowHomeMyWave(): Boolean = prefs.getBoolean(KEY_SHOW_HOME_MY_WAVE, true)
-    fun setShowHomeMyWave(enabled: Boolean) = prefs.edit { putBoolean(KEY_SHOW_HOME_MY_WAVE, enabled) }
-
-    fun getShowHomeMyWaveFlow(): kotlinx.coroutines.flow.Flow<Boolean> = kotlinx.coroutines.flow.callbackFlow {
-        trySend(getShowHomeMyWave())
-        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == KEY_SHOW_HOME_MY_WAVE) {
-                trySend(getShowHomeMyWave())
-            }
-        }
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
-    }
-
-    fun getShowHomeCharts(): Boolean = prefs.getBoolean(KEY_SHOW_HOME_CHARTS, true)
-    fun setShowHomeCharts(enabled: Boolean) = prefs.edit { putBoolean(KEY_SHOW_HOME_CHARTS, enabled) }
-
-    fun getShowHomeChartsFlow(): kotlinx.coroutines.flow.Flow<Boolean> = kotlinx.coroutines.flow.callbackFlow {
-        trySend(getShowHomeCharts())
-        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == KEY_SHOW_HOME_CHARTS) {
-                trySend(getShowHomeCharts())
-            }
-        }
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
-    }
-
-    fun getShowPlaylistTotalDuration(): Boolean = prefs.getBoolean(KEY_SHOW_PLAYLIST_TOTAL_DURATION, true)
-    fun setShowPlaylistTotalDuration(enabled: Boolean) = prefs.edit { putBoolean(KEY_SHOW_PLAYLIST_TOTAL_DURATION, enabled) }
-
-    fun getShowPlaylistTotalDurationFlow(): kotlinx.coroutines.flow.Flow<Boolean> = kotlinx.coroutines.flow.callbackFlow {
-        trySend(getShowPlaylistTotalDuration())
-        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == KEY_SHOW_PLAYLIST_TOTAL_DURATION) {
-                trySend(getShowPlaylistTotalDuration())
-            }
-        }
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
-    }
-
-    fun getFullPlayerSourceIndicatorEnabled(): Boolean = prefs.getBoolean(KEY_FULL_PLAYER_SOURCE_INDICATOR_ENABLED, false)
-    fun setFullPlayerSourceIndicatorEnabled(enabled: Boolean) = prefs.edit { putBoolean(KEY_FULL_PLAYER_SOURCE_INDICATOR_ENABLED, enabled) }
-
-    fun getFullPlayerSourceIndicatorEnabledFlow(): kotlinx.coroutines.flow.Flow<Boolean> = kotlinx.coroutines.flow.callbackFlow {
-        trySend(getFullPlayerSourceIndicatorEnabled())
-        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == KEY_FULL_PLAYER_SOURCE_INDICATOR_ENABLED) {
-                trySend(getFullPlayerSourceIndicatorEnabled())
-            }
-        }
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
-    }
-
-    fun getTrackSourceBadgeStyle(): TrackSourceBadgeStyle =
-        TrackSourceBadgeStyle.fromString(prefs.getString(KEY_TRACK_SOURCE_BADGE_STYLE, "ICON_ONLY"))
-    fun setTrackSourceBadgeStyle(style: TrackSourceBadgeStyle) = prefs.edit { putString(KEY_TRACK_SOURCE_BADGE_STYLE, style.name) }
-
-    fun getTrackSourceBadgeStyleFlow(): kotlinx.coroutines.flow.Flow<TrackSourceBadgeStyle> = kotlinx.coroutines.flow.callbackFlow {
-        trySend(getTrackSourceBadgeStyle())
-        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == KEY_TRACK_SOURCE_BADGE_STYLE) {
-                trySend(getTrackSourceBadgeStyle())
             }
         }
         prefs.registerOnSharedPreferenceChangeListener(listener)

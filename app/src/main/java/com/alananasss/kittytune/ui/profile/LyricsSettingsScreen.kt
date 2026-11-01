@@ -39,16 +39,6 @@ import com.alananasss.kittytune.ui.icons.Icon
     import com.alananasss.kittytune.data.lyrics.providers.PreferredLyricsProvider
     import com.alananasss.kittytune.data.lyrics.providers.DefaultLyricsProviderOrder
     import com.alananasss.kittytune.data.lyrics.clients.PaxsenixClient
-    import com.alananasss.kittytune.ui.common.SettingsSwitch
-    import android.view.HapticFeedbackConstants
-    import androidx.compose.animation.core.animateDpAsState
-    import androidx.compose.foundation.lazy.itemsIndexed
-    import androidx.compose.foundation.lazy.rememberLazyListState
-    import androidx.compose.material.icons.rounded.DragIndicator
-    import androidx.compose.ui.draw.alpha
-    import androidx.compose.ui.platform.LocalView
-    import sh.calvin.reorderable.ReorderableItem
-    import sh.calvin.reorderable.rememberReorderableLazyListState
     import kotlin.math.roundToInt
 
     @Composable
@@ -118,7 +108,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                         }
                     }
                 },
-                confirmButton = { TextButton(onClick = hapticAction(HapticKind.UI) { showProviderDialog = false }) { Text(stringResource(R.string.btn_cancel)) } }
+                confirmButton = { TextButton(onClick = { showProviderDialog = false }) { Text(stringResource(R.string.btn_cancel)) } }
             )
         }
 
@@ -165,7 +155,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                         }
                     }
                 },
-                confirmButton = { TextButton(onClick = hapticAction(HapticKind.UI) { showLangDialog = false }) { Text(stringResource(R.string.btn_cancel)) } }
+                confirmButton = { TextButton(onClick = { showLangDialog = false }) { Text(stringResource(R.string.btn_cancel)) } }
             )
         }
 
@@ -202,7 +192,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = hapticAction(HapticKind.UI) { showPlacementDialog = false }) {
+                    TextButton(onClick = { showPlacementDialog = false }) {
                         Text(stringResource(R.string.btn_cancel))
                     }
                 }
@@ -246,98 +236,44 @@ import com.alananasss.kittytune.ui.icons.Icon
         }
 
         if (showProviderOrderDialog) {
-            val view = LocalView.current
-            val dialogListState = rememberLazyListState()
-            val currentOrder = remember(showProviderOrderDialog) {
-                mutableStateListOf<PreferredLyricsProvider>().apply { addAll(prefs.getLyricsProviderOrder()) }
-            }
-            var currentEnabled by remember(showProviderOrderDialog) {
-                mutableStateOf(
-                    PreferredLyricsProvider.entries.associateWith { prefs.getLyricsProviderEnabled(it) }
-                )
-            }
-            val reorderState = rememberReorderableLazyListState(
-                lazyListState = dialogListState,
-                onMove = { from, to ->
-                    val item = currentOrder.removeAt(from.index)
-                    currentOrder.add(to.index, item)
-                    view.performAppHaptic(HapticFeedbackConstants.SEGMENT_FREQUENT_TICK)
-                }
-            )
+            var currentOrder by remember { mutableStateOf(prefs.getLyricsProviderOrder().toMutableList()) }
             AlertDialog(
                 onDismissRequest = { showProviderOrderDialog = false },
                 title = { Text(stringResource(R.string.pref_lyrics_order)) },
                 text = {
-                    LazyColumn(
-                        state = dialogListState,
-                        modifier = Modifier.fillMaxWidth().heightIn(max = 440.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        itemsIndexed(currentOrder, key = { _, provider -> provider.name }) { index, provider ->
-                            ReorderableItem(state = reorderState, key = provider.name) { isDragging ->
-                                val elevation by animateDpAsState(
-                                    if (isDragging) 6.dp else 0.dp,
-                                    label = "providerDrag"
+                    LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp)) {
+                        items(currentOrder.size) { index ->
+                            val p = currentOrder[index]
+                            Row(
+                                Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    "${index + 1}. ${p.displayName}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.weight(1f)
                                 )
-                                val isEnabled = currentEnabled[provider] ?: true
-                                Surface(
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = if (isDragging) MaterialTheme.colorScheme.surfaceContainerHighest else MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    shadowElevation = elevation,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Row(
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .heightIn(min = 52.dp)
-                                            .padding(horizontal = 4.dp, vertical = 6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(44.dp)
-                                                .draggableHandle(
-                                                    onDragStarted = {
-                                                        view.performAppHaptic(HapticFeedbackConstants.LONG_PRESS)
-                                                    },
-                                                    onDragStopped = {
-                                                        view.performAppHaptic(HapticFeedbackConstants.GESTURE_END)
-                                                    }
-                                                ),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.DragIndicator,
-                                                contentDescription = stringResource(R.string.reorder_handle),
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
+                                Row {
+                                    if (index > 0) {
+                                        IconButton(onClick = {
+                                            val list = currentOrder.toMutableList()
+                                            val item = list.removeAt(index)
+                                            list.add(index - 1, item)
+                                            currentOrder = list
+                                        }) {
+                                            Text("▲")
                                         }
-                                        Row(
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .alpha(if (isEnabled) 1f else 0.45f),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                "${index + 1}",
-                                                style = MaterialTheme.typography.labelLarge,
-                                                color = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.width(28.dp)
-                                            )
-                                            Text(
-                                                provider.displayName,
-                                                style = MaterialTheme.typography.bodyLarge,
-                                                modifier = Modifier.weight(1f)
-                                            )
+                                    }
+                                    if (index < currentOrder.size - 1) {
+                                        IconButton(onClick = {
+                                            val list = currentOrder.toMutableList()
+                                            val item = list.removeAt(index)
+                                            list.add(index + 1, item)
+                                            currentOrder = list
+                                        }) {
+                                            Text("▼")
                                         }
-                                        Spacer(Modifier.width(8.dp))
-                                        SettingsSwitch(
-                                            checked = isEnabled,
-                                            onCheckedChange = { checked ->
-                                                currentEnabled = currentEnabled + (provider to checked)
-                                            }
-                                        )
-                                        Spacer(Modifier.width(8.dp))
                                     }
                                 }
                             }
@@ -345,19 +281,16 @@ import com.alananasss.kittytune.ui.icons.Icon
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = hapticAction(HapticKind.UI) {
-                        providerOrder = currentOrder.toList()
-                        prefs.setLyricsProviderOrder(currentOrder.toList())
-                        currentEnabled.forEach { (p, enabled) ->
-                            prefs.setLyricsProviderEnabled(p, enabled)
-                        }
+                    TextButton(onClick = {
+                        providerOrder = currentOrder
+                        prefs.setLyricsProviderOrder(currentOrder)
                         showProviderOrderDialog = false
                     }) {
                         Text(stringResource(R.string.btn_save))
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = hapticAction(HapticKind.UI) { showProviderOrderDialog = false }) {
+                    TextButton(onClick = { showProviderOrderDialog = false }) {
                         Text(stringResource(R.string.btn_cancel))
                     }
                 }
@@ -390,7 +323,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = hapticAction(HapticKind.UI) { showUiStyleDialog = false }) {
+                    TextButton(onClick = { showUiStyleDialog = false }) {
                         Text(stringResource(R.string.btn_cancel))
                     }
                 }
@@ -423,7 +356,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = hapticAction(HapticKind.UI) { showLyricsFontDialog = false }) {
+                    TextButton(onClick = { showLyricsFontDialog = false }) {
                         Text(stringResource(R.string.btn_cancel))
                     }
                 }
@@ -446,7 +379,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text("${(playerViewModel.lyricsBounceFactor * 100).toInt()}%", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.width(60.dp))
-                            IconButton(onClick = hapticAction(HapticKind.UI) { playerViewModel.updateLyricsBounceFactor((playerViewModel.lyricsBounceFactor - 0.1f).coerceAtLeast(0f)) }) { Icon(Icons.Rounded.Remove, null) }
+                            IconButton(onClick = { playerViewModel.updateLyricsBounceFactor((playerViewModel.lyricsBounceFactor - 0.1f).coerceAtLeast(0f)) }) { Icon(Icons.Rounded.Remove, null) }
                             Slider(
                                 value = playerViewModel.lyricsBounceFactor,
                                 onValueChange = { playerViewModel.updateLyricsBounceFactor(it) },
@@ -454,12 +387,12 @@ import com.alananasss.kittytune.ui.icons.Icon
                                 steps = 19,
                                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
                             )
-                            IconButton(onClick = hapticAction(HapticKind.UI) { playerViewModel.updateLyricsBounceFactor((playerViewModel.lyricsBounceFactor + 0.1f).coerceAtMost(2f)) }) { Icon(Icons.Rounded.Add, null) }
+                            IconButton(onClick = { playerViewModel.updateLyricsBounceFactor((playerViewModel.lyricsBounceFactor + 0.1f).coerceAtMost(2f)) }) { Icon(Icons.Rounded.Add, null) }
                         }
                         Spacer(Modifier.height(24.dp))
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            TextButton(onClick = hapticAction(HapticKind.UI) { playerViewModel.updateLyricsBounceFactor(1f) }) { Text(stringResource(R.string.pref_lyrics_reset)) }
-                            TextButton(onClick = hapticAction(HapticKind.UI) { showBounceFactorDialog = false }) { Text(stringResource(R.string.btn_close)) }
+                            TextButton(onClick = { playerViewModel.updateLyricsBounceFactor(1f) }) { Text(stringResource(R.string.pref_lyrics_reset)) }
+                            TextButton(onClick = { showBounceFactorDialog = false }) { Text(stringResource(R.string.btn_close)) }
                         }
                     }
                 }
@@ -482,7 +415,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text("${(playerViewModel.lyricsGlowFactor * 100).toInt()}%", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.width(60.dp))
-                            IconButton(onClick = hapticAction(HapticKind.UI) { playerViewModel.updateLyricsGlowFactor((playerViewModel.lyricsGlowFactor - 0.1f).coerceAtLeast(0f)) }) { Icon(Icons.Rounded.Remove, null) }
+                            IconButton(onClick = { playerViewModel.updateLyricsGlowFactor((playerViewModel.lyricsGlowFactor - 0.1f).coerceAtLeast(0f)) }) { Icon(Icons.Rounded.Remove, null) }
                             Slider(
                                 value = playerViewModel.lyricsGlowFactor,
                                 onValueChange = { playerViewModel.updateLyricsGlowFactor(it) },
@@ -490,12 +423,12 @@ import com.alananasss.kittytune.ui.icons.Icon
                                 steps = 19,
                                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
                             )
-                            IconButton(onClick = hapticAction(HapticKind.UI) { playerViewModel.updateLyricsGlowFactor((playerViewModel.lyricsGlowFactor + 0.1f).coerceAtMost(2f)) }) { Icon(Icons.Rounded.Add, null) }
+                            IconButton(onClick = { playerViewModel.updateLyricsGlowFactor((playerViewModel.lyricsGlowFactor + 0.1f).coerceAtMost(2f)) }) { Icon(Icons.Rounded.Add, null) }
                         }
                         Spacer(Modifier.height(24.dp))
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            TextButton(onClick = hapticAction(HapticKind.UI) { playerViewModel.updateLyricsGlowFactor(1f) }) { Text(stringResource(R.string.pref_lyrics_reset)) }
-                            TextButton(onClick = hapticAction(HapticKind.UI) { showGlowFactorDialog = false }) { Text(stringResource(R.string.btn_close)) }
+                            TextButton(onClick = { playerViewModel.updateLyricsGlowFactor(1f) }) { Text(stringResource(R.string.pref_lyrics_reset)) }
+                            TextButton(onClick = { showGlowFactorDialog = false }) { Text(stringResource(R.string.btn_close)) }
                         }
                     }
                 }
@@ -518,7 +451,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text("${playerViewModel.lyricsFillTransitionWidth.toInt()} dp", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.width(60.dp))
-                            IconButton(onClick = hapticAction(HapticKind.UI) { playerViewModel.updateLyricsFillTransitionWidth((playerViewModel.lyricsFillTransitionWidth - 2f).coerceAtLeast(2f)) }) { Icon(Icons.Rounded.Remove, null) }
+                            IconButton(onClick = { playerViewModel.updateLyricsFillTransitionWidth((playerViewModel.lyricsFillTransitionWidth - 2f).coerceAtLeast(2f)) }) { Icon(Icons.Rounded.Remove, null) }
                             Slider(
                                 value = playerViewModel.lyricsFillTransitionWidth,
                                 onValueChange = { playerViewModel.updateLyricsFillTransitionWidth(it) },
@@ -526,12 +459,12 @@ import com.alananasss.kittytune.ui.icons.Icon
                                 steps = 10,
                                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
                             )
-                            IconButton(onClick = hapticAction(HapticKind.UI) { playerViewModel.updateLyricsFillTransitionWidth((playerViewModel.lyricsFillTransitionWidth + 2f).coerceAtMost(24f)) }) { Icon(Icons.Rounded.Add, null) }
+                            IconButton(onClick = { playerViewModel.updateLyricsFillTransitionWidth((playerViewModel.lyricsFillTransitionWidth + 2f).coerceAtMost(24f)) }) { Icon(Icons.Rounded.Add, null) }
                         }
                         Spacer(Modifier.height(24.dp))
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            TextButton(onClick = hapticAction(HapticKind.UI) { playerViewModel.updateLyricsFillTransitionWidth(8f) }) { Text(stringResource(R.string.pref_lyrics_reset)) }
-                            TextButton(onClick = hapticAction(HapticKind.UI) { showFillTransitionDialog = false }) { Text(stringResource(R.string.btn_close)) }
+                            TextButton(onClick = { playerViewModel.updateLyricsFillTransitionWidth(8f) }) { Text(stringResource(R.string.pref_lyrics_reset)) }
+                            TextButton(onClick = { showFillTransitionDialog = false }) { Text(stringResource(R.string.btn_close)) }
                         }
                     }
                 }
@@ -554,7 +487,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text("${playerViewModel.lyricsLineSpacing.toInt()} dp", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.width(60.dp))
-                            IconButton(onClick = hapticAction(HapticKind.UI) { playerViewModel.updateLyricsLineSpacing((playerViewModel.lyricsLineSpacing - 2f).coerceAtLeast(12f)) }) { Icon(Icons.Rounded.Remove, null) }
+                            IconButton(onClick = { playerViewModel.updateLyricsLineSpacing((playerViewModel.lyricsLineSpacing - 2f).coerceAtLeast(12f)) }) { Icon(Icons.Rounded.Remove, null) }
                             Slider(
                                 value = playerViewModel.lyricsLineSpacing,
                                 onValueChange = { playerViewModel.updateLyricsLineSpacing(it) },
@@ -562,12 +495,12 @@ import com.alananasss.kittytune.ui.icons.Icon
                                 steps = 17,
                                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
                             )
-                            IconButton(onClick = hapticAction(HapticKind.UI) { playerViewModel.updateLyricsLineSpacing((playerViewModel.lyricsLineSpacing + 2f).coerceAtMost(48f)) }) { Icon(Icons.Rounded.Add, null) }
+                            IconButton(onClick = { playerViewModel.updateLyricsLineSpacing((playerViewModel.lyricsLineSpacing + 2f).coerceAtMost(48f)) }) { Icon(Icons.Rounded.Add, null) }
                         }
                         Spacer(Modifier.height(24.dp))
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            TextButton(onClick = hapticAction(HapticKind.UI) { playerViewModel.updateLyricsLineSpacing(24f) }) { Text(stringResource(R.string.pref_lyrics_reset)) }
-                            TextButton(onClick = hapticAction(HapticKind.UI) { showLineSpacingDialog = false }) { Text(stringResource(R.string.btn_close)) }
+                            TextButton(onClick = { playerViewModel.updateLyricsLineSpacing(24f) }) { Text(stringResource(R.string.pref_lyrics_reset)) }
+                            TextButton(onClick = { showLineSpacingDialog = false }) { Text(stringResource(R.string.btn_close)) }
                         }
                     }
                 }
@@ -590,7 +523,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text("${fontSize.roundToInt()} sp", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.width(60.dp))
-                            IconButton(onClick = hapticAction(HapticKind.UI) { playerViewModel.updateLyricsFontSize((fontSize - 2f).coerceAtLeast(12f)) }) { Icon(Icons.Rounded.Remove, null) }
+                            IconButton(onClick = { playerViewModel.updateLyricsFontSize((fontSize - 2f).coerceAtLeast(12f)) }) { Icon(Icons.Rounded.Remove, null) }
                             Slider(
                                 value = fontSize,
                                 onValueChange = { playerViewModel.updateLyricsFontSize(it) },
@@ -598,12 +531,12 @@ import com.alananasss.kittytune.ui.icons.Icon
                                 steps = 17,
                                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
                             )
-                            IconButton(onClick = hapticAction(HapticKind.UI) { playerViewModel.updateLyricsFontSize((fontSize + 2f).coerceAtMost(48f)) }) { Icon(Icons.Rounded.Add, null) }
+                            IconButton(onClick = { playerViewModel.updateLyricsFontSize((fontSize + 2f).coerceAtMost(48f)) }) { Icon(Icons.Rounded.Add, null) }
                         }
                         Spacer(Modifier.height(24.dp))
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            TextButton(onClick = hapticAction(HapticKind.UI) { playerViewModel.updateLyricsFontSize(26f) }) { Text(stringResource(R.string.pref_lyrics_reset)) }
-                            TextButton(onClick = hapticAction(HapticKind.UI) { showFontSizeDialog = false }) { Text(stringResource(R.string.btn_close)) }
+                            TextButton(onClick = { playerViewModel.updateLyricsFontSize(26f) }) { Text(stringResource(R.string.pref_lyrics_reset)) }
+                            TextButton(onClick = { showFontSizeDialog = false }) { Text(stringResource(R.string.btn_close)) }
                         }
                     }
                 }
@@ -621,7 +554,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                         AlignRadioButton(stringResource(R.string.align_right), LyricsAlignment.RIGHT, alignment) { playerViewModel.updateLyricsAlignment(it); showAlignmentDialog = false }
                     }
                 },
-                confirmButton = { TextButton(onClick = hapticAction(HapticKind.UI) { showAlignmentDialog = false }) { Text(stringResource(R.string.btn_cancel)) } }
+                confirmButton = { TextButton(onClick = { showAlignmentDialog = false }) { Text(stringResource(R.string.btn_cancel)) } }
             )
         }
 
@@ -722,7 +655,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                                         shape = shape,
                                         title = stringResource(R.string.pref_lyrics_translation_lang),
                                         subtitle = targetLang.uppercase(),
-                                        onClick = hapticAction(HapticKind.UI) { showLangDialog = true }
+                                        onClick = { showLangDialog = true }
                                     )
                                 }
                             },
@@ -745,13 +678,14 @@ import com.alananasss.kittytune.ui.icons.Icon
                 }
 
                 item {
+                    val providers = PreferredLyricsProvider.entries
                     val itemsList = mutableListOf<@Composable (Shape) -> Unit>()
                     itemsList.add { shape ->
                         SettingsItem(
                             shape = shape,
                             title = stringResource(R.string.pref_lyrics_order),
                             subtitle = stringResource(R.string.pref_lyrics_order_sub),
-                            onClick = hapticAction(HapticKind.UI) { showProviderOrderDialog = true }
+                            onClick = { showProviderOrderDialog = true }
                         )
                     }
                     itemsList.add { shape ->
@@ -759,8 +693,24 @@ import com.alananasss.kittytune.ui.icons.Icon
                             shape = shape,
                             title = stringResource(R.string.pref_lyrics_paxsenix_key),
                             subtitle = if (paxsenixKeyInput.isNotBlank()) "••••••••" else stringResource(R.string.pref_lyrics_paxsenix_key_sub),
-                            onClick = hapticAction(HapticKind.UI) { showPaxsenixKeyDialog = true }
+                            onClick = { showPaxsenixKeyDialog = true }
                         )
+                    }
+                    providers.forEach { p ->
+                        itemsList.add { shape ->
+                            var enabled by remember { mutableStateOf(prefs.getLyricsProviderEnabled(p)) }
+                            SettingsItem(
+                                shape = shape,
+                                title = p.displayName,
+                                subtitle = stringResource(R.string.pref_lyrics_enable_provider, p.displayName),
+                                hasSwitch = true,
+                                switchState = enabled,
+                                onSwitchChange = {
+                                    enabled = it
+                                    prefs.setLyricsProviderEnabled(p, it)
+                                }
+                            )
+                        }
                     }
 
                     SettingsGroup(
@@ -781,7 +731,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                                 com.alananasss.kittytune.data.local.LyricsUiStyle.ENHANCED -> stringResource(R.string.pref_lyrics_ui_style_enhanced)
                                 com.alananasss.kittytune.data.local.LyricsUiStyle.CLASSIC -> stringResource(R.string.pref_lyrics_ui_style_classic)
                             },
-                            onClick = hapticAction(HapticKind.UI) { showUiStyleDialog = true }
+                            onClick = { showUiStyleDialog = true }
                         )
                     }
                     styleItems.add { shape ->
@@ -792,7 +742,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                                 com.alananasss.kittytune.data.local.LyricsFont.APPLE -> stringResource(R.string.pref_lyrics_font_apple)
                                 com.alananasss.kittytune.data.local.LyricsFont.APP_DEFAULT -> stringResource(R.string.pref_lyrics_font_app_default)
                             },
-                            onClick = hapticAction(HapticKind.UI) { showLyricsFontDialog = true }
+                            onClick = { showLyricsFontDialog = true }
                         )
                     }
                     if (isEnhanced) {
@@ -821,7 +771,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                                 shape = shape,
                                 title = stringResource(R.string.pref_lyrics_bounce_factor_title),
                                 subtitle = "${(playerViewModel.lyricsBounceFactor * 100).toInt()}%",
-                                onClick = hapticAction(HapticKind.UI) { showBounceFactorDialog = true }
+                                onClick = { showBounceFactorDialog = true }
                             )
                         }
                         styleItems.add { shape ->
@@ -829,7 +779,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                                 shape = shape,
                                 title = stringResource(R.string.pref_lyrics_glow_factor_title),
                                 subtitle = "${(playerViewModel.lyricsGlowFactor * 100).toInt()}%",
-                                onClick = hapticAction(HapticKind.UI) { showGlowFactorDialog = true }
+                                onClick = { showGlowFactorDialog = true }
                             )
                         }
                         styleItems.add { shape ->
@@ -837,7 +787,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                                 shape = shape,
                                 title = stringResource(R.string.pref_lyrics_fill_transition_title),
                                 subtitle = "${playerViewModel.lyricsFillTransitionWidth.toInt()} dp",
-                                onClick = hapticAction(HapticKind.UI) { showFillTransitionDialog = true }
+                                onClick = { showFillTransitionDialog = true }
                             )
                         }
                         styleItems.add { shape ->
@@ -845,7 +795,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                                 shape = shape,
                                 title = stringResource(R.string.pref_lyrics_line_spacing_title),
                                 subtitle = "${playerViewModel.lyricsLineSpacing.toInt()} dp",
-                                onClick = hapticAction(HapticKind.UI) { showLineSpacingDialog = true }
+                                onClick = { showLineSpacingDialog = true }
                             )
                         }
                     }
@@ -876,7 +826,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                                 shape = getSettingsShape(totalVisibleItems, 0),
                                 title = stringResource(R.string.pref_lyrics_provider_title),
                                 subtitle = if (provider == com.alananasss.kittytune.ui.player.LyricsProvider.MAX_QUALITY) stringResource(R.string.pref_lyrics_provider_max_quality) else stringResource(R.string.pref_lyrics_provider_open_source),
-                                onClick = hapticAction(HapticKind.UI) { showProviderDialog = true }
+                                onClick = { showProviderDialog = true }
                             )
 
                             SettingsItem(
@@ -946,7 +896,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                                             LyricsUnderCoverPlacement.REPLACE_TITLE_ARTIST -> stringResource(R.string.pref_lyrics_under_cover_replace)
                                             LyricsUnderCoverPlacement.ABOVE_TITLE_ARTIST -> stringResource(R.string.pref_lyrics_under_cover_above)
                                         },
-                                        onClick = hapticAction(HapticKind.UI) { showPlacementDialog = true }
+                                        onClick = { showPlacementDialog = true }
                                     )
 
                                     SettingsItem(
@@ -971,14 +921,14 @@ import com.alananasss.kittytune.ui.icons.Icon
                                     LyricsAlignment.CENTER -> stringResource(R.string.align_center_simple)
                                     LyricsAlignment.RIGHT -> stringResource(R.string.align_right)
                                 },
-                                onClick = hapticAction(HapticKind.UI) { showAlignmentDialog = true }
+                                onClick = { showAlignmentDialog = true }
                             )
 
                             SettingsItem(
                                 shape = getSettingsShape(totalVisibleItems, sizeIndex),
                                 title = stringResource(R.string.pref_lyrics_size),
                                 subtitle = "${fontSize.roundToInt()} sp",
-                                onClick = hapticAction(HapticKind.UI) { showFontSizeDialog = true }
+                                onClick = { showFontSizeDialog = true }
                             )
                         }
                     }

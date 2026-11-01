@@ -2,7 +2,6 @@ package com.alananasss.kittytune.ui.home
 
 import android.net.Uri
 import androidx.activity.compose.BackHandler
-import com.alananasss.kittytune.ui.player.PlaybackContext
 import androidx.compose.animation.*
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
@@ -11,6 +10,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -49,17 +49,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.border
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.text.font.FontStyle
-import com.alananasss.kittytune.domain.CaptionedRepostItem
-import com.alananasss.kittytune.ui.library.getRelativeTime
-import java.text.SimpleDateFormat
-import java.util.Locale
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
@@ -79,17 +71,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.util.lerp
 import coil.compose.AsyncImage
 import com.alananasss.kittytune.R
 import com.alananasss.kittytune.data.DownloadManager
 import com.alananasss.kittytune.data.LikeRepository
 import com.alananasss.kittytune.data.SearchCategory
-import com.alananasss.kittytune.data.search.TrackVerification
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.distinctUntilChanged
 import com.alananasss.kittytune.data.local.HistoryItem
@@ -98,10 +85,6 @@ import com.alananasss.kittytune.domain.Track
 import com.alananasss.kittytune.domain.User
 import com.alananasss.kittytune.ui.common.ArtistCircleShimmer
 import com.alananasss.kittytune.ui.common.ExpressiveConnectedButtonGroup
-import com.alananasss.kittytune.ui.common.HapticKind
-import com.alananasss.kittytune.ui.common.hapticAction
-import com.alananasss.kittytune.ui.common.hapticClickable
-import com.alananasss.kittytune.ui.common.rememberAppHaptics
 import com.alananasss.kittytune.ui.common.ShimmerLine
 import com.alananasss.kittytune.ui.common.SquareCardShimmer
 import com.alananasss.kittytune.ui.common.moveCaretWithArrowKeys
@@ -137,7 +120,6 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun HomeScreen(
@@ -146,23 +128,13 @@ fun HomeScreen(
     onNavigate: (String) -> Unit
 ) {
     val history by homeViewModel.historyFlow.collectAsState(initial = emptyList())
-    val haptics = rememberAppHaptics()
     val userProfile = homeViewModel.userProfile
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusRequester = remember { FocusRequester() }
-    val searchFieldState = rememberSaveable(saver = TextFieldState.Saver) { TextFieldState() }
+    val searchFieldState = remember { TextFieldState() }
     val searchFieldInteractions = remember { MutableInteractionSource() }
     val isSearchFieldFocused by searchFieldInteractions.collectIsFocusedAsState()
-
-    val homeClips by com.alananasss.kittytune.data.artist.ArtistClips.homeClips.collectAsState()
-    val likes by com.alananasss.kittytune.data.LikeRepository.likedTracks.collectAsState()
-
-    LaunchedEffect(likes) {
-        if (likes.isNotEmpty() && com.alananasss.kittytune.data.artist.ArtistClips.homeClips.value.isEmpty()) {
-            com.alananasss.kittytune.data.artist.ArtistClips.loadHomeClips(likes)
-        }
-    }
 
     val isKeyboardOpen = WindowInsets.isImeVisible
 
@@ -182,58 +154,37 @@ fun HomeScreen(
         }
     }
 
-    LaunchedEffect(playerViewModel.isPlayerExpanded) {
-        if (playerViewModel.isPlayerExpanded) {
-            focusManager.clearFocus(force = true)
-            keyboardController?.hide()
-        }
-    }
-
     LaunchedEffect(homeViewModel.isSearching, homeViewModel.searchTrigger) {
         if (homeViewModel.isSearching) {
-            if (!playerViewModel.isPlayerExpanded) {
-                delay(400)
-                try {
-                    if (!playerViewModel.isPlayerExpanded) {
-                        focusRequester.requestFocus()
-                        keyboardController?.show()
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+            delay(400)
+            try {
+                focusRequester.requestFocus()
+                keyboardController?.show()
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         } else {
-            focusManager.clearFocus(force = true)
-            keyboardController?.hide()
+            focusManager.clearFocus()
         }
     }
 
     LaunchedEffect(searchFieldState) {
         snapshotFlow { searchFieldState.text.toString() }
             .distinctUntilChanged()
-            .collect { text ->
-                if (text != homeViewModel.searchQuery) {
-                    homeViewModel.onSearchQueryChanged(text)
-                }
-            }
+            .collect { homeViewModel.onSearchQueryChanged(it) }
     }
 
     LaunchedEffect(homeViewModel.searchQuery) {
         val query = homeViewModel.searchQuery
-        val current = searchFieldState.text.toString()
-        if (current == query) return@LaunchedEffect
-        // The field is the source of truth for what was typed. Writing an older
-        // value back over it aborts the keyboard's composition, and the characters
-        // typed since are lost — which is how a typed title turned into a
-        // half-word and the search answered with something else. So a field that
-        // already holds text is left alone; only an empty field (a search picked
-        // from the history) and a cleared search are written to.
-        if (query.isNotEmpty() && current.isNotEmpty()) return@LaunchedEffect
-        searchFieldState.edit {
-            replace(0, length, query)
-            selection = TextRange(length)
+        if (searchFieldState.text.toString() != query) {
+            searchFieldState.edit {
+                replace(0, length, query)
+                selection = TextRange(length)
+            }
         }
     }
+
+    // Live network observer
     val context = LocalContext.current
     DisposableEffect(context) {
         val connectivityManager = context.getSystemService(ConnectivityManager::class.java)
@@ -247,18 +198,12 @@ fun HomeScreen(
                 homeViewModel.isOfflineMode = true
             }
         }
-        try {
-            connectivityManager.registerDefaultNetworkCallback(networkCallback)
-        } catch (_: Exception) {
-            val request = NetworkRequest.Builder()
-                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                .build()
-            connectivityManager.registerNetworkCallback(request, networkCallback)
-        }
+        val request = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+        connectivityManager.registerNetworkCallback(request, networkCallback)
         onDispose {
-            try {
-                connectivityManager.unregisterNetworkCallback(networkCallback)
-            } catch (_: Exception) {}
+            connectivityManager.unregisterNetworkCallback(networkCallback)
         }
     }
 
@@ -291,7 +236,7 @@ fun HomeScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 8.dp)
-                                .hapticClickable { onNavigate("downloads") },
+                                .clickable { onNavigate("downloads") },
                             shape = RoundedCornerShape(16.dp)
                         ) {
                             Row(
@@ -349,13 +294,9 @@ fun HomeScreen(
                         inputField = {
                             SearchBarDefaults.InputField(
                                 state = searchFieldState,
-                                onSearch = {
-                                    haptics.perform(HapticKind.UI)
-                                    focusManager.clearFocus()
-                                },
+                                onSearch = { focusManager.clearFocus() },
                                 expanded = isSearching,
                                 onExpandedChange = {
-                                    haptics.perform(HapticKind.LIGHT)
                                     if (it) homeViewModel.activateSearch() else {
                                         homeViewModel.clearSearch()
                                         focusManager.clearFocus()
@@ -368,17 +309,12 @@ fun HomeScreen(
                                         overflow = TextOverflow.Ellipsis
                                     )
                                 },
-                                modifier = Modifier
-                                    .focusProperties {
-                                        canFocus = !playerViewModel.isPlayerExpanded
-                                    }
-                                    .focusRequester(focusRequester),
+                                modifier = Modifier.focusRequester(focusRequester),
                                 interactionSource = searchFieldInteractions,
                                 leadingIcon = {
                                     if (isSearching) {
                                         IconButton(
                                             onClick = {
-                                                haptics.perform(HapticKind.LIGHT)
                                                 homeViewModel.clearSearch()
                                                 focusManager.clearFocus()
                                             },
@@ -390,10 +326,7 @@ fun HomeScreen(
                                             )
                                         }
                                     } else {
-                                        IconButton(onClick = {
-                                            haptics.perform(HapticKind.LIGHT)
-                                            homeViewModel.activateSearch()
-                                        }) {
+                                        IconButton(onClick = { homeViewModel.activateSearch() }) {
                                             Icon(
                                                 Icons.Default.Search,
                                                 null,
@@ -402,32 +335,16 @@ fun HomeScreen(
                                         }
                                     }
                                 },
-                                 trailingIcon = {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        if (isSearching) {
-                                            if (homeViewModel.searchQuery.isNotEmpty()) {
-                                                IconButton(onClick = {
-                                                    haptics.perform(HapticKind.LIGHT)
-                                                    homeViewModel.onSearchQueryChanged("")
-                                                }) {
-                                                    Icon(Icons.Default.Close, stringResource(R.string.btn_close))
-                                                }
+                                trailingIcon = {
+                                    if (isSearching) {
+                                        if (homeViewModel.searchQuery.isNotEmpty()) {
+                                            IconButton(onClick = { homeViewModel.onSearchQueryChanged("") }) {
+                                                Icon(Icons.Default.Close, stringResource(R.string.btn_close))
                                             }
-                                            IconButton(onClick = {
-                                                haptics.perform(HapticKind.UI)
-                                                onNavigate("recognition")
-                                            }) {
-                                                Icon(
-                                                    imageVector = Icons.Rounded.GraphicEq,
-                                                    contentDescription = stringResource(R.string.recognize_music),
-                                                    tint = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
-                                        } else {
-                                            IconButton(onClick = {
-                                                haptics.perform(HapticKind.UI)
-                                                onNavigate("recognition")
-                                            }) {
+                                        }
+                                    } else {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            IconButton(onClick = { onNavigate("recognition") }) {
                                                 Icon(
                                                     imageVector = Icons.Rounded.GraphicEq,
                                                     contentDescription = stringResource(R.string.recognize_music),
@@ -435,7 +352,6 @@ fun HomeScreen(
                                                 )
                                             }
                                             IconButton(onClick = {
-                                                haptics.perform(HapticKind.UI)
                                                 if (userProfile != null) {
                                                     onNavigate("my_profile_menu")
                                                 } else {
@@ -501,8 +417,8 @@ fun HomeScreen(
                                             SearchSource.TIDAL,
                                             SearchSource.QOBUZ
                                         ),
-                                        enter = fadeIn() + expandHorizontally(),
-                                        exit = fadeOut() + shrinkHorizontally(),
+                                        enter = fadeIn(),
+                                        exit = fadeOut(),
                                         modifier = Modifier.weight(1f)
                                     ) {
                                         SearchFilters(
@@ -513,50 +429,10 @@ fun HomeScreen(
                                     if (homeViewModel.activeSearchSource == SearchSource.VK) {
                                         Spacer(Modifier.weight(1f))
                                     }
-                                    if (homeViewModel.verifiedFilterEnabled &&
-                                        (homeViewModel.activeFilter == SearchFilter.ALL ||
-                                            homeViewModel.activeFilter == SearchFilter.TRACKS ||
-                                            homeViewModel.activeSearchSource == SearchSource.YOUTUBE ||
-                                            homeViewModel.activeSearchSource == SearchSource.VK)
-                                    ) {
-                                        Spacer(Modifier.width(8.dp))
-                                        VerifiedFilterButton(
-                                            verifiedOnly = homeViewModel.verifiedOnly,
-                                            status = homeViewModel.trackVerificationStatus,
-                                            verifiedCount = homeViewModel.verifiedTrackKeys.size,
-                                            onToggle = homeViewModel::onVerifiedFilterChanged
-                                        )
-                                    }
                                     Spacer(Modifier.width(8.dp))
                                     SearchSourceSelector(
                                         selectedSource = homeViewModel.activeSearchSource,
                                         onSelect = homeViewModel::onSearchSourceChanged
-                                    )
-                                }
-
-                                val verifiedStatusText = when {
-                                    !homeViewModel.verifiedOnly -> null
-                                    homeViewModel.trackVerificationStatus == TrackVerification.Status.NO_MATCHES ->
-                                        stringResource(R.string.search_verified_no_matches)
-                                    homeViewModel.trackVerificationStatus == TrackVerification.Status.UNAVAILABLE ->
-                                        stringResource(R.string.search_verified_unavailable)
-                                    else -> null
-                                }
-                                AnimatedVisibility(
-                                    visible = verifiedStatusText != null,
-                                    enter = fadeIn() + expandVertically(),
-                                    exit = fadeOut() + shrinkVertically()
-                                ) {
-                                    Text(
-                                        text = verifiedStatusText.orEmpty(),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 16.dp)
-                                            .padding(bottom = 2.dp)
                                     )
                                 }
 
@@ -591,14 +467,13 @@ fun HomeScreen(
                                 ) { state ->
                                     when {
                                         state == "categories" -> {
-                                            SearchLanding(
-                                                homeViewModel = homeViewModel,
-                                                playerViewModel = playerViewModel,
-                                                onNavigate = onNavigate,
+                                            SearchCategoriesGrid(
+                                                moods = homeViewModel.moodCategories,
+                                                genres = homeViewModel.genreCategories,
                                                 onCategoryClick = { category: SearchCategory ->
                                                     val encodedTitle = Uri.encode(category.title)
                                                     val encodedQuery = Uri.encode(category.query)
-                                                    onNavigate("genre_detail/$encodedTitle/$encodedQuery")
+                                                    onNavigate("genre_playlists/$encodedTitle/$encodedQuery")
                                                 }
                                             )
                                         }
@@ -648,10 +523,7 @@ fun HomeScreen(
 
                     PullToRefreshBox(
                         isRefreshing = homeViewModel.isRefreshing,
-                        onRefresh = {
-                            haptics.perform(HapticKind.LIGHT)
-                            homeViewModel.refreshData()
-                        },
+                        onRefresh = { homeViewModel.refreshData() },
                         state = pullRefreshState,
                         modifier = Modifier.fillMaxSize(),
                         indicator = {
@@ -713,16 +585,12 @@ fun HomeContent(
     var isSupportBannerVisible by remember { mutableStateOf(isBannerEligible) }
     val showHomeYourMix by prefs.getShowHomeYourMixFlow().collectAsState(initial = prefs.getShowHomeYourMix())
     val showHomeListeningStats by prefs.getShowHomeListeningStatsFlow().collectAsState(initial = prefs.getShowHomeListeningStats())
-    val showHomeMyWave by prefs.getShowHomeMyWaveFlow().collectAsState(initial = prefs.getShowHomeMyWave())
-    val showHomeCharts by prefs.getShowHomeChartsFlow().collectAsState(initial = prefs.getShowHomeCharts())
-    val homeClips by com.alananasss.kittytune.data.artist.ArtistClips.homeClips.collectAsState()
 
     val scrollState = rememberLazyListState()
     val allSections = homeViewModel.homeSections
 
     val titleRecommended = stringResource(R.string.home_recommended_tracks)
 
-    val titleReposts = stringResource(R.string.home_reposts_from_friends)
     val titleRediscover = stringResource(R.string.home_rediscovery_title)
     val titleHabits = stringResource(R.string.home_habits_title)
 
@@ -731,33 +599,25 @@ fun HomeContent(
     val titleSimilarPrefix = stringResource(R.string.home_section_similar, "").trim()
 
     val discoverySection = allSections.find { it.id == "discovery" || it.type == SectionType.DISCOVERY_ROW }
-    val repostsSection = allSections.find { it.id == "reposts_from_friends" || it.type == SectionType.REPOSTS_ROW || it.title == titleReposts || it.title.equals("Reposts by people you follow", ignoreCase = true) || it.title.equals("Reposts from friends", ignoreCase = true) || it.title.equals("Repost de vos amis", ignoreCase = true) }
     val recommendedSection = allSections.find { it.id == "recommended" || it.title == titleRecommended || it.title.equals("Recommended for You", ignoreCase = true) || it.title.equals("Рекомендовано вам", ignoreCase = true) }
 
     val rediscoverSection = allSections.find { it.id == "rediscover" || it.title == titleRediscover || it.title.equals("Rediscover your collection", ignoreCase = true) || it.title.equals("Откройте свою коллекцию заново", ignoreCase = true) }
     val habitsSection = allSections.find { it.id == "habits" || it.title == titleHabits || it.title.equals("Your Vibe", ignoreCase = true) || it.title.equals("Ваш вайб", ignoreCase = true) }
 
     val stationsSection = allSections.find { it.id == "stations" || it.title == titleStations || it.title.equals("Discover with Stations", ignoreCase = true) || it.title.equals("Discover with stations", ignoreCase = true) || it.title.equals("Откройте для себя станции", ignoreCase = true) }
-    val newCrewSection = allSections.find { it.id == "new_crew" || it.title.contains("New crew", ignoreCase = true) || it.title.contains("Nouveaux Talents", ignoreCase = true) || it.title.contains("New Talent", ignoreCase = true) }
     val albumsSection = allSections.find { it.id == "albums" || it.title == titleAlbums || it.title.equals("Albums for you", ignoreCase = true) || it.title.equals("Альбомы для вас", ignoreCase = true) }
     val similarSection = allSections.find { it.id == "similar" || it.title.startsWith(titleSimilarPrefix) || it.title.startsWith("Similar to", ignoreCase = true) || it.title.startsWith("Похожие на", ignoreCase = true) }
 
     val usedSections = setOfNotNull(
         discoverySection,
-        repostsSection,
         recommendedSection,
         rediscoverSection,
         habitsSection,
         stationsSection,
-        newCrewSection,
         albumsSection,
         similarSection
     )
-    val remainingSections = allSections.filter { 
-        !usedSections.contains(it) && 
-        it.id != "reposts_from_friends" && 
-        it.type != SectionType.REPOSTS_ROW 
-    }
+    val remainingSections = allSections.filter { !usedSections.contains(it) }
 
     LazyColumn(
         state = scrollState,
@@ -778,7 +638,7 @@ fun HomeContent(
                     onCategoryClick = { category ->
                         val encodedTitle = Uri.encode(category.title)
                         val encodedQuery = Uri.encode(category.query)
-                        onNavigate("genre_detail/$encodedTitle/$encodedQuery")
+                        onNavigate("genre_playlists/$encodedTitle/$encodedQuery")
                     }
                 )
 
@@ -820,15 +680,7 @@ fun HomeContent(
             }
         }
 
-        val cleanHistory = history.filter {
-            it.id != "playlist:0" &&
-            !it.title.equals("history", ignoreCase = true) &&
-            !it.title.equals("MyWave", ignoreCase = true) &&
-            !it.title.contains("MyWave", ignoreCase = true) &&
-            !it.id.contains("my_wave", ignoreCase = true) &&
-            !it.id.contains("wave", ignoreCase = true) &&
-            it.originalUrl != "my_wave"
-        }
+        val cleanHistory = history.filter { it.id != "playlist:0" && !it.title.equals("history", ignoreCase = true) }
         if (cleanHistory.isNotEmpty()) {
             item {
                 StandardHorizontalSection(
@@ -914,10 +766,19 @@ fun HomeContent(
             }
         }
 
+        if (showHomeYourMix) {
+            item {
+                StartMixingCard(
+                    playerViewModel = playerViewModel,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                )
+            }
+        }
+
         if (showHomeListeningStats) {
             item {
                 ListeningStatsCard(
-                    modifier = Modifier.padding(horizontal = 16.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
                     onNavigateToStats = { onNavigate("listening_stats") },
                     onNavigateToYearlyPlayback = { onNavigate("yearly_playback") }
                 )
@@ -932,16 +793,15 @@ fun HomeContent(
             RenderHomeSection(it, onNavigate, playerViewModel)
         }
 
-        // MyWave: the personal radio, one press, always something on (PR #77).
-        if (showHomeMyWave) {
-            item {
-                com.alananasss.kittytune.ui.home.MyWaveCard(
-                    playerViewModel = playerViewModel,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
-            }
+        stationsSection?.let {
+            RenderHomeSection(it, onNavigate, playerViewModel)
         }
-
+        albumsSection?.let {
+            RenderHomeSection(it, onNavigate, playerViewModel)
+        }
+        similarSection?.let {
+            RenderHomeSection(it, onNavigate, playerViewModel)
+        }
         discoverySection?.let {
             item {
                 val context = androidx.compose.ui.platform.LocalContext.current
@@ -957,77 +817,7 @@ fun HomeContent(
                 )
             }
         }
-
         recommendedSection?.let {
-            RenderHomeSection(it, onNavigate, playerViewModel)
-        }
-
-        stationsSection?.let {
-            RenderHomeSection(it, onNavigate, playerViewModel)
-        }
-
-        // Home clips shelf
-        if (homeClips.isNotEmpty()) {
-            item {
-                com.alananasss.kittytune.ui.profile.HomeClipsShelf(
-                    playerViewModel = playerViewModel,
-                    clips = homeClips,
-                )
-            }
-        }
-
-        // From your artists (grouped by release weeks)
-        if (homeViewModel.likedArtistUpdates.isNotEmpty()) {
-            item {
-                FromYourArtistsSection(
-                    tracks = homeViewModel.likedArtistUpdates.toList(),
-                    playerViewModel = playerViewModel,
-                )
-            }
-        }
-
-        albumsSection?.let {
-            RenderHomeSection(it, onNavigate, playerViewModel)
-        }
-
-        similarSection?.let {
-            RenderHomeSection(it, onNavigate, playerViewModel)
-        }
-
-        // Country charts preview
-        if (showHomeCharts) {
-            item {
-                HomeChartPreview(
-                    playerViewModel = playerViewModel,
-                    onOpenCharts = { onNavigate("charts") },
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
-            }
-        }
-
-        if (showHomeYourMix) {
-            item {
-                StartMixingCard(
-                    playerViewModel = playerViewModel,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-            }
-        }
-
-        // Sections propres à dev, conservées : elles ne sont pas rendues plus haut.
-        habitsSection?.let {
-            RenderHomeSection(it, onNavigate, playerViewModel)
-        }
-
-        rediscoverSection?.let {
-            RenderHomeSection(it, onNavigate, playerViewModel)
-        }
-
-        newCrewSection?.let {
-            RenderHomeSection(it, onNavigate, playerViewModel)
-        }
-
-        repostsSection?.let {
             RenderHomeSection(it, onNavigate, playerViewModel)
         }
         remainingSections.forEach { section ->
@@ -1101,49 +891,6 @@ fun LazyListScope.RenderHomeSection(
                 }
             }
 
-            SectionType.ARTIST_UPDATES_ROW -> {
-                // New songs from the artists the listener already plays, their shelf cut where the
-                // releases actually come out: on Fridays. A slim marker stands at each week's start,
-                // and a press plays the whole shelf from the song pressed (desktop PR #77, mobile UI).
-                // Grouped here rather than in the row's scope, which is not composable.
-                val tracks = section.content.filterIsInstance<Track>()
-                val groups = remember(tracks) { ReleaseWeeks.group(tracks) }
-                val language = com.alananasss.kittytune.utils.LocaleUtils.getLocale(context).language
-                StandardHorizontalSection(
-                    title = locTitle,
-                    subtitle = locSub
-                ) {
-                    groups.forEach { group ->
-                        item(key = "artist_updates_week_${group.week}") {
-                            ReleaseWeekMarker(group, language)
-                        }
-                        items(group.tracks) { track ->
-                            TrackCardModern(track) {
-                                playerViewModel.playPlaylist(tracks, tracks.indexOf(track), null)
-                            }
-                        }
-                    }
-                }
-            }
-
-            SectionType.REPOSTS_ROW -> {
-                val reposts = section.content.filterIsInstance<CaptionedRepostItem>()
-                if (reposts.isNotEmpty()) {
-                    StandardHorizontalSection(
-                        title = locTitle,
-                        subtitle = locSub
-                    ) {
-                        items(reposts) { repost ->
-                            CaptionedRepostCard(
-                                repost = repost,
-                                onTrackClick = { playerViewModel.playPlaylist(listOf(repost.track), 0, null) },
-                                onUserClick = { onNavigate(repost.reposter.profileNavId) }
-                            )
-                        }
-                    }
-                }
-            }
-
             else -> {}
         }
     }
@@ -1151,16 +898,12 @@ fun LazyListScope.RenderHomeSection(
 
 @Composable
 fun HighlightTrackCard(track: Track, onClick: () -> Unit) {
-    val haptics = rememberAppHaptics()
     val blockedTrackIds by com.alananasss.kittytune.data.BlockManager.blockedTrackIdsFlow.collectAsState()
     val blockedArtistIds by com.alananasss.kittytune.data.BlockManager.blockedArtistIdsFlow.collectAsState()
     if (track.id in blockedTrackIds || (track.user?.id != null && track.user.id in blockedArtistIds)) return
 
     Card(
-        onClick = {
-            haptics.perform(HapticKind.MEDIUM)
-            onClick()
-        },
+        onClick = onClick,
         modifier = Modifier
             .width(200.dp)
             .height(280.dp),
@@ -1239,211 +982,6 @@ fun HighlightTrackCard(track: Track, onClick: () -> Unit) {
     }
 }
 
-fun formatRelativeRepostTime(dateStr: String?, context: android.content.Context): String {
-    val safeDate = dateStr?.takeIf { it.isNotBlank() } ?: return ""
-    val rel = getRelativeTime(safeDate, context)
-    if (rel.isNotBlank()) return rel
-    return try {
-        val epochMillis = try {
-            val scFormat = SimpleDateFormat("yyyy/MM/dd HH:mm:ss Z", Locale.US)
-            scFormat.parse(safeDate)?.time
-        } catch (_: Exception) {
-            null
-        } ?: try {
-            java.time.OffsetDateTime.parse(safeDate).toInstant().toEpochMilli()
-        } catch (_: Exception) {
-            try {
-                java.time.Instant.parse(safeDate).toEpochMilli()
-            } catch (_: Exception) {
-                null
-            }
-        } ?: return ""
-
-        val diff = System.currentTimeMillis() - epochMillis
-        val seconds = diff / 1000
-        val minutes = seconds / 60
-        val hours = minutes / 60
-        val days = hours / 24
-        val weeks = days / 7
-        val months = days / 30
-        val years = days / 365
-        when {
-            seconds < 60 -> context.getString(R.string.time_now)
-            minutes < 60 -> context.getString(R.string.time_minutes_ago, minutes)
-            hours < 24 -> context.getString(R.string.time_hours_ago, hours)
-            days < 7 -> context.getString(R.string.time_days_ago, days)
-            weeks < 5 -> context.getString(R.string.time_weeks_ago, weeks)
-            months < 12 -> context.getString(R.string.time_months_ago, months)
-            years == 1L -> context.getString(R.string.time_one_year_ago)
-            else -> context.getString(R.string.time_years_ago, years)
-        }
-    } catch (_: Exception) {
-        ""
-    }
-}
-
-@Composable
-fun CaptionedRepostCard(
-    repost: CaptionedRepostItem,
-    onTrackClick: () -> Unit,
-    onUserClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-    val screenWidth = configuration.screenWidthDp
-    val columns = maxOf(1, (screenWidth / 350f).toInt())
-    val cardWidth = ((screenWidth * 0.82f) / columns).dp
-
-    val context = LocalContext.current
-    val timeAgo = remember(repost.createdAt) {
-        formatRelativeRepostTime(repost.createdAt, context)
-    }
-
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer
-        ),
-        modifier = modifier
-            .width(cardWidth)
-            .wrapContentHeight()
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .weight(1f, fill = false)
-                        .clip(RoundedCornerShape(8.dp))
-                        .hapticClickable(onClick = onUserClick),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    AsyncImage(
-                        model = repost.reposter.avatarUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(24.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    )
-                    Text(
-                        text = repost.reposter.username ?: "",
-                        color = MaterialTheme.colorScheme.onSurface,
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    if (repost.reposter.verified) {
-                        Icon(
-                            imageVector = Icons.Rounded.Verified,
-                            contentDescription = null,
-                            tint = Color(0xFF1DA1F2),
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                }
-
-                Icon(
-                    imageVector = Icons.Rounded.Repeat,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(14.dp)
-                )
-
-                if (timeAgo.isNotBlank()) {
-                    Text(
-                        text = timeAgo,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1
-                    )
-                }
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .defaultMinSize(minHeight = 44.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.Top
-            ) {
-                Text(
-                    text = "“",
-                    color = MaterialTheme.colorScheme.primary,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    lineHeight = 24.sp
-                )
-                Text(
-                    text = repost.caption ?: "",
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-            val artworkUrl = repost.track.fullResArtwork ?: repost.track.artworkUrl
-            Surface(
-                onClick = hapticAction(HapticKind.LIGHT, onTrackClick),
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 8.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    AsyncImage(
-                        model = artworkUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    )
-
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = repost.track.title ?: "",
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = repost.track.displayArtist.ifBlank { repost.track.user?.username ?: "" },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
 @Composable
 fun ExplorerSection(onNavigate: (String) -> Unit) {
     val windowSizeInfo = com.alananasss.kittytune.ui.common.rememberWindowSizeInfo()
@@ -1491,83 +1029,6 @@ fun ExplorerSection(onNavigate: (String) -> Unit) {
                 modifier = Modifier.weight(1f)
             )
         }
-
-        Spacer(Modifier.height(16.dp))
-
-        TogetherCard(
-            onClick = { onNavigate("together") },
-            modifier = if (windowSizeInfo.isTablet) Modifier.widthIn(max = 480.dp) else Modifier.fillMaxWidth()
-        )
-    }
-}
-
-@Composable
-fun TogetherCard(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val scheme = MaterialTheme.colorScheme
-    Surface(
-        onClick = hapticAction(HapticKind.MEDIUM, onClick),
-        shape = RoundedCornerShape(24.dp),
-        color = scheme.surfaceContainerHigh,
-        modifier = modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = scheme.primaryContainer,
-                modifier = Modifier.size(48.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Rounded.Groups,
-                        contentDescription = null,
-                        modifier = Modifier.size(26.dp),
-                        tint = scheme.onPrimaryContainer
-                    )
-                }
-            }
-
-            Spacer(Modifier.width(16.dp))
-
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text = stringResource(R.string.together_title),
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold
-                    ),
-                    color = scheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = stringResource(R.string.together_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = scheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            Spacer(Modifier.width(8.dp))
-
-            Icon(
-                imageVector = Icons.Rounded.ChevronRight,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = scheme.onSurfaceVariant.copy(alpha = 0.7f)
-            )
-        }
     }
 }
 
@@ -1588,7 +1049,7 @@ fun ExplorerButton(
         modifier = modifier
     ) {
         Surface(
-            onClick = hapticAction(HapticKind.MEDIUM, onClick),
+            onClick = onClick,
             shape = RoundedCornerShape(28.dp),
             color = containerColor,
             modifier = Modifier
@@ -1627,7 +1088,6 @@ fun HomeFilterRow(
     categories: List<SearchCategory>,
     onCategoryClick: (SearchCategory) -> Unit
 ) {
-    val haptics = rememberAppHaptics()
     LazyRow(
         contentPadding = PaddingValues(horizontal = 24.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1635,10 +1095,7 @@ fun HomeFilterRow(
     ) {
         items(categories) { category ->
             Button(
-                onClick = {
-                    haptics.perform(HapticKind.LIGHT)
-                    onCategoryClick(category)
-                },
+                onClick = { onCategoryClick(category) },
                 shapes = ButtonDefaults.shapes(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -1715,7 +1172,7 @@ fun QuickHistoryTile(item: HistoryItem, onClick: () -> Unit) {
         modifier = Modifier
             .width(110.dp)
             .clip(RoundedCornerShape(12.dp))
-            .hapticClickable { onClick() }
+            .clickable { onClick() }
             .padding(4.dp)
     ) {
         Card(
@@ -1801,7 +1258,7 @@ fun StandardHorizontalSection(
     Column {
         Column(
             modifier = Modifier
-                .then(if (onTitleClick != null) Modifier.hapticClickable { onTitleClick() } else Modifier)
+                .then(if (onTitleClick != null) Modifier.clickable { onTitleClick() } else Modifier)
                 .padding(horizontal = 24.dp, vertical = 8.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1939,7 +1396,7 @@ fun DiscoveryBigCard(
                 scaleY = scale
                 this.alpha = alpha
             }
-            .hapticClickable { onClick() }
+            .clickable { onClick() }
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             AsyncImage(
@@ -2043,7 +1500,7 @@ fun StationCardLarge(playlist: Playlist, onClick: () -> Unit) {
     }
 
     Card(
-        onClick = hapticAction(HapticKind.MEDIUM, onClick),
+        onClick = onClick,
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         modifier = Modifier.width(180.dp)
@@ -2094,49 +1551,6 @@ fun StationCardLarge(playlist: Playlist, onClick: () -> Unit) {
     }
 }
 
-/**
- * Where one release week begins in the "From your artists" shelf: a slim standing marker on the theme's
- * accent, the week's name and the Friday its songs came out on (desktop PR #77, mobile UI).
- */
-@Composable
-private fun ReleaseWeekMarker(group: ReleaseWeeks.Group, language: String) {
-    val scheme = MaterialTheme.colorScheme
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-        modifier = Modifier
-            .height(160.dp)
-            .width(58.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(scheme.primary.copy(alpha = 0.14f))
-            .padding(horizontal = 6.dp, vertical = 12.dp)
-    ) {
-        Text(
-            text = when (group.week) {
-                ReleaseWeeks.Week.THIS_FRIDAY -> stringResource(R.string.home_releases_this_friday)
-                ReleaseWeeks.Week.LAST_FRIDAY -> stringResource(R.string.home_releases_last_friday)
-                ReleaseWeeks.Week.EARLIER -> stringResource(R.string.home_releases_earlier)
-            },
-            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-            color = scheme.primary,
-            textAlign = TextAlign.Center,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
-        group.since?.let { since ->
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = ReleaseWeeks.shortDate(since, language),
-                style = MaterialTheme.typography.labelSmall,
-                color = scheme.primary.copy(alpha = 0.8f),
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
 @Composable
 fun TrackCardModern(track: Track, onClick: () -> Unit) {
     val blockedTrackIds by com.alananasss.kittytune.data.BlockManager.blockedTrackIdsFlow.collectAsState()
@@ -2146,7 +1560,7 @@ fun TrackCardModern(track: Track, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .width(160.dp)
-            .hapticClickable(onClick = onClick)
+            .clickable(onClick = onClick)
     ) {
         Card(
             shape = RoundedCornerShape(16.dp),
@@ -2362,10 +1776,6 @@ fun SearchCategoriesGrid(
     genres: List<SearchCategory>,
     onCategoryClick: (SearchCategory) -> Unit
 ) {
-    val allCategories = (moods + genres).distinctBy { it.id }
-    val officialCategories = allCategories.filter { !it.artworkUrl.isNullOrBlank() }
-    val manualCategories = allCategories.filter { it.artworkUrl.isNullOrBlank() }.sortedBy { it.title }
-
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 160.dp),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 180.dp),
@@ -2373,34 +1783,30 @@ fun SearchCategoriesGrid(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize()
     ) {
-        if (officialCategories.isNotEmpty()) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                Text(
-                    text = stringResource(R.string.search_section_genres),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.ExtraBold,
-                    modifier = Modifier.padding(bottom = 8.dp, top = 8.dp)
-                )
-            }
-
-            items(officialCategories) { category ->
-                SearchCategoryCard(category = category) { onCategoryClick(category) }
-            }
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Text(
+                text = stringResource(R.string.search_section_moods),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.ExtraBold,
+                modifier = Modifier.padding(bottom = 8.dp, top = 8.dp)
+            )
         }
 
-        if (manualCategories.isNotEmpty()) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                Text(
-                    text = stringResource(R.string.search_section_other_genres),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.ExtraBold,
-                    modifier = Modifier.padding(top = 24.dp, bottom = 8.dp)
-                )
-            }
+        items(moods) { category ->
+            SearchCategoryCard(category = category) { onCategoryClick(category) }
+        }
 
-            items(manualCategories) { category ->
-                SearchCategoryCard(category = category) { onCategoryClick(category) }
-            }
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Text(
+                text = stringResource(R.string.search_section_genres),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.ExtraBold,
+                modifier = Modifier.padding(top = 24.dp, bottom = 8.dp)
+            )
+        }
+
+        items(genres) { category ->
+            SearchCategoryCard(category = category) { onCategoryClick(category) }
         }
     }
 }
@@ -2414,49 +1820,39 @@ fun SearchCategoryCard(
     val containerColor = MaterialTheme.colorScheme.secondaryContainer
     val contentColor = MaterialTheme.colorScheme.onSecondaryContainer
 
+    val cardModifier = if (isSquare) {
+        Modifier
+            .fillMaxWidth()
+            .aspectRatio(1f)
+    } else {
+        Modifier
+            .fillMaxWidth()
+            .height(110.dp)
+    }
+
     Card(
-        onClick = hapticAction(HapticKind.MEDIUM, onClick),
+        onClick = onClick,
         shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(
             containerColor = containerColor,
             contentColor = contentColor
         ),
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(110.dp)
+        modifier = cardModifier
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            if (!category.artworkUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model = category.artworkUrl,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .size(90.dp)
-                        .offset(x = 10.dp, y = 10.dp)
-                        .graphicsLayer {
-                            rotationZ = -5f
-                            alpha = 0.5f
-                        },
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                category.icon?.let { icon ->
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = contentColor.copy(alpha = 0.15f),
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .size(100.dp)
-                            .offset(x = 20.dp, y = 20.dp)
-                            .graphicsLayer {
-                                rotationZ = -10f
-                                alpha = 0.5f
-                            }
-                    )
-                }
-            }
+            Icon(
+                imageVector = category.icon,
+                contentDescription = null,
+                tint = contentColor.copy(alpha = 0.15f),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(100.dp)
+                    .offset(x = 20.dp, y = 20.dp)
+                    .graphicsLayer {
+                        rotationZ = -10f
+                        alpha = 0.5f
+                    }
+            )
 
             Column(
                 modifier = Modifier
@@ -2518,67 +1914,6 @@ fun SearchFilters(activeFilter: SearchFilter, onFilterSelected: (SearchFilter) -
             )
         }
     )
-}
-
-/**
- * Compact Verified toggle for the search bar.
- *
- * It lives beside the source selector, using the same expressive button shape, and stays visually
- * quiet (flat and transparent) until the filter is enabled. A label would make it compete with the
- * search filters; the status hint below only appears when the comparison has something to report.
- */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-fun VerifiedFilterButton(
-    verifiedOnly: Boolean,
-    status: TrackVerification.Status,
-    verifiedCount: Int,
-    onToggle: (Boolean) -> Unit,
-) {
-    val label = stringResource(R.string.search_verified_filter)
-    val statusDescription = when {
-        !verifiedOnly -> null
-        status == TrackVerification.Status.VERIFIED && verifiedCount > 0 ->
-            stringResource(R.string.search_verified_count, verifiedCount)
-        status == TrackVerification.Status.NO_MATCHES ->
-            stringResource(R.string.search_verified_no_matches)
-        status == TrackVerification.Status.UNAVAILABLE ->
-            stringResource(R.string.search_verified_unavailable)
-        status == TrackVerification.Status.INCONCLUSIVE ->
-            stringResource(R.string.search_verified_inconclusive)
-        else -> null
-    }
-    val colors = IconButtonDefaults.iconButtonColors(
-        containerColor = if (verifiedOnly) {
-            MaterialTheme.colorScheme.secondaryContainer
-        } else {
-            Color.Transparent
-        },
-        contentColor = if (verifiedOnly) {
-            MaterialTheme.colorScheme.onSecondaryContainer
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
-        }
-    )
-
-    IconButton(
-        onClick = hapticAction(HapticKind.LIGHT) { onToggle(!verifiedOnly) },
-        shapes = IconButtonDefaults.shapes(),
-        colors = colors,
-        modifier = Modifier
-            .size(44.dp)
-            .semantics {
-                contentDescription = label
-                selected = verifiedOnly
-                statusDescription?.let { stateDescription = it }
-            }
-    ) {
-        Icon(
-            imageVector = Icons.Rounded.Verified,
-            contentDescription = null,
-            modifier = Modifier.size(20.dp)
-        )
-    }
 }
 
 @Composable
@@ -2645,8 +1980,7 @@ fun SearchResultsList(
                             val isDownloaded = downloadedIds.contains(track.id)
                             TrackListItem(
                                 track = track,
-                                isVerifiedMatch = homeViewModel.isVerifiedMatch(track),
-                                currentlyPlayingTrack = playerViewModel.uiCurrentTrack,
+                                currentlyPlayingTrack = playerViewModel.currentTrack,
                                 index = index,
                                 isDownloading = false,
                                 isDownloaded = isDownloaded,
@@ -2682,13 +2016,6 @@ fun SearchResultsList(
             val hasArtists = homeViewModel.searchResultsSpotifyArtists.isNotEmpty()
             val hasPlaylistsOrAlbums = homeViewModel.searchResultsSpotifyPlaylists.isNotEmpty() || homeViewModel.searchResultsSpotifyAlbums.isNotEmpty()
 
-            val spotifyTopArtist = remember(homeViewModel.searchResultsSpotifyArtists.size, homeViewModel.searchQuery) {
-                com.alananasss.kittytune.domain.TopResultRanker.findTopArtist(
-                    homeViewModel.searchResultsSpotifyArtists.map { it.toUser() },
-                    homeViewModel.searchQuery
-                )
-            }
-
             if (!hasTracks && !hasArtists && !hasPlaylistsOrAlbums) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -2702,31 +2029,6 @@ fun SearchResultsList(
                     contentPadding = PaddingValues(bottom = 180.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    // TOP RESULT HERO CARD
-                    if (spotifyTopArtist != null && activeFilter == SearchFilter.ALL) {
-                        item {
-                            val idx = globalIndex++
-                            StaggeredItem(idx, key = homeViewModel.searchQuery, isScrolling = isScrolling) {
-                                SearchTopMatchHeroCard(
-                                    user = spotifyTopArtist,
-                                    isSpotify = true,
-                                    onArtistClick = {
-                                        homeViewModel.noteOpenedArtist(spotifyTopArtist)
-                                        onNavigate("spotify_artist:${spotifyTopArtist.id}")
-                                    },
-                                    onPlayClick = {
-                                        if (homeViewModel.searchResultsSpotify.isNotEmpty()) {
-                                            playerViewModel.playPlaylist(homeViewModel.searchResultsSpotify, 0)
-                                        } else {
-                                            homeViewModel.noteOpenedArtist(spotifyTopArtist)
-                                            onNavigate("spotify_artist:${spotifyTopArtist.id}")
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                    }
-
                     // ARTISTS SECTION
                     if (hasArtists && (activeFilter == SearchFilter.ALL || activeFilter == SearchFilter.ARTISTS)) {
                         if (activeFilter == SearchFilter.ALL) {
@@ -2748,9 +2050,7 @@ fun SearchResultsList(
                                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                                     ) {
                                         items(homeViewModel.searchResultsSpotifyArtists) { artist ->
-                                            val u = artist.toUser()
-                                            ArtistCircle(u) {
-                                                homeViewModel.noteOpenedArtist(u)
+                                            ArtistCircle(artist.toUser()) {
                                                 onNavigate("spotify_artist:${artist.id}")
                                             }
                                         }
@@ -2760,13 +2060,11 @@ fun SearchResultsList(
                         } else if (activeFilter == SearchFilter.ARTISTS) {
                             items(homeViewModel.searchResultsSpotifyArtists) { artist ->
                                 val idx = globalIndex++
-                                val u = artist.toUser()
                                 StaggeredItem(idx, key = homeViewModel.searchQuery, isScrolling = isScrolling) {
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .hapticClickable {
-                                                homeViewModel.noteOpenedArtist(u)
+                                            .clickable {
                                                 onNavigate("spotify_artist:${artist.id}")
                                             }
                                             .padding(16.dp),
@@ -2831,16 +2129,12 @@ fun SearchResultsList(
                                 val isDownloaded = downloadedIds.contains(track.id)
                                 TrackListItem(
                                     track = track,
-                                    isVerifiedMatch = homeViewModel.isVerifiedMatch(track),
-                                    currentlyPlayingTrack = playerViewModel.uiCurrentTrack,
+                                    currentlyPlayingTrack = playerViewModel.currentTrack,
                                     index = index,
                                     isDownloading = false,
                                     isDownloaded = isDownloaded,
                                     downloadProgress = 0,
-                                    onClick = {
-                                        homeViewModel.noteOpenedTrack(track)
-                                        playerViewModel.playPlaylist(listOf(track), 0)
-                                    },
+                                    onClick = { playerViewModel.playPlaylist(listOf(track), 0) },
                                     onOptionClick = { playerViewModel.showTrackOptions(track) }
                                 )
                             }
@@ -2873,7 +2167,6 @@ fun SearchResultsList(
                                          items(allPlaylists) { playlist ->
                                             SquareCard(playlist) {
                                                 val navId = playlist.urn ?: if (playlist.isAlbum) "spotify:album:${playlist.permalink ?: playlist.id}" else "spotify:playlist:${playlist.permalink ?: playlist.id}"
-                                                homeViewModel.noteOpenedPlaylist(playlist, navId)
                                                 onNavigate(navId)
                                             }
                                         }
@@ -2891,7 +2184,6 @@ fun SearchResultsList(
                                         onOptionClick = { selectedPlaylistForMenu = playlist },
                                         onClick = {
                                             val navId = playlist.urn ?: if (playlist.isAlbum) "spotify:album:${playlist.permalink ?: playlist.id}" else "spotify:playlist:${playlist.permalink ?: playlist.id}"
-                                            homeViewModel.noteOpenedPlaylist(playlist, navId)
                                             onNavigate(navId)
                                         }
                                     )
@@ -2959,14 +2251,6 @@ fun SearchResultsList(
                 }
             }
             LaunchedEffect(shouldLoadMore) { if (shouldLoadMore && !homeViewModel.isSearchLoadingMore) homeViewModel.loadMoreSearchResults() }
-
-            val soundCloudTopArtist = remember(homeViewModel.searchResultsArtists.size, homeViewModel.searchQuery) {
-                com.alananasss.kittytune.domain.TopResultRanker.findTopArtist(
-                    homeViewModel.searchResultsArtists,
-                    homeViewModel.searchQuery
-                ) { com.alananasss.kittytune.data.search.SearchPicks.timesPicked(homeViewModel.searchQuery, it.id) }
-            }
-
             LazyColumn(
                 state = listState,
                 contentPadding = PaddingValues(bottom = 180.dp),
@@ -2974,43 +2258,6 @@ fun SearchResultsList(
             ) {
                 var globalIndex = 0
                 val isScrolling = listState.isScrollInProgress
-
-                val corrected = homeViewModel.searchCorrectedQuery
-                if (corrected != null && homeViewModel.searchQuery.isNotEmpty()) {
-                    item {
-                        Text(
-                            text = stringResource(R.string.search_showing_results_for, corrected),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
-                        )
-                    }
-                }
-
-                if (soundCloudTopArtist != null && activeFilter == SearchFilter.ALL) {
-                    item {
-                        val idx = globalIndex++
-                        StaggeredItem(idx, key = homeViewModel.searchQuery, isScrolling = isScrolling) {
-                            SearchTopMatchHeroCard(
-                                user = soundCloudTopArtist,
-                                isSpotify = false,
-                                onArtistClick = {
-                                    homeViewModel.noteOpenedArtist(soundCloudTopArtist)
-                                    onNavigate(soundCloudTopArtist.profileNavId)
-                                },
-                                onPlayClick = {
-                                    if (homeViewModel.searchResultsTracks.isNotEmpty()) {
-                                        playerViewModel.playPlaylist(homeViewModel.searchResultsTracks, 0)
-                                    } else {
-                                        homeViewModel.noteOpenedArtist(soundCloudTopArtist)
-                                        onNavigate(soundCloudTopArtist.profileNavId)
-                                    }
-                                }
-                            )
-                        }
-                    }
-                }
-
                 if (homeViewModel.searchResultsArtists.isNotEmpty()) {
                     if (activeFilter == SearchFilter.ALL) item {
                         val idx = globalIndex++; StaggeredItem(
@@ -3034,57 +2281,36 @@ fun SearchResultsList(
                         Row(
                             modifier = Modifier
                             .fillMaxWidth()
-                            .hapticClickable {
-                                homeViewModel.noteOpenedArtist(artist)
-                                onNavigate(artist.profileNavId)
-                            }
+                            .clickable { onNavigate(artist.profileNavId) }
                             .padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                             ArtistAvatar(
                                 avatarUrl = artist.avatarUrl, enableViewer = false, modifier = Modifier
                                     .size(56.dp)
                                     .clip(CircleShape)
-                            )
-                            val profile = com.alananasss.kittytune.ui.common.rememberArtistProfile(artist.username)
-                            Spacer(Modifier.width(16.dp))
-                            Column {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        artist.username ?: stringResource(R.string.unknown_artist),
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                    if (artist.verified || profile?.isVerified == true) {
-                                        Spacer(Modifier.width(4.dp))
-                                        Icon(
-                                            Icons.Rounded.Verified,
-                                            contentDescription = null,
-                                            tint = if (artist.urn?.startsWith("spotify") == true) Color(0xFF1DB954) else MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                }
-                                val followersCount = artist.followersCount
-                                val followersText = listOfNotNull(
-                                    profile?.monthlyListeners?.let { stringResource(R.string.artist_monthly_listeners, it) },
-                                    followersCount.takeIf { it > 0 }?.let {
-                                        "${java.text.NumberFormat.getNumberInstance(java.util.Locale.getDefault()).format(it)} ${stringResource(R.string.profile_followers)}"
-                                    },
-                                    artist.trackCount.takeIf { it > 0 }?.let {
-                                        "$it ${stringResource(R.string.profile_tracks).lowercase()}"
-                                    }
-                                ).joinToString(" · ").ifBlank { stringResource(R.string.lib_artists) }
+                            ); Spacer(Modifier.width(16.dp)); Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = followersText,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    artist.username ?: stringResource(R.string.unknown_artist),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.SemiBold
+                                ); if (artist.verified) {
+                                Spacer(Modifier.width(4.dp)); Icon(
+                                    Icons.Rounded.Verified,
+                                    null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
+                            }; Text(
+                            text = "${artist.followersCount} ${stringResource(R.string.profile_followers)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        }
                         }
                     }
-                }
-                else item {
+                    }
+                    else item {
                         val idx = globalIndex++; StaggeredItem(
                         idx,
                         key = homeViewModel.searchQuery,
@@ -3093,14 +2319,7 @@ fun SearchResultsList(
                         LazyRow(
                             contentPadding = PaddingValues(horizontal = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            items(homeViewModel.searchResultsArtists) { artist ->
-                                ArtistCircle(artist) {
-                                    homeViewModel.noteOpenedArtist(artist)
-                                    onNavigate(artist.profileNavId)
-                                }
-                            }
-                        }
+                        ) { items(homeViewModel.searchResultsArtists) { artist -> ArtistCircle(artist) { onNavigate(artist.profileNavId) } } }
                     }
                     }
                 }
@@ -3127,16 +2346,12 @@ fun SearchResultsList(
                     ) {
                         TrackListItem(
                             track = track,
-                            isVerifiedMatch = homeViewModel.isVerifiedMatch(track),
-                            currentlyPlayingTrack = playerViewModel.uiCurrentTrack,
+                            currentlyPlayingTrack = playerViewModel.currentTrack,
                             index = index,
                             isDownloading = downloadProgress[track.id] != null,
                             isDownloaded = downloadedIds.contains(track.id),
                             downloadProgress = downloadProgress[track.id] ?: 0,
-                            onClick = {
-                                homeViewModel.noteOpenedTrack(track)
-                                playerViewModel.playPlaylist(listOf(track), 0)
-                            },
+                            onClick = { playerViewModel.playPlaylist(listOf(track), 0) },
                             onOptionClick = { playerViewModel.showTrackOptions(track) })
                     }
                     }
@@ -3164,10 +2379,7 @@ fun SearchResultsList(
                                 isGrid = false,
                                 modifier = Modifier.padding(horizontal = 16.dp),
                                 onOptionClick = { selectedPlaylistForMenu = playlist },
-                                onClick = {
-                                    homeViewModel.noteOpenedPlaylist(playlist, playlist.id.toString())
-                                    onNavigate(playlist.id.toString())
-                                }
+                                onClick = { onNavigate(playlist.id.toString()) }
                             )
                         }
                     }
@@ -3183,7 +2395,6 @@ fun SearchResultsList(
                         ) {
                             items(homeViewModel.searchResultsPlaylists) { playlist ->
                                 SquareCard(playlist) {
-                                    homeViewModel.noteOpenedPlaylist(playlist, playlist.id.toString())
                                     onNavigate(
                                         playlist.id.toString()
                                     )
@@ -3215,11 +2426,8 @@ fun SearchResultsList(
         val permalink =
             playlist.permalinkUrl ?: if (playlist.id > 0) "https://soundcloud.com/playlists/${playlist.id}" else ""
         val likedPlaylistsRepo by LikeRepository.likedPlaylists.collectAsState()
-        val libraryPlaylistId = remember(playlist.id, playlist.permalinkUrl) {
-            com.alananasss.kittytune.data.local.ExternalPlaylists.libraryIdFor(playlist.permalinkUrl, playlist.id)
-        }
-        val isPlaylistLiked = remember(libraryPlaylistId, likedPlaylistsRepo) {
-            LikeRepository.isPlaylistLiked(libraryPlaylistId)
+        val isPlaylistLiked = remember(playlist.id, likedPlaylistsRepo) {
+            LikeRepository.isPlaylistLiked(playlist.id)
         }
         val primaryColor = MaterialTheme.colorScheme.primary
 
@@ -3333,18 +2541,16 @@ fun SearchResultsList(
                             if (isPlaylistLiked) context.getString(R.string.action_unlike) else context.getString(R.string.player_like_action)
                         ) {
                             if (!isPlaylistLiked) {
-                                    val isExternal = com.alananasss.kittytune.data.local.ExternalPlaylists.isExternalProvider(
-                                        playlist.permalinkUrl, playlist.urn
-                                    )
+                                    val isSpotify = playlist.permalinkUrl?.contains("spotify") == true || playlist.urn?.startsWith("spotify:") == true
                                     com.alananasss.kittytune.data.DownloadManager.importPlaylistToLibrary(
                                         playlist = playlist,
                                         tracks = playlist.tracks ?: emptyList(),
-                                        syncToCloud = !isExternal,
+                                        syncToCloud = !isSpotify,
                                         likePlaylist = true
                                     )
                             } else {
                                 LikeRepository.togglePlaylistLike(
-                                    libraryPlaylistId,
+                                    playlist.id,
                                     false,
                                     playlist.permalinkUrl ?: "",
                                     playlist.urn ?: ""
@@ -3382,7 +2588,7 @@ fun SearchResultsList(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
-                                .hapticClickable { action() }
+                                .clickable { action() }
                                 .padding(8.dp)
                         ) {
                             Icon(
@@ -3465,7 +2671,6 @@ fun ProviderSearchResults(
                             ) {
                                 items(artists) { artist ->
                                     ArtistCircle(artist) {
-                                        homeViewModel.noteOpenedArtist(artist)
                                         onNavigate(artist.urn ?: artist.id.toString())
                                     }
                                 }
@@ -3479,8 +2684,7 @@ fun ProviderSearchResults(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .hapticClickable {
-                                        homeViewModel.noteOpenedArtist(artist)
+                                    .clickable {
                                         onNavigate(artist.urn ?: artist.id.toString())
                                     }
                                     .padding(16.dp),
@@ -3527,8 +2731,7 @@ fun ProviderSearchResults(
                         val isDownloaded = downloadedIds.contains(track.id)
                         TrackListItem(
                             track = track,
-                            isVerifiedMatch = homeViewModel.isVerifiedMatch(track),
-                            currentlyPlayingTrack = playerViewModel.uiCurrentTrack,
+                            currentlyPlayingTrack = playerViewModel.currentTrack,
                             index = index,
                             isDownloading = false,
                             isDownloaded = isDownloaded,
@@ -3562,9 +2765,7 @@ fun ProviderSearchResults(
                             ) {
                                 items(allPlaylists) { playlist ->
                                     SquareCard(playlist) {
-                                        val dest = playlist.urn ?: playlist.permalink ?: playlist.id.toString()
-                                        homeViewModel.noteOpenedPlaylist(playlist, dest)
-                                        onNavigate(dest)
+                                        onNavigate(playlist.urn ?: playlist.permalink ?: playlist.id.toString())
                                     }
                                 }
                             }
@@ -3580,9 +2781,7 @@ fun ProviderSearchResults(
                                 modifier = Modifier.padding(horizontal = 16.dp),
                                 onOptionClick = { onPlaylistOptionClick(playlist) },
                                 onClick = {
-                                    val dest = playlist.urn ?: playlist.permalink ?: playlist.id.toString()
-                                    homeViewModel.noteOpenedPlaylist(playlist, dest)
-                                    onNavigate(dest)
+                                    onNavigate(playlist.urn ?: playlist.permalink ?: playlist.id.toString())
                                 }
                             )
                         }
@@ -3666,7 +2865,7 @@ fun ArtistCircle(user: User, onClick: () -> Unit) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier
             .width(120.dp)
-            .hapticClickable { onClick() }) {
+            .clickable { onClick() }) {
         ArtistAvatar(
             avatarUrl = user.avatarUrl, enableViewer = false, modifier = Modifier
                 .size(120.dp)
@@ -3747,7 +2946,7 @@ fun HistoryCard(
     if (item.numericId in blockedTrackIds || (item.type == "artist" && item.numericId in blockedArtistIds)) return
 
     Card(
-        onClick = hapticAction(HapticKind.MEDIUM, onClick),
+        onClick = onClick,
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         modifier = Modifier.width(280.dp)
@@ -3885,7 +3084,7 @@ fun OfflineHomeView(
         Spacer(Modifier.height(48.dp))
 
         Button(
-            onClick = hapticAction(HapticKind.MEDIUM, onRetry),
+            onClick = onRetry,
             modifier = Modifier.fillMaxWidth().height(56.dp),
             shapes = ButtonDefaults.shapes(),
             contentPadding = PaddingValues(horizontal = 24.dp)
@@ -3898,7 +3097,7 @@ fun OfflineHomeView(
         Spacer(Modifier.height(12.dp))
 
         FilledTonalButton(
-            onClick = hapticAction(HapticKind.UI, onGoToDownloads),
+            onClick = onGoToDownloads,
             modifier = Modifier.fillMaxWidth().height(56.dp),
             shapes = ButtonDefaults.shapes(),
             contentPadding = PaddingValues(horizontal = 24.dp)
@@ -3906,153 +3105,6 @@ fun OfflineHomeView(
             Icon(Icons.Rounded.Download, null)
             Spacer(Modifier.width(12.dp))
             Text(stringResource(R.string.home_offline_btn_downloads), fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
-@Composable
-private fun HomeChartPreview(
-    playerViewModel: PlayerViewModel,
-    onOpenCharts: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val country = remember {
-        val appLang = com.alananasss.kittytune.data.local.PlayerPreferences(context).getAppLanguage()
-        val lang = if (appLang == com.alananasss.kittytune.data.local.AppLanguage.SYSTEM)
-            java.util.Locale.getDefault().language
-        else appLang.code
-        ChartRepository.ChartCountry.forDevice(context, lang)
-    }
-    val entriesState by androidx.compose.runtime.produceState<List<ChartRepository.ChartEntry>>(initialValue = emptyList(), country) {
-        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            ChartRepository.fetchChart(
-                context = context,
-                kind = ChartRepository.ChartKind.COUNTRY,
-                genre = ChartRepository.chartGenres.first(),
-                limit = 5,
-                countryCode = country.code,
-                country = country,
-            )
-        }
-    }
-    if (entriesState.isEmpty()) return
-
-    Surface(
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        modifier = modifier.fillMaxWidth(),
-    ) {
-        Column(Modifier.padding(vertical = 12.dp)) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .hapticClickable(onClick = onOpenCharts)
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = stringResource(R.string.chart_section_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    text = stringResource(R.string.btn_see_all),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-            Spacer(Modifier.height(4.dp))
-            entriesState.forEachIndexed { index, entry ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .hapticClickable {
-                            playerViewModel.playPlaylist(
-                                tracks = entriesState.map { it.track },
-                                startIndex = index,
-                                context = PlaybackContext(
-                                    displayText = context.getString(R.string.chart_section_title),
-                                    navigationId = "charts",
-                                ),
-                            )
-                        }
-                        .padding(horizontal = 16.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = entry.rank.toString(),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Black,
-                        color = if (entry.rank <= 3) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.width(32.dp),
-                    )
-                    AsyncImage(
-                        model = entry.track.artworkUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = entry.track.title.orEmpty(),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = entry.track.displayArtist.ifBlank { entry.track.user?.username.orEmpty() },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FromYourArtistsSection(
-    tracks: List<Track>,
-    playerViewModel: PlayerViewModel,
-    modifier: Modifier = Modifier,
-) {
-    if (tracks.isEmpty()) return
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val groups = remember(tracks) { ReleaseWeeks.group(tracks) }
-    val displayTracks = remember(groups) { groups.flatMap { it.tracks }.take(16) }
-    if (displayTracks.isEmpty()) return
-
-    Column(modifier = modifier.fillMaxWidth()) {
-        StandardHorizontalSection(
-            title = stringResource(R.string.home_from_your_artists),
-            subtitle = null,
-        ) {
-            items(displayTracks) { track ->
-                TrackCardModern(
-                    track = track,
-                    onClick = {
-                        val index = displayTracks.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
-                        playerViewModel.playPlaylist(
-                            tracks = displayTracks,
-                            startIndex = index,
-                            context = PlaybackContext(
-                                displayText = context.getString(R.string.home_from_your_artists),
-                                navigationId = "home",
-                            ),
-                        )
-                    },
-                )
-            }
         }
     }
 }

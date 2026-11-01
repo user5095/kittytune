@@ -32,9 +32,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.alananasss.kittytune.R
-import com.alananasss.kittytune.ui.common.HapticKind
-import com.alananasss.kittytune.ui.common.hapticAction
-import com.alananasss.kittytune.ui.common.hapticClickable
 import coil.compose.AsyncImage
 import com.alananasss.kittytune.data.RecognitionHistoryRepository
 import com.alananasss.kittytune.data.local.RecognitionHistoryItem
@@ -96,7 +93,7 @@ fun RecognitionHistoryScreen(
             text = { Text(stringResource(R.string.dialog_clear_history_msg)) },
             confirmButton = {
                 TextButton(
-                    onClick = hapticAction(HapticKind.UI) {
+                    onClick = {
                         RecognitionHistoryRepository.clearHistory()
                         showClearHistoryDialog = false
                     }
@@ -105,7 +102,7 @@ fun RecognitionHistoryScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = hapticAction(HapticKind.UI) { showClearHistoryDialog = false }) {
+                TextButton(onClick = { showClearHistoryDialog = false }) {
                     Text(stringResource(R.string.btn_cancel))
                 }
             }
@@ -131,7 +128,7 @@ fun RecognitionHistoryScreen(
                 actions = {
                     if (historyItems.isNotEmpty()) {
                         FilledTonalIconButton(
-                            onClick = hapticAction(HapticKind.UI) { showClearHistoryDialog = true },
+                            onClick = { showClearHistoryDialog = true },
                             shapes = IconButtonDefaults.shapes(),
                             colors = IconButtonDefaults.filledTonalIconButtonColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
@@ -153,13 +150,7 @@ fun RecognitionHistoryScreen(
             KittyOutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = {
-                    Text(
-                        stringResource(R.string.search_history_hint),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                },
+                placeholder = { Text(stringResource(R.string.search_history_hint)) },
                 leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -196,11 +187,11 @@ fun RecognitionHistoryScreen(
                             )
                         }
 
-                        items(items, key = { it.id }) { item ->
+                        items(items) { item ->
                             HistoryItemRow(
                                 item = item,
-                                currentlyPlayingTrack = playerViewModel.uiCurrentTrack,
-                                onClick = hapticAction(HapticKind.UI) {
+                                currentlyPlayingTrack = playerViewModel.currentTrack,
+                                onClick = {
                                     if (item.trackId != null) {
                                         val trackList = filteredItems.mapNotNull { historyItem ->
                                             historyItem.trackId?.let { id ->
@@ -267,7 +258,7 @@ fun HistoryItemRow(
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = {
-                    view.performAppHaptic(HapticFeedbackConstants.LONG_PRESS)
+                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                     onOptionsClick()
                 }
             )

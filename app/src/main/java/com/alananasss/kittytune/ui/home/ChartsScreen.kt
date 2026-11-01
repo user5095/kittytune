@@ -1,4 +1,4 @@
-package com.alananasss.kittytune.ui.home
+    package com.alananasss.kittytune.ui.home
 
     import android.content.Intent
     import androidx.compose.animation.animateColorAsState
@@ -53,149 +53,569 @@ import com.alananasss.kittytune.ui.icons.Icon
     import com.alananasss.kittytune.ui.profile.ArtistAvatar
     import java.util.Locale
 
-/**
- * The charts screen (desktop parity): what a country is listening to, one list, ranked as the
- * source ranks it. A chart is a queue — tapping a song plays the chart from there.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ChartsScreen(
-    onBackClick: () -> Unit,
-    onPlaylistClick: (Long) -> Unit,
-    onNavigate: (String) -> Unit,
-    playerViewModel: PlayerViewModel,
-    viewModel: ChartsViewModel = viewModel(),
-) {
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    @Composable
+    fun rememberDominantColor(url: String?, defaultColor: Color = MaterialTheme.colorScheme.surface): State<Color> {
+        val context = LocalContext.current
+        val color = remember(url) { mutableStateOf(defaultColor) }
 
-    val visibleTracks = rememberFilteredTracks(viewModel.chartEntries.map { it.track })
-    val chartEntries = remember(viewModel.chartEntries, visibleTracks) {
-        val visibleIds = visibleTracks.map { it.id }.toSet()
-        viewModel.chartEntries.filter { it.track.id in visibleIds }
+        LaunchedEffect(url) {
+            if (url != null) {
+                val request = ImageRequest.Builder(context)
+                    .data(url)
+                    .allowHardware(false)
+                    .build()
+
+                val result = context.imageLoader.execute(request).drawable
+                if (result != null) {
+                    val bitmap = (result as android.graphics.drawable.BitmapDrawable).bitmap
+                    Palette.from(bitmap).generate { palette ->
+                        val dominant = palette?.darkVibrantSwatch?.rgb ?: palette?.vibrantSwatch?.rgb ?: defaultColor.hashCode()
+                        color.value = Color(dominant)
+                    }
+                }
+            }
+        }
+        return color
     }
 
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            LargeTopAppBar(
-                title = {
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Composable
+    fun ChartsScreen(
+        onBackClick: () -> Unit,
+        onPlaylistClick: (Long) -> Unit,
+        onNavigate: (String) -> Unit,
+        playerViewModel: PlayerViewModel,
+        viewModel: ChartsViewModel = viewModel()
+    ) {
+        var showCountrySelector by remember { mutableStateOf(false) }
+        var showArtistMenu by remember { mutableStateOf<User?>(null) }
+
+        val currentCountry = ChartsData.charts[viewModel.selectedCountryIndex]
+        val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+        val context = LocalContext.current
+
+        // country selector sheet
+        if (showCountrySelector) {
+            com.alananasss.kittytune.ui.common.KittyModalBottomSheet(
+                onDismissRequest = { showCountrySelector = false },
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                dragHandle = { BottomSheetDefaults.DragHandle() }
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 32.dp)
+                        .navigationBarsPadding()
+                ) {
                     Text(
-                        stringResource(R.string.home_charts),
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = (-0.5).sp,
+                        text = stringResource(R.string.charts_select_country),
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                        modifier = Modifier
+                            .padding(bottom = 16.dp)
+                            .align(Alignment.CenterHorizontally)
                     )
-                },
-                navigationIcon = {
-                    FilledTonalIconButton(
-                        onClick = onBackClick,
-                        shapes = IconButtonDefaults.shapes(),
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.btn_back))
+
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        itemsIndexed(ChartsData.charts) { index, chartData ->
+                            val isSelected = index == viewModel.selectedCountryIndex
+                            CountrySelectionCard(
+                                countryName = chartData.countryName,
+                                flagEmoji = chartData.flagEmoji,
+                                isSelected = isSelected,
+                                onClick = {
+                                    viewModel.loadCountryCharts(index)
+                                    showCountrySelector = false
+                                }
+                            )
+                        }
                     }
-                },
-                actions = {
-                    if (chartEntries.isNotEmpty()) {
+                }
+            }
+        }
+
+        // artist options menu with new design
+        if (showArtistMenu != null) {
+            val user = showArtistMenu!!
+            com.alananasss.kittytune.ui.common.KittyModalBottomSheet(
+                onDismissRequest = { showArtistMenu = null },
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+            ) {
+                Column(modifier = Modifier.padding(bottom = 32.dp)) {
+                    // header stylized similar to player menu
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .padding(horizontal = 24.dp, vertical = 20.dp)
+                            .fillMaxWidth()
+                    ) {
+                        ArtistAvatar(
+                            avatarUrl = user.avatarUrl,
+                            enableViewer = false,
+                            modifier = Modifier
+                                .size(64.dp)
+                                .clip(CircleShape)
+                        )
+                        Spacer(Modifier.width(16.dp))
+                        Column {
+                            Text(
+                                text = user.username ?: stringResource(R.string.unknown_artist),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = stringResource(R.string.lib_artists),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                if (user.verified) {
+                                    Spacer(Modifier.width(4.dp))
+                                    Icon(
+                                        imageVector = Icons.Rounded.Verified,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    Spacer(Modifier.height(8.dp))
+
+                    // options list
+                    ArtistMenuOption(
+                        icon = Icons.Default.Shuffle,
+                        text = stringResource(R.string.btn_shuffle),
+                        onClick = {
+                            viewModel.fetchArtistTopTracks(user.id) { tracks ->
+                                if (tracks.isNotEmpty()) {
+                                    playerViewModel.playPlaylist(tracks.shuffled(), 0)
+                                }
+                            }
+                            showArtistMenu = null
+                        }
+                    )
+
+                    ArtistMenuOption(
+                        icon = Icons.Default.Radio,
+                        text = stringResource(R.string.radio),
+                        onClick = {
+                            onNavigate("station_artist:${user.id}")
+                            showArtistMenu = null
+                        }
+                    )
+
+                    ArtistMenuOption(
+                        icon = Icons.Default.Person,
+                        text = stringResource(R.string.menu_go_artist),
+                        onClick = {
+                            onNavigate("profile:${user.id}")
+                            showArtistMenu = null
+                        }
+                    )
+
+                    ArtistMenuOption(
+                        icon = Icons.Outlined.Share,
+                        text = stringResource(R.string.btn_share),
+                        onClick = {
+                            val url = user.permalinkUrl ?: "https://soundcloud.com/${user.username}"
+                            val sendIntent = Intent().apply {
+                                action = Intent.ACTION_SEND
+                                putExtra(Intent.EXTRA_TEXT, url)
+                                type = "text/plain"
+                            }
+                            context.startActivity(Intent.createChooser(sendIntent, null))
+                            showArtistMenu = null
+                        }
+                    )
+                }
+            }
+        }
+
+        Scaffold(
+            modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+            topBar = {
+                LargeTopAppBar(
+                    title = {
+                        Text(
+                            stringResource(R.string.home_charts),
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = (-0.5).sp
+                        )
+                    },
+                    navigationIcon = {
                         FilledTonalIconButton(
-                            onClick = hapticAction(HapticKind.UI) {
-                                playerViewModel.prepareBulkAdd(chartEntries.map { it.track })
-                            },
+                            onClick = onBackClick,
                             shapes = IconButtonDefaults.shapes(),
                             colors = IconButtonDefaults.filledTonalIconButtonColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                                 contentColor = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         ) {
-                            Icon(
-                                Icons.Default.Add,
-                                contentDescription = stringResource(R.string.menu_add_playlist)
-                            )
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.btn_back))
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                        scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
+                    ),
+                    scrollBehavior = scrollBehavior
+                )
+            },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        ) { innerPadding ->
+            LazyColumn(
+                modifier = Modifier.padding(innerPadding),
+                contentPadding = PaddingValues(bottom = 180.dp)
+            ) {
+                // country selector button
+                item {
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = 24.dp, vertical = 12.dp)
+                            .fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Surface(
+                            onClick = { showCountrySelector = true },
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surfaceContainer,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                            modifier = Modifier.height(56.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .padding(horizontal = 20.dp)
+                                    .fillMaxSize(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(text = currentCountry.flagEmoji, style = MaterialTheme.typography.titleLarge)
+                                    Spacer(Modifier.width(12.dp))
+                                    Text(
+                                        text = currentCountry.countryName,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                                Icon(Icons.Rounded.KeyboardArrowDown, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                     }
-                },
-                colors = TopAppBarDefaults.largeTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                ),
-                scrollBehavior = scrollBehavior,
-            )
-        },
-        containerColor = MaterialTheme.colorScheme.background,
-    ) { innerPadding ->
-        LazyColumn(
+                }
+
+                if (viewModel.isLoading) {
+                    // loading skeleton
+                    item {
+                        LazyRow(
+                            contentPadding = PaddingValues(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            items(4) { SquareCardShimmer() }
+                        }
+                    }
+                } else {
+                    if (viewModel.chartPlaylists.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = stringResource(R.string.explorer_charts),
+                                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
+                            )
+                        }
+                        item {
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(viewModel.chartPlaylists) { playlist ->
+                                    ChartPlaylistCard(playlist = playlist, onClick = { onPlaylistClick(playlist.id) })
+                                }
+                            }
+                        }
+                    }
+
+                    if (viewModel.topArtists.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = stringResource(R.string.charts_top_artists),
+                                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)
+                            )
+                        }
+
+                        item {
+                            val blockedArtistIds by com.alananasss.kittytune.data.BlockManager.blockedArtistIdsFlow.collectAsState()
+                            // split list into chunks of 4 for the vertical columns, excluding blocked artists
+                            val chunkedArtists = remember(viewModel.topArtists, blockedArtistIds) {
+                                viewModel.topArtists.filter { it.user.id !in blockedArtistIds }.chunked(4)
+                            }
+
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                items(chunkedArtists) { columnGroup ->
+                                    Column(
+                                        modifier = Modifier.width(340.dp), // wide column like youtube music
+                                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        columnGroup.forEach { artistRanking ->
+                                            ArtistRankRow(
+                                                ranking = artistRanking,
+                                                onClick = { onNavigate("profile:${artistRanking.user.id}") },
+                                                onMenuClick = { showArtistMenu = artistRanking.user }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    fun ArtistRankRow(
+        ranking: ArtistRanking,
+        onClick: () -> Unit,
+        onMenuClick: () -> Unit
+    ) {
+        val blockedArtistIds by com.alananasss.kittytune.data.BlockManager.blockedArtistIdsFlow.collectAsState()
+        if (ranking.user.id in blockedArtistIds) return
+
+        Row(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-            contentPadding = PaddingValues(bottom = 180.dp),
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            item {
-                SongChart(
-                    kind = viewModel.chartKind,
-                    genre = viewModel.chartGenre,
-                    genres = ChartRepository.chartGenres,
-                    onKindChange = { viewModel.loadChart(it, viewModel.chartGenre) },
-                    onGenreChange = { viewModel.loadChart(viewModel.chartKind, it) },
-                    country = viewModel.chartCountry,
-                    onCountryChange = { viewModel.selectChartCountry(it) },
-                    isSwitching = viewModel.isChartLoading,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            // rank number
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.width(40.dp)
+            ) {
+                Text(
+                    text = "${ranking.rank}",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Medium),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                // static visual dot (grey) to match screenshot
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
                 )
             }
 
-            if (viewModel.isChartLoading && chartEntries.isEmpty()) {
-                items(8) {
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(64.dp)
-                            .padding(horizontal = 16.dp, vertical = 4.dp),
-                    ) {
-                        ShimmerBox(Modifier.fillMaxSize())
-                    }
-                }
-            } else if (chartEntries.isNotEmpty()) {
-                itemsIndexed(chartEntries, key = { _, e -> "${e.rank}-${e.track.id}" }) { index, entry ->
-                    val label = when (viewModel.chartKind) {
-                        ChartRepository.ChartKind.COUNTRY -> viewModel.chartCountry.deezerName
-                        ChartRepository.ChartKind.TOP -> stringResource(R.string.chart_kind_top)
-                        ChartRepository.ChartKind.TRENDING -> stringResource(R.string.chart_kind_trending)
-                    }
-                    ChartTrackRow(
-                        track = entry.track,
-                        rank = entry.rank,
-                        currentlyPlayingTrack = playerViewModel.uiCurrentTrack ?: playerViewModel.currentTrack,
-                        onClick = hapticAction(HapticKind.UI) {
-                            playerViewModel.playPlaylist(
-                                tracks = chartEntries.map { it.track },
-                                startIndex = index,
-                                context = PlaybackContext(
-                                    displayText = label,
-                                    navigationId = "charts",
-                                ),
-                            )
-                        },
-                        onArtistClick = { track ->
-                            track.user?.id?.let { artistId ->
-                                onNavigate("profile:$artistId")
-                            }
-                        },
-                        onOptionClick = hapticAction(HapticKind.UI) { playerViewModel.showTrackOptions(entry.track) },
-                        modifier = Modifier.padding(horizontal = 6.dp),
+            Spacer(Modifier.width(12.dp))
+
+            // avatar
+            ArtistAvatar(
+                avatarUrl = ranking.user.avatarUrl,
+                enableViewer = false,
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+            )
+
+            Spacer(Modifier.width(16.dp))
+
+            // info
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = ranking.user.username ?: stringResource(R.string.unknown_artist),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                // changed to display follower count instead of plays
+                Text(
+                    text = formatCompactNumber(ranking.user.followersCount.toLong()) + " " + stringResource(R.string.profile_followers).lowercase(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // menu three dots
+            IconButton(onClick = onMenuClick) {
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = stringResource(R.string.btn_options),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+
+    @Composable
+    fun ArtistMenuOption(icon: ImageVector, text: String, onClick: () -> Unit) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = 24.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(icon, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(26.dp))
+            Spacer(Modifier.width(20.dp))
+            Text(
+                text = text,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+
+    @Composable
+    private fun CountrySelectionCard(
+        countryName: String,
+        flagEmoji: String,
+        isSelected: Boolean,
+        onClick: () -> Unit
+    ) {
+        val backgroundColor by animateColorAsState(
+            targetValue = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceContainer,
+            label = "bgColor"
+        )
+        val contentColor by animateColorAsState(
+            targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            label = "textColor"
+        )
+        val borderColor by animateColorAsState(
+            targetValue = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+            label = "borderColor"
+        )
+
+        Surface(
+            onClick = onClick,
+            shape = RoundedCornerShape(20.dp),
+            color = backgroundColor,
+            border = BorderStroke(1.5.dp, borderColor),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = flagEmoji, style = MaterialTheme.typography.headlineSmall)
+                    Spacer(Modifier.width(16.dp))
+                    Text(
+                        text = countryName,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = contentColor
                     )
                 }
-            } else {
-                item {
-                    Text(
-                        stringResource(R.string.chart_failed),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 32.dp),
+
+                if (isSelected) {
+                    Icon(
+                        imageVector = Icons.Rounded.Check,
+                        contentDescription = stringResource(R.string.desc_selected),
+                        tint = contentColor
                     )
                 }
             }
         }
     }
-}
+
+    @Composable
+    fun ChartPlaylistCard(
+        playlist: com.alananasss.kittytune.domain.Playlist,
+        onClick: () -> Unit
+    ) {
+        val dominantColor by rememberDominantColor(url = playlist.fullResArtwork)
+
+        val animatedColor by animateColorAsState(
+            targetValue = dominantColor,
+            animationSpec = tween(500),
+            label = "dominantColor"
+        )
+
+        // reduced width card for inline scrolling
+        Card(
+            onClick = onClick,
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            modifier = Modifier
+                .width(160.dp) // fixed width for horizontal scroll
+                .wrapContentHeight()
+        ) {
+            Column {
+                Box(modifier = Modifier.size(160.dp)) {
+                    AsyncImage(
+                        model = playlist.fullResArtwork,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        animatedColor.copy(alpha = 0.1f),
+                                        animatedColor.copy(alpha = 0.4f)
+                                    )
+                                )
+                            )
+                    )
+                }
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp)
+                ) {
+                    Text(
+                        text = playlist.title?.uppercase() ?: stringResource(R.string.home_charts).uppercase(),
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    val subtitle = when {
+                        playlist.trackCount != null && playlist.trackCount > 0 -> stringResource(R.string.playlist_num_tracks, playlist.trackCount)
+                        !playlist.user?.username.isNullOrBlank() -> playlist.user.username
+                        else -> stringResource(R.string.lib_playlists)
+                    }
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+
+    // helper to format numbers nicely (1.2m, 14k)
+    fun formatCompactNumber(count: Long): String {
+        if (count < 1000) return count.toString()
+        val k = count / 1000.0
+        val m = count / 1000000.0
+        return when {
+            m >= 1.0 -> String.format(Locale.getDefault(), "%.1fM", m)
+            k >= 1.0 -> String.format(Locale.getDefault(), "%.1fk", k)
+            else -> count.toString()
+        }
+    }
+
