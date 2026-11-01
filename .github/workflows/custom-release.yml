@@ -21,6 +21,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
       - name: Merge latest upstream release
         id: sync
         env:
@@ -35,13 +42,20 @@ jobs:
             git config user.name "github-actions"
             git config user.email "github-actions@users.noreply.github.com"
             PRE=$(git rev-parse HEAD)
-            # conflicts: retry letting upstream win the conflicting hunks; the build below is the safety net
-            # (ponytail: fork patches inside a conflicting hunk are dropped silently, port them back by hand when it matters)
-            git merge --no-edit "$UP_TAG" || { git merge --abort; git merge --no-edit -X theirs "$UP_TAG"; }
-            # GITHUB_TOKEN can't push workflow-file changes: keep this fork's own workflows
-            git checkout "$PRE" -- .github/workflows
-            git ls-tree -r --name-only HEAD .github/workflows | while read -r f; do git cat-file -e "$PRE:$f" 2>/dev/null || git rm -qf "$f"; done
-            git commit --amend --no-edit
+            # strategies in order: plain merge, our lines win conflicts, upstream's lines win conflicts.
+            # The first one that still compiles is kept; none compiles -> job fails, nothing is pushed.
+            # (ponytail: a strategy that compiles can still drop a fork patch inside a conflicting hunk)
+            ok=false
+            for strat in "" "-X ours" "-X theirs"; do
+              git reset -q --hard "$PRE"
+              git merge --no-edit $strat "$UP_TAG" >/dev/null 2>&1 || continue
+              # GITHUB_TOKEN can't push workflow-file changes: keep this fork's own workflows
+              git checkout "$PRE" -- .github/workflows
+              git ls-tree -r --name-only HEAD .github/workflows | while read -r f; do git cat-file -e "$PRE:$f" 2>/dev/null || git rm -qf "$f"; done
+              git commit --amend --no-edit
+              if ./gradlew compileDebugKotlin -q --console=plain; then echo "merge strategy: '${strat:-plain}'"; ok=true; break; fi
+            done
+            $ok || { echo "no merge strategy compiles, resolve by hand"; exit 1; }
             echo "new_upstream=true" >> $GITHUB_OUTPUT
           fi
 
@@ -67,14 +81,6 @@ jobs:
           sed -i -E "s/(versionName\s*=\s*)\"[^\"]*\"/\1\"$VERSION\"/; s/(versionCode\s*=\s*)[0-9]+/\1$(( CODE * 100 + N ))/" $F
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "base=$BASE" >> $GITHUB_OUTPUT
-
-      - name: Set up JDK 21
-        if: steps.gate.outputs.build == 'true'
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: gradle
 
       - name: Setup Android NDK
         if: steps.gate.outputs.build == 'true'
