@@ -1,6 +1,6 @@
 name: Custom Release
 
-# Scheduled: merge the latest upstream release into this branch, build, publish.
+# Scheduled: merge the latest upstream release into this branch, build, then push the merge and publish.
 # Manual run: rebuild the current branch (use after pushing your own changes).
 on:
   schedule:
@@ -34,10 +34,14 @@ jobs:
           else
             git config user.name "github-actions"
             git config user.email "github-actions@users.noreply.github.com"
-            # a conflict fails the job here -> GitHub emails you, resolve locally
-            git merge --no-edit "$UP_TAG"
-            # ponytail: push fails if upstream touched .github/workflows (GITHUB_TOKEN can't); merge that locally
-            git push origin HEAD
+            PRE=$(git rev-parse HEAD)
+            # conflicts: retry letting upstream win the conflicting hunks; the build below is the safety net
+            # (ponytail: fork patches inside a conflicting hunk are dropped silently, port them back by hand when it matters)
+            git merge --no-edit "$UP_TAG" || { git merge --abort; git merge --no-edit -X theirs "$UP_TAG"; }
+            # GITHUB_TOKEN can't push workflow-file changes: keep this fork's own workflows
+            git checkout "$PRE" -- .github/workflows
+            git ls-tree -r --name-only HEAD .github/workflows | while read -r f; do git cat-file -e "$PRE:$f" 2>/dev/null || git rm -qf "$f"; done
+            git commit --amend --no-edit
             echo "new_upstream=true" >> $GITHUB_OUTPUT
           fi
 
@@ -108,8 +112,10 @@ jobs:
           printf 'Custom build based on upstream v%s.\n\n' "${{ steps.ver.outputs.base }}" > notes.md
           gh api repos/$UPSTREAM/releases/tags/v${{ steps.ver.outputs.base }} --jq .body >> notes.md || true
           # --repo is mandatory: the `upstream` remote added above makes gh target the original repo otherwise
+          # publish the upstream merge only now that it is known to build
+          if [ "${{ steps.sync.outputs.new_upstream }}" = "true" ]; then git push origin HEAD; fi
           gh release create "v${{ steps.ver.outputs.version }}" app/build/outputs/apk/release/*.apk \
             --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
+            --target "$(git rev-parse HEAD)" \
             --title "KittyTune ${{ steps.ver.outputs.version }}" \
             --notes-file notes.md
