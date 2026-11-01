@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Bundle
 import androidx.annotation.OptIn
 import androidx.core.app.ServiceCompat
+import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -22,9 +23,12 @@ import com.alananasss.kittytune.data.local.PlayerPreferences
 import com.alananasss.kittytune.data.local.NotificationExtraButton
 import com.alananasss.kittytune.data.network.RetrofitClient
 import com.google.common.collect.ImmutableList
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -32,6 +36,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
 import android.app.PendingIntent
+import androidx.core.net.toUri
 
 class PlaybackService : MediaLibraryService() {
 
@@ -55,13 +60,18 @@ class PlaybackService : MediaLibraryService() {
 
     private var mediaSession: MediaLibrarySession? = null
     private var librarySessionCallback: KittyTuneMediaLibrarySessionCallback? = null
-    private val serviceScope = CoroutineScope(Dispatchers.Main)
+    // SupervisorJob so one failed collector cannot silently kill the others; cancelled in
+    // onDestroy so a destroyed service stops multiplying every player event.
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var serviceListener: Player.Listener? = null
+    private var mediaController: androidx.media3.session.MediaController? = null
 
     private var updateJob: Job? = null
     private var discordJob: Job? = null
     private var discordRpc: DiscordRPC? = null
     private var automotiveLyricsJob: Job? = null
     private var automotiveLyricsGeneration = 0
+    private var currentForwardingPlayer: KittyTuneForwardingPlayer? = null
     private lateinit var prefs: PlayerPreferences
 
     @OptIn(UnstableApi::class)
@@ -73,6 +83,7 @@ class PlaybackService : MediaLibraryService() {
         SocialProofRepository.init(this)
         HistoryRepository.init(this)
         com.alananasss.kittytune.data.RecognitionHistoryRepository.init(this)
+        com.alananasss.kittytune.data.QueueHistoryRepository.init(this)
         RepostRepository.init(this)
         DownloadManager.init(this)
         BlockManager.init(this)
@@ -97,37 +108,26 @@ class PlaybackService : MediaLibraryService() {
             }
         }
 
+        serviceScope.launch {
+            MusicManager.isLoadingTrackFlow.collect { isLoading ->
+                currentForwardingPlayer?.notifyLoadingStateChanged()
+                requestUpdate(delayed = false)
+            }
+        }
+
+        serviceScope.launch {
+            MusicManager.playWhenReadyRequestedFlow.collect {
+                currentForwardingPlayer?.notifyLoadingStateChanged()
+                requestUpdate(delayed = false)
+            }
+        }
+
         val sessionIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val pendingIntent = PendingIntent.getActivity(this, 0, sessionIntent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
 
-    fun createForwardingPlayer(): ForwardingPlayer {
-        return object : ForwardingPlayer(MusicManager.player) {
-            override fun getAvailableCommands(): Player.Commands {
-                return super.getAvailableCommands().buildUpon()
-                    .add(Player.COMMAND_SEEK_TO_NEXT)
-                    .add(Player.COMMAND_SEEK_TO_PREVIOUS)
-                    .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
-                    .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
-                    .build()
-            }
-
-            override fun isCommandAvailable(command: Int): Boolean {
-                return when (command) {
-                    Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_PREVIOUS,
-                    Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> true
-                    else -> super.isCommandAvailable(command)
-                }
-            }
-
-            override fun seekToNext() { MusicManager.onNextClick?.invoke() }
-            override fun seekToPrevious() { MusicManager.onPreviousClick?.invoke() }
-            override fun seekToNextMediaItem() { MusicManager.onNextClick?.invoke() }
-            override fun seekToPreviousMediaItem() { MusicManager.onPreviousClick?.invoke() }
-        }
-    }
 
         librarySessionCallback = KittyTuneMediaLibrarySessionCallback(
             context = this,
@@ -156,6 +156,7 @@ class PlaybackService : MediaLibraryService() {
             }
         }
 
+        this.serviceListener = serviceListener
         MusicManager.player.addListener(serviceListener)
 
         serviceScope.launch {
@@ -171,7 +172,9 @@ class PlaybackService : MediaLibraryService() {
         // Keep a connected controller so that Media3 automatically posts the notification
         val sessionToken = androidx.media3.session.SessionToken(this, android.content.ComponentName(this, PlaybackService::class.java))
         val controllerFuture = androidx.media3.session.MediaController.Builder(this, sessionToken).buildAsync()
-        controllerFuture.addListener({ controllerFuture.get() }, androidx.core.content.ContextCompat.getMainExecutor(this))
+        controllerFuture.addListener({
+            mediaController = try { controllerFuture.get() } catch (_: Exception) { null }
+        }, androidx.core.content.ContextCompat.getMainExecutor(this))
 
         // Android Auto synchronized lyrics observer
         serviceScope.launch {
@@ -179,10 +182,8 @@ class PlaybackService : MediaLibraryService() {
                 librarySessionCallback!!.isAutomotiveControllerConnected,
                 prefs.getAndroidAutoSyncedLyricsFlow()
             ) { automotiveConnected, lyricsEnabled ->
-                android.util.Log.d("KittyTuneAA", "combine flow: auto=$automotiveConnected, pref=$lyricsEnabled")
                 automotiveConnected && lyricsEnabled
             }.collectLatest { shouldRun ->
-                android.util.Log.d("KittyTuneAA", "automotiveLyricsObserver: shouldRun=$shouldRun")
                 automotiveLyricsJob?.cancel()
                 if (!shouldRun) {
                     automotiveLyricsJob = null
@@ -323,8 +324,15 @@ class PlaybackService : MediaLibraryService() {
                     .build()
             }
             NotificationExtraButton.HAPTICS -> {
+                // The button is a switch: it says which state it puts the haptics in.
+                val hapticsOn = prefs.getHapticsEnabled()
                 CommandButton.Builder()
-                    .setDisplayName(getString(R.string.notif_btn_haptics))
+                    .setDisplayName(
+                        getString(
+                            if (hapticsOn) R.string.notif_btn_haptics_on
+                            else R.string.notif_btn_haptics_off
+                        )
+                    )
                     .setIconResId(R.drawable.ic_vibration)
                     .setSessionCommand(SessionCommand(CUSTOM_ACTION_HAPTICS, Bundle.EMPTY))
                     .setEnabled(true)
@@ -374,6 +382,7 @@ class PlaybackService : MediaLibraryService() {
             player.stop()
             player.clearMediaItems()
             MusicManager.currentTrack = null
+            MusicManager.updateRainPlayback()
             MusicWidget.update(this)
             ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
             stopSelf()
@@ -401,7 +410,6 @@ class PlaybackService : MediaLibraryService() {
                 rawItemMediaId.contains(mediaId) ||
                 rawItemMediaId.removePrefix("track:").substringBefore(":context:") == mediaId
 
-        android.util.Log.d("KittyTuneAA", "replaceSubtitle: rawId=$rawItemMediaId, target=$mediaId, matches=$matchesId, currentSub=${mediaItem.mediaMetadata.subtitle}, newSub=$subtitle, isLyric=$isLyric")
         if (!matchesId) return
         if (mediaItem.mediaMetadata.subtitle == subtitle && mediaItem.mediaMetadata.artist == subtitle) return
 
@@ -432,6 +440,10 @@ class PlaybackService : MediaLibraryService() {
             var lastSubtitle: CharSequence? = null
             var currentMediaId: String? = null
             var originalSubtitle: String? = null
+            // Network resolution is attempted at most ONCE per track: retrying every second in a
+            // loop was hammering the lyrics providers (and the radio's data plan) forever on
+            // tracks that simply have no lyrics. A track change resets the attempt.
+            var networkFetchAttemptedForMediaId: String? = null
 
             while (serviceScope.isActive && generation == automotiveLyricsGeneration) {
                 val currentTrack = MusicManager.currentTrack
@@ -455,14 +467,20 @@ class PlaybackService : MediaLibraryService() {
                     if (cached != null && cached.found && cached.lines.isNotEmpty()) {
                         MusicManager.currentLyricsFlow.value = cached.lines
                         lines = cached.lines
-                    } else {
+                    } else if (networkFetchAttemptedForMediaId != mediaId) {
+                        networkFetchAttemptedForMediaId = mediaId
                         withContext(Dispatchers.IO) {
                             try {
-                                val provider = com.alananasss.kittytune.data.lyrics.providers.LyricsProviders.get(
-                                    com.alananasss.kittytune.data.lyrics.providers.PreferredLyricsProvider.BETTER_LYRICS
-                                ) ?: com.alananasss.kittytune.data.lyrics.providers.LyricsProviders.get(
-                                    com.alananasss.kittytune.data.lyrics.providers.PreferredLyricsProvider.LRCLIB
+                                val automotiveSources = DataSaver.restrictLyricsProviders(
+                                    this@PlaybackService,
+                                    listOf(
+                                        com.alananasss.kittytune.data.lyrics.providers.PreferredLyricsProvider.BETTER_LYRICS,
+                                        com.alananasss.kittytune.data.lyrics.providers.PreferredLyricsProvider.LRCLIB,
+                                    ),
                                 )
+                                val provider = automotiveSources.firstOrNull()?.let {
+                                    com.alananasss.kittytune.data.lyrics.providers.LyricsProviders.get(it)
+                                }
                                 val durationSec = ((currentTrack.durationMs ?: 0L) / 1000L).toInt()
                                 val res = provider?.getLyrics(
                                     id = currentTrack.id.toString(),
@@ -535,9 +553,269 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
+    private fun createForwardingPlayer(): KittyTuneForwardingPlayer {
+        return KittyTuneForwardingPlayer(MusicManager.player).also {
+            currentForwardingPlayer = it
+        }
+    }
+
+    inner class KittyTuneForwardingPlayer(delegate: Player) : ForwardingPlayer(delegate) {
+        private val wrappedListeners = java.util.concurrent.CopyOnWriteArrayList<Player.Listener>()
+        private val listenerMap = java.util.concurrent.ConcurrentHashMap<Player.Listener, Player.Listener>()
+
+        override fun getDuration(): Long {
+            val superDuration = super.getDuration()
+            if (superDuration > 0L && superDuration != C.TIME_UNSET) {
+                return superDuration
+            }
+            val trackDuration = MusicManager.currentTrack?.actualDurationMs ?: 0L
+            if (trackDuration > 0L) {
+                return trackDuration
+            }
+            return superDuration
+        }
+
+        override fun isCurrentMediaItemSeekable(): Boolean {
+            if (super.isCurrentMediaItemSeekable()) return true
+            return MusicManager.currentTrack != null
+        }
+
+        override fun isCurrentMediaItemDynamic(): Boolean {
+            if (MusicManager.currentTrack != null) return false
+            return super.isCurrentMediaItemDynamic()
+        }
+
+        override fun isCurrentMediaItemLive(): Boolean {
+            if (MusicManager.currentTrack != null) return false
+            return super.isCurrentMediaItemLive()
+        }
+
+        override fun getMediaMetadata(): androidx.media3.common.MediaMetadata {
+            val superMeta = super.getMediaMetadata()
+            val track = MusicManager.currentTrack
+            if (track != null && (superMeta.title.isNullOrEmpty() || superMeta.durationMs == null || superMeta.durationMs == 0L)) {
+                val artist = track.displayArtist.ifBlank { getString(R.string.unknown_artist) }
+                return superMeta.buildUpon()
+                    .setTitle(superMeta.title?.takeIf { it.isNotEmpty() } ?: track.title ?: getString(R.string.untitled_track))
+                    .setArtist(superMeta.artist?.takeIf { it.isNotEmpty() } ?: artist)
+                    .setSubtitle(superMeta.subtitle?.takeIf { it.isNotEmpty() } ?: artist)
+                    .setIsPlayable(true)
+                    .setMediaType(androidx.media3.common.MediaMetadata.MEDIA_TYPE_MUSIC)
+                    .setArtworkUri(superMeta.artworkUri ?: track.fullResArtwork.toUri())
+                    .setDurationMs(track.actualDurationMs)
+                    .build()
+            }
+            return superMeta
+        }
+
+        override fun getCurrentMediaItem(): androidx.media3.common.MediaItem? {
+            val superItem = super.getCurrentMediaItem()
+            if (superItem != null) return superItem
+            val track = MusicManager.currentTrack ?: return null
+            val artist = track.displayArtist.ifBlank { getString(R.string.unknown_artist) }
+            val meta = androidx.media3.common.MediaMetadata.Builder()
+                .setTitle(track.title ?: getString(R.string.untitled_track))
+                .setArtist(artist)
+                .setSubtitle(artist)
+                .setIsPlayable(true)
+                .setMediaType(androidx.media3.common.MediaMetadata.MEDIA_TYPE_MUSIC)
+                .setArtworkUri(track.fullResArtwork.toUri())
+                .setDurationMs(track.actualDurationMs)
+                .build()
+            return androidx.media3.common.MediaItem.Builder()
+                .setMediaId(track.id.toString())
+                .setUri("soundtune://track/${track.id}".toUri())
+                .setMediaMetadata(meta)
+                .build()
+        }
+
+        override fun getAvailableCommands(): Player.Commands {
+            return super.getAvailableCommands().buildUpon()
+                .add(Player.COMMAND_SEEK_TO_NEXT)
+                .add(Player.COMMAND_SEEK_TO_PREVIOUS)
+                .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+                .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+                .add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
+                .add(Player.COMMAND_GET_CURRENT_MEDIA_ITEM)
+                .add(Player.COMMAND_GET_TIMELINE)
+                .add(Player.COMMAND_GET_METADATA)
+                .add(Player.COMMAND_PLAY_PAUSE)
+                .build()
+        }
+
+        override fun isCommandAvailable(command: Int): Boolean {
+            return when (command) {
+                Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_PREVIOUS,
+                Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
+                Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM, Player.COMMAND_GET_CURRENT_MEDIA_ITEM,
+                Player.COMMAND_GET_TIMELINE, Player.COMMAND_GET_METADATA,
+                Player.COMMAND_PLAY_PAUSE -> true
+                else -> super.isCommandAvailable(command)
+            }
+        }
+
+        override fun getPlaybackState(): Int {
+            val base = super.getPlaybackState()
+            return if (MusicManager.isLoadingTrack || (MusicManager.currentTrack != null && base == Player.STATE_IDLE)) {
+                Player.STATE_BUFFERING
+            } else {
+                base
+            }
+        }
+
+        override fun getPlayWhenReady(): Boolean {
+            return if (MusicManager.isLoadingTrack) {
+                MusicManager.playWhenReadyRequested
+            } else {
+                super.getPlayWhenReady()
+            }
+        }
+
+        override fun isPlaying(): Boolean {
+            return if (MusicManager.isLoadingTrack) {
+                false
+            } else {
+                super.isPlaying()
+            }
+        }
+
+        override fun getCurrentPosition(): Long {
+            return if (MusicManager.isLoadingTrack) {
+                MusicManager.pendingSeekPositionMs ?: 0L
+            } else {
+                super.getCurrentPosition()
+            }
+        }
+
+        override fun seekTo(positionMs: Long) {
+            if (MusicManager.isLoadingTrack) {
+                MusicManager.pendingSeekPositionMs = positionMs
+                notifyPositionDiscontinuity(positionMs)
+            } else {
+                super.seekTo(positionMs)
+            }
+        }
+
+        override fun seekTo(mediaItemIndex: Int, positionMs: Long) {
+            if (MusicManager.isLoadingTrack) {
+                MusicManager.pendingSeekPositionMs = positionMs
+                notifyPositionDiscontinuity(positionMs)
+            } else {
+                super.seekTo(mediaItemIndex, positionMs)
+            }
+        }
+
+        override fun play() {
+            MusicManager.playWhenReadyRequested = true
+            if (MusicManager.isLoadingTrack) {
+                notifyLoadingStateChanged()
+            } else {
+                super.play()
+            }
+        }
+
+        override fun pause() {
+            MusicManager.playWhenReadyRequested = false
+            if (MusicManager.isLoadingTrack) {
+                notifyLoadingStateChanged()
+            } else {
+                super.pause()
+            }
+        }
+
+        override fun seekToNext() { MusicManager.onNextClick?.invoke() }
+        override fun seekToPrevious() { MusicManager.onPreviousClick?.invoke() }
+        override fun seekToNextMediaItem() { MusicManager.onNextClick?.invoke() }
+        override fun seekToPreviousMediaItem() { MusicManager.onPreviousClick?.invoke() }
+
+        override fun addListener(listener: Player.Listener) {
+            val wrapped = object : Player.Listener {
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    val effectiveState = if (MusicManager.isLoadingTrack || (MusicManager.currentTrack != null && playbackState == Player.STATE_IDLE)) {
+                        Player.STATE_BUFFERING
+                    } else {
+                        playbackState
+                    }
+                    listener.onPlaybackStateChanged(effectiveState)
+                }
+
+                override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                    val effective = if (MusicManager.isLoadingTrack) MusicManager.playWhenReadyRequested else playWhenReady
+                    listener.onPlayWhenReadyChanged(effective, reason)
+                }
+
+                override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    val effective = if (MusicManager.isLoadingTrack) false else isPlaying
+                    listener.onIsPlayingChanged(effective)
+                }
+
+                override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
+                    listener.onMediaItemTransition(mediaItem, reason)
+                }
+
+                override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+                    listener.onTimelineChanged(timeline, reason)
+                }
+
+                override fun onEvents(player: Player, events: Player.Events) {
+                    listener.onEvents(this@KittyTuneForwardingPlayer, events)
+                }
+
+                override fun onPositionDiscontinuity(
+                    oldPosition: Player.PositionInfo,
+                    newPosition: Player.PositionInfo,
+                    reason: Int
+                ) {
+                    listener.onPositionDiscontinuity(oldPosition, newPosition, reason)
+                }
+            }
+            listenerMap[listener] = wrapped
+            wrappedListeners.add(wrapped)
+            super.addListener(wrapped)
+        }
+
+        override fun removeListener(listener: Player.Listener) {
+            val wrapped = listenerMap.remove(listener) ?: listener
+            wrappedListeners.remove(wrapped)
+            super.removeListener(wrapped)
+        }
+
+        fun notifyLoadingStateChanged() {
+            val state = getPlaybackState()
+            val pwr = getPlayWhenReady()
+            val playing = isPlaying
+            for (l in wrappedListeners) {
+                try {
+                    l.onPlaybackStateChanged(state)
+                    l.onPlayWhenReadyChanged(pwr, Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
+                    l.onIsPlayingChanged(playing)
+                } catch (_: Exception) {}
+            }
+        }
+
+        private fun notifyPositionDiscontinuity(positionMs: Long) {
+            val oldPos = Player.PositionInfo(null, 0, null, null, 0, 0L, 0L, 0, 0)
+            val newPos = Player.PositionInfo(null, 0, null, null, 0, positionMs, positionMs, 0, 0)
+            for (l in wrappedListeners) {
+                try {
+                    l.onPositionDiscontinuity(oldPos, newPos, Player.DISCONTINUITY_REASON_SEEK)
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
     override fun onDestroy() {
         closeDiscordRpc()
         automotiveLyricsJob?.cancel()
+        // Release everything registered in onCreate: the player listener, the session-keeping
+        // controller, and the service scope. Without this, every service recreation stacked a
+        // new listener/collector pair on the singletons, progressively amplifying each player
+        // event into duplicated widget updates, notifications and Discord RPC calls.
+        serviceListener?.let { MusicManager.player.removeListener(it) }
+        mediaController?.release()
+        mediaController = null
+        serviceScope.cancel()
+        AchievementManager.flushPendingWrites()
         librarySessionCallback?.release()
         mediaSession?.run { release(); mediaSession = null }
         super.onDestroy()

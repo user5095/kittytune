@@ -83,6 +83,16 @@ object YouTube {
         set(value) {
             innerTube.proxy = value
         }
+    var socketFactory: javax.net.SocketFactory?
+        get() = innerTube.socketFactory
+        set(value) {
+            innerTube.socketFactory = value
+        }
+    var okHttpClient: okhttp3.OkHttpClient?
+        get() = innerTube.okHttpClient
+        set(value) {
+            innerTube.okHttpClient = value
+        }
 
     suspend fun searchSuggestions(query: String): Result<SearchSuggestions> = runCatching {
         val response = innerTube.getSearchSuggestions(WEB_REMIX, query).body<GetSearchSuggestionsResponse>()
@@ -129,8 +139,16 @@ object YouTube {
         )
     }
 
-    suspend fun search(query: String, filter: SearchFilter): Result<SearchResult> = runCatching {
-        val response = innerTube.search(WEB_REMIX, query, filter.value).body<SearchResponse>()
+    suspend fun search(query: String, filter: SearchFilter = SearchFilter.FILTER_ALL): Result<SearchResult> = runCatching {
+        val param = filter.value.takeIf { it.isNotBlank() }
+        val response = innerTube.search(WEB_REMIX, query, param).body<SearchResponse>()
+        val contents = response.contents?.tabbedSearchResultsRenderer?.tabs?.firstOrNull()
+            ?.tabRenderer?.content?.sectionListRenderer?.contents
+        val shelf = contents?.mapNotNull { it.musicShelfRenderer }?.firstOrNull()
+            ?: contents?.lastOrNull()?.musicShelfRenderer
+        val items: List<YTItem> = shelf?.contents?.mapNotNull {
+            SearchPage.toYTItem(it.musicResponsiveListItemRenderer)
+        }.orEmpty()
         SearchResult(
             items = response.contents?.tabbedSearchResultsRenderer?.tabs?.firstOrNull()
                 ?.tabRenderer?.content?.sectionListRenderer?.contents?.lastOrNull()
@@ -613,6 +631,7 @@ object YouTube {
     @JvmInline
     value class SearchFilter(val value: String) {
         companion object {
+            val FILTER_ALL = SearchFilter("")
             val FILTER_SONG = SearchFilter("EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D")
             val FILTER_VIDEO = SearchFilter("EgWKAQIQAWoKEAkQChAFEAMQBA%3D%3D")
             val FILTER_ALBUM = SearchFilter("EgWKAQIYAWoKEAkQChAFEAMQBA%3D%3D")

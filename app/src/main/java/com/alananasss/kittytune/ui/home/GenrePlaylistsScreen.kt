@@ -34,6 +34,9 @@ import com.alananasss.kittytune.ui.icons.Icon
     import androidx.lifecycle.viewmodel.compose.viewModel
     import coil.compose.AsyncImage
     import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.ui.common.hapticClickable
     import com.alananasss.kittytune.domain.Playlist
     import com.alananasss.kittytune.ui.common.SquareCardShimmer
 
@@ -122,7 +125,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                     items(viewModel.playlists) { playlist ->
                         CinematicPlaylistCard(
                             playlist = playlist,
-                            onClick = { onPlaylistClick(playlist.id) }
+                            onClick = hapticAction(HapticKind.UI) { onPlaylistClick(playlist.id) }
                         )
                     }
 

@@ -9,6 +9,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Devices
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Pause
@@ -33,6 +34,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.rememberAppHaptics
 import com.alananasss.kittytune.ui.player.PlayerViewModel
 
 @Composable
@@ -47,8 +50,11 @@ fun TabletBottomDock(
     onPlayerClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val track = playerViewModel.currentTrack
-    val isPlaying = playerViewModel.isPlaying
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val playerPrefs = remember { com.alananasss.kittytune.data.local.PlayerPreferences(context) }
+    val haptics = rememberAppHaptics()
+    val track = playerViewModel.uiCurrentTrack
+    val isPlaying = playerViewModel.uiIsPlaying
     val showMiniPlayer = track != null && !playerViewModel.isSidePlayerOpen
 
     Row(
@@ -101,7 +107,10 @@ fun TabletBottomDock(
                             .weight(1f)
                             .fillMaxHeight()
                             .clip(RoundedCornerShape(24.dp))
-                            .clickable { onTabSelected(tab) },
+                            .clickable {
+                                haptics.perform(HapticKind.UI)
+                                onTabSelected(tab)
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         Column(
@@ -136,7 +145,10 @@ fun TabletBottomDock(
                         .weight(1f)
                         .fillMaxHeight()
                         .clip(RoundedCornerShape(24.dp))
-                        .clickable { onFabClick() },
+                        .clickable {
+                            haptics.perform(HapticKind.MEDIUM)
+                            onFabClick()
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     Column(
@@ -177,7 +189,10 @@ fun TabletBottomDock(
         ) {
             if (track != null) {
                 Surface(
-                    onClick = { onPlayerClick() },
+                    onClick = {
+                        haptics.perform(HapticKind.LIGHT)
+                        onPlayerClick()
+                    },
                     shape = RoundedCornerShape(36.dp),
                     color = MaterialTheme.colorScheme.surfaceContainer,
                     tonalElevation = 6.dp,
@@ -221,13 +236,45 @@ fun TabletBottomDock(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Spacer(Modifier.height(2.dp))
-                                Text(
-                                    text = track.displayArtist.ifBlank { stringResource(R.string.unknown_artist) },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    val deviceLabel = playerViewModel.playbackDeviceLabel
+                                    if (deviceLabel != null) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.clickable {
+                                                haptics.perform(HapticKind.LIGHT)
+                                                playerViewModel.showConnectSheet = true
+                                            }
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Devices,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                            Spacer(Modifier.width(3.dp))
+                                            Text(
+                                                text = deviceLabel,
+                                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                                                color = MaterialTheme.colorScheme.primary,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("·", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Spacer(Modifier.width(4.dp))
+                                    }
+                                    Text(
+                                        text = track.displayArtist.ifBlank { stringResource(R.string.unknown_artist) },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
 
                             // Bouton Like
@@ -237,9 +284,9 @@ fun TabletBottomDock(
                                 modifier = Modifier.size(36.dp)
                             ) {
                                 Icon(
-                                    imageVector = if (playerViewModel.isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                                    imageVector = if (playerViewModel.uiIsLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                                     contentDescription = null,
-                                    tint = if (playerViewModel.isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = if (playerViewModel.uiIsLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(22.dp)
                                 )
                             }

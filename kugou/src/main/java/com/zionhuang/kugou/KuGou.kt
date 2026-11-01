@@ -6,6 +6,8 @@ import com.zionhuang.kugou.models.SearchLyricsResponse
 import com.zionhuang.kugou.models.SearchSongResponse
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.compression.ContentEncoding
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
@@ -18,6 +20,7 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import java.lang.Character.UnicodeScript
 import java.lang.Integer.min
+import javax.net.SocketFactory
 import kotlin.math.abs
 
 /**
@@ -27,9 +30,37 @@ import kotlin.math.abs
 object KuGou {
     var useTraditionalChinese: Boolean = false
 
+    /**
+     * Optional plain [SocketFactory] (e.g. the app's DPI-bypass factory). The client is
+     * (re)created with it, so set it once at startup; dynamic factories need no further updates.
+     */
+    @Volatile
+    var socketFactory: SocketFactory? = null
+        set(value) {
+            field = value
+            client.close()
+            client = createClient()
+        }
+
+    @Volatile
+    private var client = createClient()
+
     @OptIn(ExperimentalSerializationApi::class)
-    private val client = HttpClient {
+    private fun createClient() = HttpClient(OkHttp) {
+        socketFactory?.let { factory ->
+            engine {
+                config {
+                    socketFactory(factory)
+                }
+            }
+        }
         expectSuccess = true
+
+        install(HttpTimeout) {
+            requestTimeoutMillis = 15000
+            connectTimeoutMillis = 10000
+            socketTimeoutMillis = 15000
+        }
 
         install(ContentNegotiation) {
             val json = Json {

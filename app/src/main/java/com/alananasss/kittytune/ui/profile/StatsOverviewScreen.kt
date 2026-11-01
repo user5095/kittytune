@@ -24,7 +24,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Celebration
 import androidx.compose.material.icons.rounded.Check
@@ -73,6 +77,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.ui.common.hapticClickable
 import com.alananasss.kittytune.data.local.PlayerPreferences
 import com.alananasss.kittytune.data.stats.ListeningReport
 import com.alananasss.kittytune.data.stats.ReportArtist
@@ -93,6 +100,7 @@ import com.alananasss.kittytune.ui.profile.stats.StatsListTarget
 import com.alananasss.kittytune.ui.profile.stats.StoryStats
 import com.alananasss.kittytune.ui.profile.stats.TracksListDialog
 import com.alananasss.kittytune.ui.profile.stats.formatDuration
+import com.alananasss.kittytune.ui.profile.stats.periodHeadline
 import com.alananasss.kittytune.ui.profile.stats.spanLabel
 
 private const val TOP_TRACKS_SHOWN = 5
@@ -189,7 +197,7 @@ fun ListeningStatsScreen(
                 actions = {
                     Box {
                         FilledTonalIconButton(
-                            onClick = { styleMenu = true },
+                            onClick = hapticAction(HapticKind.UI) { styleMenu = true },
                             shapes = IconButtonDefaults.shapes(),
                             colors = IconButtonDefaults.filledTonalIconButtonColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
@@ -227,7 +235,7 @@ fun ListeningStatsScreen(
                                             )
                                         }
                                     },
-                                    onClick = {
+                                    onClick = hapticAction(HapticKind.UI) {
                                         styleMenu = false
                                         style = option
                                         playerPrefs.setListeningStatsStyle(option.name)
@@ -237,7 +245,7 @@ fun ListeningStatsScreen(
                         }
                     }
                     Spacer(Modifier.width(4.dp))
-                    IconButton(onClick = { showPrivacy = true }) {
+                    IconButton(onClick = hapticAction(HapticKind.UI) { showPrivacy = true }) {
                         Icon(
                             Icons.Rounded.Tune,
                             contentDescription = stringResource(R.string.pref_privacy_title)
@@ -258,7 +266,17 @@ fun ListeningStatsScreen(
                 .padding(innerPadding)
                 .fillMaxSize()
         ) {
-            StatsHeader(period = period, onSelect = { viewModel.selectPeriod(it.toStatsPeriod()) })
+            StatsHeader(
+                period = period,
+                report = report,
+                periodOffset = viewModel.periodOffset,
+                canGoBack = viewModel.canGoBack,
+                canGoForward = viewModel.canGoForward,
+                onSelect = { viewModel.selectPeriod(it.toStatsPeriod()) },
+                onPrevious = { viewModel.previousPeriod() },
+                onNext = { viewModel.nextPeriod() },
+                onReset = { viewModel.resetToCurrentPeriod() }
+            )
 
             AnimatedContent(
                 targetState = report?.takeIf { !isLoading }?.let { it to style },
@@ -267,7 +285,25 @@ fun ListeningStatsScreen(
                 },
                 contentKey = { it?.let { (r, s) -> r.window to s } },
                 label = "statsBody",
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(period, viewModel.canGoBack, viewModel.canGoForward) {
+                        if (period == ReportPeriod.ALL_TIME) return@pointerInput
+                        var totalDrag = 0f
+                        detectHorizontalDragGestures(
+                            onDragStart = { totalDrag = 0f },
+                            onHorizontalDrag = { _, dragAmount ->
+                                totalDrag += dragAmount
+                            },
+                            onDragEnd = {
+                                if (totalDrag > 80f && viewModel.canGoBack) {
+                                    viewModel.previousPeriod()
+                                } else if (totalDrag < -80f && viewModel.canGoForward) {
+                                    viewModel.nextPeriod()
+                                }
+                            }
+                        )
+                    }
             ) { shownPair ->
                 val (shownReport, shownStyle) = shownPair ?: (null to style)
                 when {
@@ -377,7 +413,7 @@ private fun PrivacyDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Surface(
-                    onClick = {
+                    onClick = hapticAction(HapticKind.UI) {
                         isEnabled = !isEnabled
                         playerPrefs.setListeningStatsEnabled(isEnabled)
                     },
@@ -419,7 +455,7 @@ private fun PrivacyDialog(
                 )
                 if (!isGuest) {
                     Surface(
-                        onClick = {
+                        onClick = hapticAction(HapticKind.UI) {
                             onDismiss()
                             onNavigateToYearlyPlayback()
                         },
@@ -467,7 +503,14 @@ private fun PrivacyDialog(
 @Composable
 private fun StatsHeader(
     period: ReportPeriod,
-    onSelect: (ReportPeriod) -> Unit
+    report: ListeningReport?,
+    periodOffset: Int,
+    canGoBack: Boolean,
+    canGoForward: Boolean,
+    onSelect: (ReportPeriod) -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onReset: () -> Unit,
 ) {
     Column(
         Modifier
@@ -495,6 +538,85 @@ private fun StatsHeader(
                 )
             }
         )
+
+        if (period != ReportPeriod.ALL_TIME) {
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                FilledTonalIconButton(
+                    onClick = hapticAction(HapticKind.UI) { onPrevious() },
+                    enabled = canGoBack,
+                    shapes = IconButtonDefaults.shapes(),
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
+                    ),
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = stringResource(R.string.listening_stats_previous_period),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(enabled = periodOffset != 0) { onReset() }
+                        .padding(vertical = 2.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    val headline = if (report != null) periodHeadline(period, periodOffset, report) else ""
+                    val subtitle = if (report != null && periodOffset != 0) spanLabel(period, report) else null
+                    Text(
+                        text = headline,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center
+                    )
+                    if (subtitle != null) {
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+
+                FilledTonalIconButton(
+                    onClick = hapticAction(HapticKind.UI) { onNext() },
+                    enabled = canGoForward,
+                    shapes = IconButtonDefaults.shapes(),
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
+                    ),
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Rounded.ArrowForward,
+                        contentDescription = stringResource(R.string.listening_stats_next_period),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
     }
 }
 

@@ -20,8 +20,10 @@ import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Repeat
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Tag
 import androidx.compose.material.icons.rounded.Verified
+import com.alananasss.kittytune.utils.formatPlaylistTotalDuration
 import androidx.compose.material3.*
 import com.alananasss.kittytune.ui.icons.Icon
 import androidx.compose.runtime.*
@@ -43,6 +45,10 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.ui.common.rememberAppHaptics
+import com.alananasss.kittytune.ui.common.hapticClickable
 import com.alananasss.kittytune.domain.User
 import com.alananasss.kittytune.ui.profile.ArtistAvatar
 import java.text.NumberFormat
@@ -58,9 +64,11 @@ fun PlaylistDetailsSheet(
     onViewAll: (Int) -> Unit,
     onNavigate: (String) -> Unit,
     onMentionClick: (String) -> Unit,
+    initialDurationMs: Long? = null,
     viewModel: PlaylistInfoViewModel = viewModel()
 ) {
     val context = LocalContext.current
+    val haptics = rememberAppHaptics()
     val uriHandler = LocalUriHandler.current
 
     LaunchedEffect(playlistId) {
@@ -102,7 +110,7 @@ fun PlaylistDetailsSheet(
                             .clip(RoundedCornerShape(12.dp))
                             .then(
                                 if (isArtist) {
-                                    Modifier.clickable {
+                                    Modifier.hapticClickable {
                                         onDismiss()
                                         val navTarget = when {
                                             creator.urn?.startsWith("spotify:artist:") == true -> creator.urn
@@ -236,6 +244,27 @@ fun PlaylistDetailsSheet(
                             }
                         }
 
+                        val totalDurationMs = initialDurationMs?.takeIf { it > 0L }
+                            ?: playlist.durationMs?.takeIf { it > 0L }
+                            ?: playlist.tracks.orEmpty().sumOf { it.durationMs ?: 0L }
+                        val durationText = if (totalDurationMs > 0L) formatPlaylistTotalDuration(context.resources, totalDurationMs) else ""
+                        if (durationText.isNotEmpty()) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Rounded.Schedule,
+                                    null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = durationText,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
                         val dateStr = playlist.lastModified ?: playlist.createdAt
                         if (dateStr != null) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -266,7 +295,7 @@ fun PlaylistDetailsSheet(
                             FlowRow(modifier = Modifier.fillMaxWidth()) {
                                 tags.take(10).forEach { tag ->
                                     SuggestionChip(
-                                        onClick = {
+                                        onClick = hapticAction(HapticKind.UI) {
                                             onDismiss()
                                             onNavigate("tag:$tag")
                                         },
@@ -320,6 +349,7 @@ fun PlaylistDetailsSheet(
                             text = playlist.description!!,
                             onUrlClick = { url -> uriHandler.openUri(url) },
                             onMentionClick = { username ->
+                                haptics.perform(HapticKind.LIGHT)
                                 onDismiss()
                                 onMentionClick(username)
                             }
@@ -386,7 +416,7 @@ fun UserSection(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { onViewAll() }
+                .hapticClickable { onViewAll() }
                 .padding(horizontal = 24.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
@@ -429,7 +459,7 @@ fun UserSection(
                         .padding(2.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                        .clickable { onViewAll() },
+                        .hapticClickable { onViewAll() },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -471,6 +501,7 @@ fun ExpandableDescription(
     onMentionClick: (String) -> Unit
 ) {
     var isExpanded by remember { mutableStateOf(false) }
+    val haptics = rememberAppHaptics()
     val urlPattern = Pattern.compile("((https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|])")
     val mentionPattern = Pattern.compile("@[\\w-]+")
 
@@ -519,6 +550,7 @@ fun ExpandableDescription(
             maxLines = if (isExpanded) Int.MAX_VALUE else 3,
             overflow = TextOverflow.Ellipsis,
             onClick = { offset ->
+                haptics.perform(HapticKind.LIGHT)
                 var isAnnotationClicked = false
                 annotatedString.getStringAnnotations(start = offset, end = offset).firstOrNull()?.let { annotation ->
                     when (annotation.tag) {
@@ -544,7 +576,7 @@ fun ExpandableDescription(
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
                     .padding(top = 4.dp)
-                    .clickable { isExpanded = !isExpanded }
+                    .hapticClickable { isExpanded = !isExpanded }
             )
         }
     }

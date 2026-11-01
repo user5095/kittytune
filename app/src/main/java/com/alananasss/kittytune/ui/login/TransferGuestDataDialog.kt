@@ -22,6 +22,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.ui.common.hapticClickable
 import com.alananasss.kittytune.data.GuestDataSummary
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -75,7 +78,7 @@ fun TransferGuestDataDialog(
             },
             confirmButton = {
                 Button(
-                    onClick = {
+                    onClick = hapticAction(HapticKind.UI) {
                         showWarningDialog1 = false
                         showWarningDialog2 = true
                     },
@@ -85,7 +88,7 @@ fun TransferGuestDataDialog(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showWarningDialog1 = false }) {
+                TextButton(onClick = hapticAction(HapticKind.UI) { showWarningDialog1 = false }) {
                     Text(stringResource(R.string.transfer_guest_warn_btn_back))
                 }
             }
@@ -127,7 +130,7 @@ fun TransferGuestDataDialog(
             },
             confirmButton = {
                 Button(
-                    onClick = {
+                    onClick = hapticAction(HapticKind.UI) {
                         showWarningDialog2 = false
                         onDismiss()
                     },
@@ -137,7 +140,7 @@ fun TransferGuestDataDialog(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showWarningDialog2 = false }) {
+                TextButton(onClick = hapticAction(HapticKind.UI) { showWarningDialog2 = false }) {
                     Text(stringResource(R.string.transfer_guest_warn_btn_cancel))
                 }
             }
@@ -319,7 +322,7 @@ fun TransferGuestDataDialog(
         },
         confirmButton = {
             Button(
-                onClick = {
+                onClick = hapticAction(HapticKind.UI) {
                     onTransfer(transferLikes, transferPlaylists, transferLikedPlaylists)
                 },
                 enabled = !isTransferring && (transferLikes || transferPlaylists || transferLikedPlaylists)
@@ -329,7 +332,7 @@ fun TransferGuestDataDialog(
         },
         dismissButton = {
             if (!isTransferring) {
-                TextButton(onClick = { showWarningDialog1 = true }) {
+                TextButton(onClick = hapticAction(HapticKind.UI) { showWarningDialog1 = true }) {
                     Text(stringResource(R.string.transfer_guest_btn_skip))
                 }
             }

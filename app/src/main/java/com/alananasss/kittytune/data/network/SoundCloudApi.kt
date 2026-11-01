@@ -81,6 +81,13 @@ interface SoundCloudApi {
         @Query("linked_partitioning") linkedPartitioning: Int = 1
     ): MixedSelectionsResponse
 
+    @GET("https://api-mobile.soundcloud.com/home/query")
+    suspend fun getHomeQuery(
+        @Query("q") q: String = "home",
+        @Query("layout") layout: String = "soundcloud:layouts:home",
+        @Query("version") version: String = "v10"
+    ): com.google.gson.JsonObject
+
     @GET("activities")
     suspend fun getActivities(
         @Query("limit") limit: Int = 20,
@@ -193,6 +200,9 @@ interface SoundCloudApi {
         @Query("linked_partitioning") linkedPartitioning: Int = 1
     ): StationLibraryResponse
 
+    @GET
+    suspend fun getStationLibraryNextPage(@Url url: String): StationLibraryResponse
+
     @GET("search/tracks")
     suspend fun searchTracks(
         @Query("q") query: String,
@@ -247,6 +257,21 @@ interface SoundCloudApi {
         @Query("q") query: String,
         @Query("limit") limit: Int = 20
     ): UserPlaylistsResponse
+
+    @GET("https://api-mobile.soundcloud.com/search/query")
+    suspend fun getSearchCategoryPage(
+        @Query("q") query: String,
+        @Query("resolver") resolver: String? = null,
+        @Query("layout") layout: String = "soundcloud:layouts:category_page",
+        @Query("version") version: String = "v10"
+    ): com.google.gson.JsonObject
+
+    @GET("https://api-mobile.soundcloud.com/search/query")
+    suspend fun getSearchLandingPage(
+        @Query("q") query: String = " ",
+        @Query("layout") layout: String = "soundcloud:layouts:landing_page",
+        @Query("version") version: String = "v10"
+    ): com.google.gson.JsonObject
 
     @GET("https://api-mobile.soundcloud.com/conversations")
     suspend fun getInbox(
@@ -408,6 +433,11 @@ interface SoundCloudApi {
     suspend fun getUserProfileGraphQL(
         @Body request: GraphQlRequest
     ): GraphQlUserProfileResponse
+
+    @POST("https://graph.soundcloud.com/graphql")
+    suspend fun getFeaturedPlaylistsGraphQL(
+        @Body request: FeaturedPlaylistsGraphQlRequest
+    ): FeaturedPlaylistsGraphQlResponse
 
     @GET("users/{userId}")
     suspend fun getUser(@Path("userId") userId: Long): User

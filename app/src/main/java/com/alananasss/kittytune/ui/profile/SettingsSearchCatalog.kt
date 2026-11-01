@@ -46,6 +46,9 @@ internal fun rememberSettingsSearchCatalog(
         var animatedArtistProfiles = prefs.getAnimatedArtistProfilesEnabled()
         var lyricsUnderCover = prefs.getLyricsUnderCoverEnabled()
         var showRemainingTime = prefs.getShowRemainingTime()
+        var fullPlayerSource = prefs.getFullPlayerSourceIndicatorEnabled()
+        var backgroundStyle = prefs.getPlayerStyle()
+        var sourceBadgeStyle = prefs.getTrackSourceBadgeStyle()
         var verticalVolume = prefs.getVerticalVolumeSlider()
         var crossfade = prefs.getCrossfadeEnabled()
         var automix = prefs.getAutomixEnabled()
@@ -55,15 +58,22 @@ internal fun rememberSettingsSearchCatalog(
         var savePosition = prefs.getSavePositionEnabled()
         var youtubeFallback = prefs.getYouTubeFallbackEnabled()
         var hideYoutubeVideos = prefs.getHideYoutubeVideos()
+        var scHistorySync = prefs.getSoundCloudHistorySyncEnabled()
+        var downloadDrm = prefs.getDownloadDrmStreamsEnabled()
         var discordRpc = prefs.getDiscordRpcEnabled()
         var dataSaver = prefs.getDataSaverEnabled()
+        var dataSaverLyricsRestrict = prefs.getDataSaverLyricsRestrictEnabled()
         var achievementPopups = prefs.getAchievementPopupsEnabled()
         var autoUpdate = prefs.getAutoUpdateEnabled()
+        var betaUpdates = prefs.getBetaUpdatesEnabled()
         var rememberSearchFilter = prefs.getRememberSearchFilter()
+        var verifiedFilterEnabled = prefs.getVerifiedFilterEnabled()
+        var showPlaylistTotalDuration = prefs.getShowPlaylistTotalDuration()
         var customFontEnabled = prefs.getCustomFontEnabled()
-        var explorerGridLayout = prefs.getExplorerGridLayout()
         var showHomeListeningStats = prefs.getShowHomeListeningStats()
         var showHomeYourMix = prefs.getShowHomeYourMix()
+        var showHomeMyWave = prefs.getShowHomeMyWave()
+        var showHomeCharts = prefs.getShowHomeCharts()
 
         val staticItems = listOf(
             // INTERFACE
@@ -88,6 +98,17 @@ internal fun rememberSettingsSearchCatalog(
                 route = "player_design_settings",
                 keywordsRes = R.string.keywords_player,
                 keywords = listOf("wavy", "slim", "squiggly", "dj flow")
+            ),
+            createSearchEntry(
+                context = context,
+                englishContext = englishContext,
+                titleRes = R.string.share_card_code_title,
+                subtitleRes = R.string.share_card_code_subtitle,
+                categoryName = catInterface,
+                icon = Icons.Rounded.QrCode2,
+                route = "player_design_settings",
+                highlightKey = "share_card_code",
+                keywords = listOf("share", "partage", "qr", "code", "card", "carte", "cover")
             ),
             createSearchEntry(
                 context = context,
@@ -158,6 +179,15 @@ internal fun rememberSettingsSearchCatalog(
                 onSwitchChange = {
                     dynamicTheme = it
                     prefs.setDynamicTheme(it)
+                    if (it) {
+                        if (trackDynamicTheme) {
+                            trackDynamicTheme = false
+                            prefs.setTrackDynamicTheme(false)
+                        }
+                    } else if (prefs.getKeyColor() == 0) {
+                        prefs.setKeyColor(0xFF1565C0.toInt())
+                        prefs.setColorStyle("Vibrant")
+                    }
                     onPreferenceChange()
                 }
             ),
@@ -215,6 +245,51 @@ internal fun rememberSettingsSearchCatalog(
                     prefs.setShowRemainingTime(it)
                     onPreferenceChange()
                 }
+            ),
+            createSearchEntry(
+                context = context,
+                englishContext = englishContext,
+                titleRes = R.string.pref_full_player_source_title,
+                subtitleRes = R.string.pref_full_player_source_desc,
+                categoryName = catInterface,
+                icon = Icons.Rounded.GraphicEq,
+                route = "player_design_settings",
+                highlightKey = "pref_full_player_source",
+                keywords = listOf("source", "youtube", "soundcloud", "badge", "provider"),
+                hasSwitch = true,
+                switchState = fullPlayerSource,
+                onSwitchChange = {
+                    fullPlayerSource = it
+                    prefs.setFullPlayerSourceIndicatorEnabled(it)
+                    onPreferenceChange()
+                }
+            ),
+            createSearchEntry(
+                context = context,
+                englishContext = englishContext,
+                titleRes = R.string.pref_player_style,
+                subtitleRes = when (backgroundStyle) {
+                    com.alananasss.kittytune.data.local.PlayerBackgroundStyle.THEME -> R.string.style_theme
+                    com.alananasss.kittytune.data.local.PlayerBackgroundStyle.GRADIENT -> R.string.style_gradient
+                    com.alananasss.kittytune.data.local.PlayerBackgroundStyle.BLUR -> R.string.style_blur
+                    com.alananasss.kittytune.data.local.PlayerBackgroundStyle.APPLE_MUSIC -> R.string.style_apple_music
+                },
+                categoryName = catInterface,
+                icon = Icons.Rounded.Style,
+                route = "player_design_settings",
+                highlightKey = "pref_player_style",
+                keywords = listOf("background", "style", "theme", "gradient", "blur", "fond", "arrière-plan")
+            ),
+            createSearchEntry(
+                context = context,
+                englishContext = englishContext,
+                titleRes = R.string.pref_track_source_badge_title,
+                subtitleRes = R.string.pref_track_source_badge_desc,
+                categoryName = catInterface,
+                icon = Icons.Rounded.Badge,
+                route = "player_design_settings",
+                highlightKey = "pref_track_source_badge",
+                keywords = listOf("source", "badge", "provider", "icon", "logo", "plateforme")
             ),
             createSearchEntry(
                 context = context,
@@ -337,24 +412,6 @@ internal fun rememberSettingsSearchCatalog(
             createSearchEntry(
                 context = context,
                 englishContext = englishContext,
-                titleRes = R.string.pref_explorer_grid_title,
-                subtitleRes = R.string.pref_explorer_grid_subtitle,
-                categoryName = catInterface,
-                icon = Icons.Rounded.GridView,
-                route = "appearance_settings",
-                highlightKey = "pref_explorer_grid",
-                keywordsRes = R.string.keywords_explorer_grid,
-                hasSwitch = true,
-                switchState = explorerGridLayout,
-                onSwitchChange = {
-                    explorerGridLayout = it
-                    prefs.setExplorerGridLayout(it)
-                    onPreferenceChange()
-                }
-            ),
-            createSearchEntry(
-                context = context,
-                englishContext = englishContext,
                 titleRes = R.string.pref_library_category_layout_title,
                 subtitleRes = R.string.pref_library_category_layout_subtitle,
                 categoryName = catInterface,
@@ -362,6 +419,17 @@ internal fun rememberSettingsSearchCatalog(
                 route = "appearance_settings",
                 highlightKey = "pref_library_category_layout",
                 keywordsRes = R.string.keywords_library_layout
+            ),
+            createSearchEntry(
+                context = context,
+                englishContext = englishContext,
+                titleRes = R.string.pref_track_removal_title,
+                subtitleRes = R.string.pref_track_removal_subtitle,
+                categoryName = catInterface,
+                icon = Icons.Rounded.DeleteSweep,
+                route = "appearance_settings",
+                highlightKey = "pref_track_removal",
+                keywords = listOf("remove", "delete", "supprimer", "retirer", "swipe", "glisser", "playlist", "track", "titre", "menu")
             ),
             createSearchEntry(
                 context = context,
@@ -439,6 +507,44 @@ internal fun rememberSettingsSearchCatalog(
                     onPreferenceChange()
                 }
             ),
+            createSearchEntry(
+                context = context,
+                englishContext = englishContext,
+                titleRes = R.string.wave_title,
+                subtitleRes = R.string.pref_home_my_wave_desc,
+                categoryName = catInterface,
+                icon = Icons.Rounded.Waves,
+                route = "appearance_settings",
+                highlightKey = "pref_home_my_wave",
+                keywordsRes = R.string.keywords_my_wave,
+                keywords = listOf("mywave", "wave", "radio"),
+                hasSwitch = true,
+                switchState = showHomeMyWave,
+                onSwitchChange = {
+                    showHomeMyWave = it
+                    prefs.setShowHomeMyWave(it)
+                    onPreferenceChange()
+                }
+            ),
+            createSearchEntry(
+                context = context,
+                englishContext = englishContext,
+                titleRes = R.string.chart_section_title,
+                subtitleRes = R.string.pref_home_charts_desc,
+                categoryName = catInterface,
+                icon = Icons.Rounded.TrendingUp,
+                route = "appearance_settings",
+                highlightKey = "pref_home_charts",
+                keywordsRes = R.string.keywords_charts,
+                keywords = listOf("charts", "ranking", "top"),
+                hasSwitch = true,
+                switchState = showHomeCharts,
+                onSwitchChange = {
+                    showHomeCharts = it
+                    prefs.setShowHomeCharts(it)
+                    onPreferenceChange()
+                }
+            ),
 
             // AUDIO
             createSearchEntry(
@@ -459,7 +565,7 @@ internal fun rememberSettingsSearchCatalog(
                 subtitleRes = R.string.equalizer_subtitle,
                 categoryName = catAudio,
                 icon = Icons.Rounded.Tune,
-                route = "audio_settings",
+                route = "equalizer",
                 highlightKey = "equalizer",
                 keywordsRes = R.string.keywords_equalizer,
                 keywords = listOf("eq", "bass", "treble")
@@ -471,7 +577,7 @@ internal fun rememberSettingsSearchCatalog(
                 subtitleRes = R.string.pref_norm_sub,
                 categoryName = catAudio,
                 icon = Icons.Rounded.VolumeUp,
-                route = "audio_settings",
+                route = "audio_quality_settings",
                 highlightKey = "pref_norm",
                 keywordsRes = R.string.keywords_volume_normalization,
                 keywords = listOf("replaygain", "lufs")
@@ -483,7 +589,7 @@ internal fun rememberSettingsSearchCatalog(
                 subtitleRes = R.string.pref_audio_mono_sub,
                 categoryName = catAudio,
                 icon = Icons.Rounded.Headphones,
-                route = "audio_settings",
+                route = "audio_quality_settings",
                 highlightKey = "pref_audio_mono",
                 keywordsRes = R.string.keywords_audio_mono
             ),
@@ -504,7 +610,7 @@ internal fun rememberSettingsSearchCatalog(
                 subtitleRes = R.string.pref_haptics_enable_sub,
                 categoryName = catAudio,
                 icon = Icons.Rounded.Vibration,
-                route = "audio_settings",
+                route = "haptic_settings",
                 highlightKey = "pref_haptics",
                 keywordsRes = R.string.keywords_haptics,
                 hasSwitch = true,
@@ -518,7 +624,7 @@ internal fun rememberSettingsSearchCatalog(
                 subtitleRes = R.string.pref_crossfade_sub,
                 categoryName = catAudio,
                 icon = Icons.Rounded.LinearScale,
-                route = "audio_settings",
+                route = "audio_transitions_settings",
                 highlightKey = "pref_crossfade",
                 keywordsRes = R.string.keywords_crossfade,
                 hasSwitch = true,
@@ -536,7 +642,7 @@ internal fun rememberSettingsSearchCatalog(
                 subtitleRes = R.string.pref_autoplay_sub,
                 categoryName = catAudio,
                 icon = Icons.Rounded.PlayArrow,
-                route = "audio_settings",
+                route = "audio_playback_settings",
                 highlightKey = "pref_autoplay",
                 keywordsRes = R.string.keywords_autoplay,
                 hasSwitch = true,
@@ -554,7 +660,7 @@ internal fun rememberSettingsSearchCatalog(
                 subtitleRes = R.string.automix_desc,
                 categoryName = catAudio,
                 icon = Icons.Rounded.AutoMode,
-                route = "audio_settings",
+                route = "audio_transitions_settings",
                 highlightKey = "pref_automix",
                 keywordsRes = R.string.keywords_automix,
                 keywords = listOf("dj", "dj flow"),
@@ -573,7 +679,7 @@ internal fun rememberSettingsSearchCatalog(
                 subtitleRes = null,
                 categoryName = catAudio,
                 icon = Icons.Rounded.Cancel,
-                route = "audio_settings",
+                route = "audio_playback_settings",
                 highlightKey = "pref_stop_on_task_clear",
                 keywordsRes = R.string.keywords_stop_on_task_clear,
                 hasSwitch = true,
@@ -591,7 +697,7 @@ internal fun rememberSettingsSearchCatalog(
                 subtitleRes = R.string.pref_persist_queue_sub,
                 categoryName = catAudio,
                 icon = Icons.AutoMirrored.Rounded.QueueMusic,
-                route = "audio_settings",
+                route = "audio_playback_settings",
                 highlightKey = "pref_persist_queue",
                 keywordsRes = R.string.keywords_persist_queue,
                 hasSwitch = true,
@@ -609,7 +715,7 @@ internal fun rememberSettingsSearchCatalog(
                 subtitleRes = R.string.pref_save_position_sub,
                 categoryName = catAudio,
                 icon = Icons.Rounded.Restore,
-                route = "audio_settings",
+                route = "audio_playback_settings",
                 highlightKey = "pref_save_position",
                 keywordsRes = R.string.keywords_save_position,
                 hasSwitch = true,
@@ -627,9 +733,59 @@ internal fun rememberSettingsSearchCatalog(
                 subtitleRes = null,
                 categoryName = catAudio,
                 icon = Icons.Rounded.Bedtime,
-                route = "audio_settings",
+                route = "audio_sleep_settings",
                 highlightKey = "sleep_timer_fade",
                 keywordsRes = R.string.keywords_sleep_timer
+            ),
+            createSearchEntry(
+                context = context,
+                englishContext = englishContext,
+                titleRes = R.string.pref_download_drm,
+                subtitleRes = R.string.pref_download_drm_sub,
+                categoryName = catAudio,
+                icon = Icons.Rounded.EnhancedEncryption,
+                route = "audio_quality_settings",
+                highlightKey = "pref_download_drm",
+                keywords = listOf("drm", "download", "télécharger", "telecharger", "widevine", "encrypted", "mp3", "youtube fallback"),
+                hasSwitch = true,
+                switchState = downloadDrm,
+                onSwitchChange = {
+                    downloadDrm = it
+                    prefs.setDownloadDrmStreamsEnabled(it)
+                    onPreferenceChange()
+                }
+            ),
+            createSearchEntry(
+                context = context,
+                englishContext = englishContext,
+                titleRes = R.string.pref_precise_speed,
+                subtitleRes = R.string.pref_precise_speed_sub,
+                categoryName = catAudio,
+                icon = Icons.Rounded.Speed,
+                route = "audio_playback_settings",
+                highlightKey = "pref_precise_speed",
+                keywords = listOf("speed", "vitesse", "playback speed", "tempo", "pitch"),
+                hasSwitch = true,
+                switchState = playerViewModel.isPreciseSpeedEnabled,
+                onSwitchChange = { playerViewModel.togglePreciseSpeedEnabled(it) }
+            ),
+            createSearchEntry(
+                context = context,
+                englishContext = englishContext,
+                titleRes = R.string.pref_sc_sync_title,
+                subtitleRes = R.string.pref_sc_sync_sub,
+                categoryName = catAudio,
+                icon = Icons.Rounded.Sync,
+                route = "audio_playback_settings",
+                highlightKey = "pref_sc_sync",
+                keywords = listOf("soundcloud", "history", "sync", "historique", "scrobble"),
+                hasSwitch = true,
+                switchState = scHistorySync,
+                onSwitchChange = {
+                    scHistorySync = it
+                    prefs.setSoundCloudHistorySyncEnabled(it)
+                    onPreferenceChange()
+                }
             ),
 
             // SOURCES
@@ -728,7 +884,7 @@ internal fun rememberSettingsSearchCatalog(
                 subtitleRes = R.string.pref_youtube_fallback_sub,
                 categoryName = catSources,
                 icon = Icons.Rounded.SmartDisplay,
-                route = "audio_settings",
+                route = "audio_playback_settings",
                 highlightKey = "pref_youtube_fallback",
                 keywords = listOf("youtube", "youtube music", "fallback"),
                 hasSwitch = true,
@@ -746,7 +902,7 @@ internal fun rememberSettingsSearchCatalog(
                 subtitleRes = R.string.pref_hide_youtube_videos_sub,
                 categoryName = catSources,
                 icon = Icons.Rounded.SmartDisplay,
-                route = "audio_settings",
+                route = "audio_playback_settings",
                 highlightKey = "pref_hide_youtube_videos",
                 keywords = listOf("youtube", "videos", "shorts"),
                 hasSwitch = true,
@@ -791,6 +947,25 @@ internal fun rememberSettingsSearchCatalog(
                 onSwitchChange = {
                     dataSaver = it
                     prefs.setDataSaverEnabled(it)
+                    onPreferenceChange()
+                }
+            ),
+            createSearchEntry(
+                context = context,
+                englishContext = englishContext,
+                titleRes = R.string.data_saver_lyrics_restrict_title,
+                subtitleRes = R.string.data_saver_lyrics_restrict_sub,
+                categoryName = catSources,
+                icon = Icons.Rounded.Lyrics,
+                route = "accounts_settings",
+                highlightKey = "pref_data_saver_lyrics",
+                keywordsRes = R.string.keywords_data_saver_lyrics,
+                keywords = listOf("lyrics", "providers", "sources", "musixmatch", "lrclib", "data saver"),
+                hasSwitch = true,
+                switchState = dataSaverLyricsRestrict,
+                onSwitchChange = {
+                    dataSaverLyricsRestrict = it
+                    prefs.setDataSaverLyricsRestrictEnabled(it)
                     onPreferenceChange()
                 }
             ),
@@ -865,6 +1040,17 @@ internal fun rememberSettingsSearchCatalog(
                 keywordsRes = R.string.keywords_proxy,
                 keywords = listOf("ip", "port", "socks", "http", "dns", "vpn")
             ),
+            createSearchEntry(
+                context = context,
+                englishContext = englishContext,
+                titleRes = R.string.zapret_title,
+                subtitleRes = R.string.network_zapret_sub,
+                categoryName = catNetwork,
+                icon = Icons.Rounded.Security,
+                route = "zapret_settings",
+                keywordsRes = R.string.keywords_zapret,
+                keywords = listOf("dpi", "bypass", "desync", "sni", "censorship", "запрет", "обход")
+            ),
 
             // MISC
             createSearchEntry(
@@ -874,7 +1060,7 @@ internal fun rememberSettingsSearchCatalog(
                 subtitleRes = R.string.settings_cat_general_sub,
                 categoryName = catMisc,
                 icon = Icons.Rounded.Tune,
-                route = "misc_settings",
+                route = "misc_general_settings",
                 keywordsRes = R.string.keywords_language
             ),
             createSearchEntry(
@@ -884,7 +1070,7 @@ internal fun rememberSettingsSearchCatalog(
                 subtitleRes = null,
                 categoryName = catMisc,
                 icon = Icons.Rounded.Translate,
-                route = "misc_settings",
+                route = "misc_general_settings",
                 highlightKey = "pref_language",
                 keywordsRes = R.string.keywords_language
             ),
@@ -895,7 +1081,7 @@ internal fun rememberSettingsSearchCatalog(
                 subtitleRes = null,
                 categoryName = catMisc,
                 icon = Icons.Rounded.Home,
-                route = "misc_settings",
+                route = "misc_general_settings",
                 highlightKey = "pref_start_screen",
                 keywordsRes = R.string.keywords_start_screen
             ),
@@ -906,7 +1092,7 @@ internal fun rememberSettingsSearchCatalog(
                 subtitleRes = R.string.pref_auto_update_sub,
                 categoryName = catMisc,
                 icon = Icons.Rounded.SystemUpdate,
-                route = "misc_settings",
+                route = "misc_general_settings",
                 highlightKey = "pref_auto_update",
                 keywordsRes = R.string.keywords_auto_update,
                 hasSwitch = true,
@@ -920,11 +1106,29 @@ internal fun rememberSettingsSearchCatalog(
             createSearchEntry(
                 context = context,
                 englishContext = englishContext,
+                titleRes = R.string.beta_updates_title,
+                subtitleRes = R.string.beta_updates_subtitle,
+                categoryName = catMisc,
+                icon = Icons.Rounded.Science,
+                route = "misc_general_settings",
+                highlightKey = "pref_beta_updates",
+                keywords = listOf("beta", "bêta", "pre-release", "prerelease", "test", "preview"),
+                hasSwitch = true,
+                switchState = betaUpdates,
+                onSwitchChange = {
+                    betaUpdates = it
+                    prefs.setBetaUpdatesEnabled(it)
+                    onPreferenceChange()
+                }
+            ),
+            createSearchEntry(
+                context = context,
+                englishContext = englishContext,
                 titleRes = R.string.pref_remember_search_filter,
                 subtitleRes = R.string.pref_remember_search_filter_sub,
                 categoryName = catMisc,
                 icon = Icons.Rounded.FilterList,
-                route = "misc_settings",
+                route = "misc_general_settings",
                 highlightKey = "pref_remember_search_filter",
                 keywords = listOf("filter", "filtre"),
                 hasSwitch = true,
@@ -938,12 +1142,61 @@ internal fun rememberSettingsSearchCatalog(
             createSearchEntry(
                 context = context,
                 englishContext = englishContext,
+                titleRes = R.string.pref_verified_filter,
+                subtitleRes = R.string.pref_verified_filter_sub,
+                categoryName = catMisc,
+                icon = Icons.Rounded.Verified,
+                route = "misc_general_settings",
+                highlightKey = "pref_verified_filter",
+                keywords = listOf(
+                    "verified", "verification", "reupload", "official", "cover",
+                    "vérifié", "officiel", "reupload", "проверено", "официальный",
+                ),
+                hasSwitch = true,
+                switchState = verifiedFilterEnabled,
+                onSwitchChange = {
+                    verifiedFilterEnabled = it
+                    prefs.setVerifiedFilterEnabled(it)
+                    onPreferenceChange()
+                }
+            ),
+            createSearchEntry(
+                context = context,
+                englishContext = englishContext,
+                titleRes = R.string.pref_show_playlist_total_duration,
+                subtitleRes = R.string.pref_show_playlist_total_duration_sub,
+                categoryName = catMisc,
+                icon = Icons.Rounded.Schedule,
+                route = "misc_general_settings",
+                highlightKey = "pref_show_playlist_total_duration",
+                keywords = listOf("duration", "playtime", "playlist", "duree", "temps"),
+                hasSwitch = true,
+                switchState = showPlaylistTotalDuration,
+                onSwitchChange = {
+                    showPlaylistTotalDuration = it
+                    prefs.setShowPlaylistTotalDuration(it)
+                    onPreferenceChange()
+                }
+            ),
+            createSearchEntry(
+                context = context,
+                englishContext = englishContext,
                 titleRes = R.string.pref_about_title,
                 subtitleRes = R.string.pref_about_subtitle,
                 categoryName = catMisc,
                 icon = Icons.Rounded.Info,
                 route = "about",
                 keywords = listOf("github", "about", "version")
+            ),
+            createSearchEntry(
+                context = context,
+                englishContext = englishContext,
+                titleRes = R.string.pref_developer_options_title,
+                subtitleRes = R.string.pref_developer_options_subtitle,
+                categoryName = catMisc,
+                icon = Icons.Rounded.Code,
+                route = "developer_options",
+                keywords = listOf("developer", "debug", "logs", "overlay", "automix", "cache", "dev")
             )
         )
 

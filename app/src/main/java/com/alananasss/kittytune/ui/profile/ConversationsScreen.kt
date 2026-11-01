@@ -23,6 +23,9 @@ import com.alananasss.kittytune.ui.icons.Icon
     import androidx.compose.ui.unit.dp
     import androidx.lifecycle.viewmodel.compose.viewModel
     import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.ui.common.hapticClickable
     import com.alananasss.kittytune.domain.InboxConversation
 import com.alananasss.kittytune.domain.parseUserIdFromUrn
     import com.alananasss.kittytune.ui.library.getRelativeTime
@@ -127,7 +130,7 @@ import com.alananasss.kittytune.domain.parseUserIdFromUrn
             ListItem(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onClick(conversation.id, parseUserIdFromUrn(otherUrn)?.toString() ?: otherUrn, otherUser) },
+                    .hapticClickable { onClick(conversation.id, parseUserIdFromUrn(otherUrn)?.toString() ?: otherUrn, otherUser) },
                 colors = ListItemDefaults.colors(
                     containerColor = MaterialTheme.colorScheme.background
                 ),

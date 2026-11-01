@@ -29,6 +29,9 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
     import androidx.compose.ui.text.style.TextOverflow
     import androidx.compose.ui.unit.dp
     import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.ui.common.hapticClickable
     import com.mikepenz.aboutlibraries.Libs
     import com.mikepenz.aboutlibraries.util.withContext
 
@@ -61,7 +64,14 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
         val unknownString = stringResource(R.string.unknown)
         val unknownLicenseString = stringResource(R.string.license_unknown)
 
-        val libs = remember { Libs.Builder().withContext(context).build() }
+        val libs = remember {
+            try {
+                val json = context.resources.openRawResource(R.raw.aboutlibraries).bufferedReader().use { it.readText() }
+                Libs.Builder().withJson(json).build()
+            } catch (_: Throwable) {
+                Libs.Builder().withContext(context).build()
+            }
+        }
 
         val allLibraries = remember(libs) {
             libs.libraries.map { lib ->
@@ -155,7 +165,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
                                 val isSelected = activeFilter == null
                                 FilterChip(
                                     selected = isSelected,
-                                    onClick = { activeFilter = null },
+                                    onClick = hapticAction(HapticKind.UI) { activeFilter = null },
                                     label = { Text(stringResource(R.string.filter_all)) },
                                     leadingIcon = if (isSelected) {
                                         {
@@ -181,7 +191,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
                                 val isSelected = activeFilter == type
                                 FilterChip(
                                     selected = isSelected,
-                                    onClick = { activeFilter = if (isSelected) null else type },
+                                    onClick = hapticAction(HapticKind.UI) { activeFilter = if (isSelected) null else type },
                                     label = { Text(type) },
                                     leadingIcon = if (isSelected) {
                                         { Icon(Icons.Rounded.Check, null, Modifier.size(16.dp)) }
@@ -247,7 +257,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
                     items(filteredList, key = { it.id }) { lib ->
                         LibraryItemExpressive(
                             library = lib,
-                            onClick = {
+                            onClick = hapticAction(HapticKind.UI) {
                                 if (lib.url.isNotEmpty()) {
                                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(lib.url))
                                     context.startActivity(intent)
@@ -298,7 +308,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
             },
             trailingIcon = if (query.isNotEmpty()) {
                 {
-                    IconButton(onClick = { onQueryChange("") }) {
+                    IconButton(onClick = hapticAction(HapticKind.UI) { onQueryChange("") }) {
                         Icon(Icons.Rounded.Close, contentDescription = null)
                     }
                 }
@@ -327,7 +337,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 
         ListItem(
             modifier = Modifier
-                .clickable(onClick = onClick)
+                .hapticClickable(onClick = onClick)
                 .fillMaxWidth(),
             headlineContent = {
                 Text(

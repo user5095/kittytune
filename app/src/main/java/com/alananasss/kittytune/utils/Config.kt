@@ -7,10 +7,14 @@ object Config {
     private const val PREFS_NAME = "app_config"
     private const val KEY_CLIENT_ID = "dynamic_client_id"
 
-    // keeping this public just in case
-    const val FALLBACK_ID = "7K3no7iJj8d02d20Z26Z26Z26Z26Z26"
-    const val OFFICIAL_CLIENT_ID = "QOFuKCOeAXIph267vzqj3B1wb65cZVAQ"
-    const val OFFICIAL_CLIENT_SECRET = "EhBDsGIj9EbuBbRf0QkhH9Fq9BX3yN4B"
+    // Official client ID and secret extracted from SoundCloud Android (2026.10.08)
+    const val OFFICIAL_CLIENT_ID = "SSdQ80vM8nLPhbDBylHl2JFK6ElhBr9B"
+    const val OFFICIAL_CLIENT_SECRET = "hfRHykhbMuLT7PnpTv0hPXsKS0NM5pX1"
+
+    // Previous client ID kept as fallback
+    const val EXPIRING_CLIENT_ID = "QOFuKCOeAXIph267vzqj3B1wb65cZVAQ"
+    const val EXPIRING_CLIENT_SECRET = "EhBDsGIj9EbuBbRf0QkhH9Fq9BX3yN4B"
+    const val FALLBACK_ID = OFFICIAL_CLIENT_ID
 
     val OFFICIAL_CLIENT_SIGNATURE: String by lazy {
         calculateSignature(OFFICIAL_CLIENT_ID, OFFICIAL_CLIENT_SECRET)
@@ -20,22 +24,26 @@ object Config {
         try {
             val concat = "$clientId:$clientSecret".toByteArray(Charsets.UTF_8)
             val digest = java.security.MessageDigest.getInstance("SHA-256").digest(concat)
-            return android.util.Base64.encodeToString(digest, android.util.Base64.URL_SAFE or android.util.Base64.NO_PADDING or android.util.Base64.NO_WRAP)
+            return android.util.Base64.encodeToString(digest, android.util.Base64.URL_SAFE or android.util.Base64.NO_PADDING or android.util.Base64.NO_WRAP).trim()
         } catch (e: Exception) {
-            return "ztQ_RKaMCPavrjcXvMT6t0STPQ0vU2cY4YKGVeLU6Iw"
+            return "cg5kjFy0kprA70IQrfihSM2yTEZiI774yeG1CW4uyTA"
         }
     }
 
     const val BASE_URL = "https://api-v2.soundcloud.com/"
     const val USER_AGENT = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
 
-    var CLIENT_ID: String = FALLBACK_ID
+    var CLIENT_ID: String = OFFICIAL_CLIENT_ID
         private set
 
     fun init(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        // try to load saved id, otherwise default to fallback
-        CLIENT_ID = prefs.getString(KEY_CLIENT_ID, FALLBACK_ID) ?: FALLBACK_ID
+        val saved = prefs.getString(KEY_CLIENT_ID, null)
+        CLIENT_ID = if (!saved.isNullOrBlank() && !saved.startsWith("7K3no7iJj8d02d20")) {
+            saved
+        } else {
+            OFFICIAL_CLIENT_ID
+        }
         Log.d("Config", "Client ID initialized: $CLIENT_ID")
     }
 

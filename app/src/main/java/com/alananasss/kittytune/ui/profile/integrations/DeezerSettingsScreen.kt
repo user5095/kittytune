@@ -15,6 +15,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.ui.common.hapticClickable
 import com.alananasss.kittytune.audio.providers.deezer.DeezerAudioProvider
 import com.alananasss.kittytune.audio.providers.deezer.DeezerAudioQuality
 import com.alananasss.kittytune.audio.providers.deezer.isDeezerCookieConfigured
@@ -76,7 +79,7 @@ fun DeezerSettingsScreen(
             },
             confirmButton = {
                 TextButton(
-                    onClick = {
+                    onClick = hapticAction(HapticKind.UI) {
                         val cleaned = tempUrl.trim().ifBlank { DeezerAudioProvider.DEFAULT_RESOLVER_URL }
                         resolverUrl = cleaned
                         prefs.setDeezerResolverUrl(cleaned)
@@ -87,7 +90,7 @@ fun DeezerSettingsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showResolverDialog = false }) {
+                TextButton(onClick = hapticAction(HapticKind.UI) { showResolverDialog = false }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             }
@@ -110,7 +113,7 @@ fun DeezerSettingsScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable {
+                                .hapticClickable {
                                     showProxyModeDialog = false
                                     if (mode == DeezerProxyMode.CUSTOM) {
                                         showCustomProxyDialog = true
@@ -131,7 +134,7 @@ fun DeezerSettingsScreen(
                         ) {
                             RadioButton(
                                 selected = proxyMode == mode,
-                                onClick = {
+                                onClick = hapticAction(HapticKind.UI) {
                                     showProxyModeDialog = false
                                     if (mode == DeezerProxyMode.CUSTOM) {
                                         showCustomProxyDialog = true
@@ -156,7 +159,7 @@ fun DeezerSettingsScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showProxyModeDialog = false }) {
+                TextButton(onClick = hapticAction(HapticKind.UI) { showProxyModeDialog = false }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             }
@@ -187,7 +190,7 @@ fun DeezerSettingsScreen(
             },
             confirmButton = {
                 TextButton(
-                    onClick = {
+                    onClick = hapticAction(HapticKind.UI) {
                         val cleaned = DeezerAudioProvider.normalizeProxyUrl(tempProxy)
                         proxyUrl = cleaned
                         proxyMode = DeezerProxyMode.CUSTOM
@@ -200,7 +203,7 @@ fun DeezerSettingsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showCustomProxyDialog = false }) {
+                TextButton(onClick = hapticAction(HapticKind.UI) { showCustomProxyDialog = false }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             }
@@ -223,7 +226,7 @@ fun DeezerSettingsScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable {
+                                .hapticClickable {
                                     audioQuality = quality
                                     prefs.setDeezerAudioQuality(quality)
                                     showQualityDialog = false
@@ -232,7 +235,7 @@ fun DeezerSettingsScreen(
                         ) {
                             RadioButton(
                                 selected = audioQuality == quality,
-                                onClick = {
+                                onClick = hapticAction(HapticKind.UI) {
                                     audioQuality = quality
                                     prefs.setDeezerAudioQuality(quality)
                                     showQualityDialog = false
@@ -245,7 +248,7 @@ fun DeezerSettingsScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showQualityDialog = false }) {
+                TextButton(onClick = hapticAction(HapticKind.UI) { showQualityDialog = false }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             }
@@ -277,7 +280,7 @@ fun DeezerSettingsScreen(
             },
             confirmButton = {
                 TextButton(
-                    onClick = {
+                    onClick = hapticAction(HapticKind.UI) {
                         val cleaned = normalizeDeezerCookieInput(tempCookie).orEmpty()
                         deezerCookie = cleaned
                         prefs.setDeezerCookie(cleaned)
@@ -288,7 +291,7 @@ fun DeezerSettingsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showCookieDialog = false }) {
+                TextButton(onClick = hapticAction(HapticKind.UI) { showCookieDialog = false }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             }
@@ -345,7 +348,7 @@ fun DeezerSettingsScreen(
                                     stringResource(R.string.deezer_cookie_not_configured)
                                 },
                                 icon = Icons.Rounded.Key,
-                                onClick = { showCookieDialog = true }
+                                onClick = hapticAction(HapticKind.UI) { showCookieDialog = true }
                             )
                         }
                         add { shape ->
@@ -354,7 +357,7 @@ fun DeezerSettingsScreen(
                                 title = stringResource(R.string.deezer_resolver_url),
                                 subtitle = stringResource(R.string.deezer_resolver_url_desc, resolverUrl),
                                 icon = Icons.Rounded.Link,
-                                onClick = { showResolverDialog = true }
+                                onClick = hapticAction(HapticKind.UI) { showResolverDialog = true }
                             )
                         }
                         add { shape ->
@@ -363,7 +366,7 @@ fun DeezerSettingsScreen(
                                 title = stringResource(R.string.deezer_proxy_mode),
                                 subtitle = proxyModeLabel,
                                 icon = Icons.Rounded.VpnLock,
-                                onClick = { showProxyModeDialog = true }
+                                onClick = hapticAction(HapticKind.UI) { showProxyModeDialog = true }
                             )
                         }
                         add { shape ->
@@ -372,7 +375,7 @@ fun DeezerSettingsScreen(
                                 title = stringResource(R.string.deezer_audio_quality),
                                 subtitle = qualityLabel,
                                 icon = Icons.Rounded.GraphicEq,
-                                onClick = { showQualityDialog = true }
+                                onClick = hapticAction(HapticKind.UI) { showQualityDialog = true }
                             )
                         }
                         add { shape ->
@@ -410,7 +413,7 @@ fun DeezerSettingsScreen(
                                     title = stringResource(R.string.deezer_reset_resolver),
                                     subtitle = DeezerAudioProvider.DEFAULT_RESOLVER_URL,
                                     icon = Icons.Rounded.Restore,
-                                    onClick = {
+                                    onClick = hapticAction(HapticKind.UI) {
                                         resolverUrl = DeezerAudioProvider.DEFAULT_RESOLVER_URL
                                         prefs.setDeezerResolverUrl(DeezerAudioProvider.DEFAULT_RESOLVER_URL)
                                     }
@@ -424,7 +427,7 @@ fun DeezerSettingsScreen(
                                     title = stringResource(R.string.deezer_clear_proxy),
                                     subtitle = stringResource(R.string.deezer_proxy_disabled),
                                     icon = Icons.Rounded.Delete,
-                                    onClick = {
+                                    onClick = hapticAction(HapticKind.UI) {
                                         proxyMode = DeezerProxyMode.DIRECT
                                         proxyUrl = ""
                                         prefs.setDeezerProxyMode(DeezerProxyMode.DIRECT)
@@ -440,7 +443,7 @@ fun DeezerSettingsScreen(
                                     title = stringResource(R.string.deezer_clear_cookie),
                                     subtitle = stringResource(R.string.deezer_cookie_configured),
                                     icon = Icons.Rounded.Delete,
-                                    onClick = {
+                                    onClick = hapticAction(HapticKind.UI) {
                                         deezerCookie = ""
                                         prefs.setDeezerCookie("")
                                         val cm = CookieManager.getInstance()

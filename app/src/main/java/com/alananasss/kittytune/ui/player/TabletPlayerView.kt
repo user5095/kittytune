@@ -1,5 +1,9 @@
 package com.alananasss.kittytune.ui.player
 
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.audio.haptics.performAppHaptic
+import com.alananasss.kittytune.ui.common.hapticClickable
 import android.content.Context
 import android.view.HapticFeedbackConstants
 import android.widget.Toast
@@ -68,6 +72,7 @@ import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import java.text.NumberFormat
 import java.util.Locale
+
 
 /**
  * Sound wave animation indicator (ılı) for currently playing queue track
@@ -149,7 +154,7 @@ fun TabletSidePlayerPanel(
     onNavigateToArtist: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val track = viewModel.currentTrack ?: return
+    val track = viewModel.uiCurrentTrack ?: return
     var selectedTab by remember { mutableIntStateOf(0) }
 
     Surface(
@@ -176,19 +181,17 @@ fun TabletSidePlayerPanel(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = onExpandFullScreen,
-                        shapes = IconButtonDefaults.shapes(),
                         modifier = Modifier.size(36.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.OpenInFull,
-                            contentDescription = "Full screen",
+                            contentDescription = stringResource(R.string.desc_fullscreen),
                             tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(18.dp)
                         )
                     }
                     IconButton(
                         onClick = onClose,
-                        shapes = IconButtonDefaults.shapes(),
                         modifier = Modifier.size(36.dp)
                     ) {
                         Icon(
@@ -209,11 +212,11 @@ fun TabletSidePlayerPanel(
                     modifier = Modifier
                         .weight(1f)
                         .padding(horizontal = 8.dp)
+                        .hapticClickable { viewModel.navigateToContext() }
                 )
 
                 IconButton(
-                    onClick = { viewModel.showTrackOptions(track, fromPlayer = true) },
-                    shapes = IconButtonDefaults.shapes(),
+                    onClick = hapticAction(HapticKind.UI) { viewModel.showTrackOptions(track, fromPlayer = true) },
                     modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
@@ -241,7 +244,7 @@ fun TabletSidePlayerPanel(
                 tabs.forEach { (index, title, _) ->
                     Tab(
                         selected = selectedTab == index,
-                        onClick = { selectedTab = index },
+                        onClick = hapticAction(HapticKind.UI) { selectedTab = index },
                         text = {
                             Text(
                                 text = title,
@@ -311,7 +314,7 @@ fun DesktopTrackInfoTabContent(
     onNavigateToArtist: (Long) -> Unit,
     onSelectTab: ((Int) -> Unit)? = null
 ) {
-    val track = viewModel.currentTrack ?: return
+    val track = viewModel.uiCurrentTrack ?: return
     val context = LocalContext.current
     val myId = viewModel.currentUserId
     val isGuest = myId == 0L
@@ -343,12 +346,32 @@ fun DesktopTrackInfoTabContent(
 
     val organizedComments = remember(viewModel.commentsList.toList()) {
         val list = mutableListOf<Comment>()
+        val alreadyNestedIds = mutableSetOf<Long>()
+        for (c in viewModel.commentsList) {
+            c.replies?.forEach { r -> if (r.id > 0) alreadyNestedIds.add(r.id) }
+        }
+        val mentionRegex = Regex("""^@([^:\n]+?)(?::\s*|\s+|$)""")
         for (comment in viewModel.commentsList) {
+            if (alreadyNestedIds.contains(comment.id)) {
+                continue
+            }
             if (comment.body.trim().startsWith("@") && list.isNotEmpty()) {
-                val parentIndex = list.indexOfLast { it.trackTimestamp == comment.trackTimestamp }
+                val match = mentionRegex.find(comment.body.trim())
+                val targetUser = match?.groupValues?.getOrNull(1)
+                val parentIndex = list.indexOfLast {
+                    it.trackTimestamp == comment.trackTimestamp && (targetUser == null || it.user?.username.equals(targetUser, ignoreCase = true))
+                }.takeIf { it != -1 } ?: list.indexOfLast {
+                    it.trackTimestamp != null && it.trackTimestamp == comment.trackTimestamp
+                }.takeIf { it != -1 } ?: list.indexOfLast {
+                    targetUser != null && it.user?.username.equals(targetUser, ignoreCase = true)
+                }
+
                 if (parentIndex != -1) {
                     val parent = list[parentIndex]
-                    list[parentIndex] = parent.copy(replies = (parent.replies ?: emptyList()) + comment)
+                    val existingReplies = parent.replies ?: emptyList()
+                    if (existingReplies.none { it.id == comment.id }) {
+                        list[parentIndex] = parent.copy(replies = existingReplies + comment)
+                    }
                     continue
                 }
             }
@@ -364,7 +387,7 @@ fun DesktopTrackInfoTabContent(
             text = { Text(stringResource(R.string.dialog_delete_comment_msg)) },
             confirmButton = {
                 TextButton(
-                    onClick = {
+                    onClick = hapticAction(HapticKind.UI) {
                         viewModel.deleteComment(commentToDelete!!)
                         commentToDelete = null
                     },
@@ -376,7 +399,7 @@ fun DesktopTrackInfoTabContent(
             },
             dismissButton = {
                 TextButton(
-                    onClick = { commentToDelete = null },
+                    onClick = hapticAction(HapticKind.UI) { commentToDelete = null },
                     shapes = ButtonDefaults.shapes()
                 ) {
                     Text(stringResource(R.string.btn_cancel))
@@ -417,69 +440,94 @@ fun DesktopTrackInfoTabContent(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable {
-                        track.user?.id?.let { if (it > 0) onNavigateToArtist(it) }
-                    }
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = track.displayArtist.ifBlank { stringResource(R.string.unknown_artist) },
-                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    if (track.user?.verified == true) {
-                        Spacer(Modifier.width(4.dp))
-                        Icon(
-                            imageVector = Icons.Rounded.Verified,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .hapticClickable {
+                                track.user?.id?.let { if (it > 0) onNavigateToArtist(it) }
+                            }
+                    ) {
+                        Text(
+                            text = track.displayArtist.ifBlank { stringResource(R.string.unknown_artist) },
+                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
                         )
+                        if (track.user?.verified == true) {
+                            Spacer(Modifier.width(4.dp))
+                            Icon(
+                                imageVector = Icons.Rounded.Verified,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
+                    val aiResult by com.alananasss.kittytune.audio.ai.AiDetectionManager.result.collectAsState()
+                    com.alananasss.kittytune.ui.player.ai.AiDetectionBadge(
+                        result = aiResult,
+                        textColor = MaterialTheme.colorScheme.onSurface,
+                        onClick = hapticAction(HapticKind.UI) { viewModel.showAiDetectionSheet = true },
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
+                    com.alananasss.kittytune.ui.common.TrackSourceBadge(
+                        track = track,
+                        resolvedSource = viewModel.currentStreamSource,
+                        modifier = Modifier.padding(start = 6.dp)
+                    )
                 }
             }
         }
 
-        item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                StatItem(
-                    icon = Icons.Rounded.PlayArrow,
-                    count = track.playbackCount
-                )
-                StatItem(
-                    icon = Icons.Rounded.Favorite,
-                    count = track.likesCount,
-                    tint = if (viewModel.isLiked) animatedColor else MaterialTheme.colorScheme.onSurfaceVariant,
-                    onClick = { viewModel.navigateToTrackDetails(track.id, 0) }
-                )
-                StatItem(
-                    icon = Icons.Rounded.Repeat,
-                    count = track.repostsCount,
-                    onClick = { viewModel.navigateToTrackDetails(track.id, 1) }
-                )
-                StatItem(
-                    icon = Icons.AutoMirrored.Rounded.Comment,
-                    count = track.commentCount
-                )
-                IconButton(
-                    onClick = { viewModel.navigateToTrackDetails(track.id, 0) },
-                    shapes = IconButtonDefaults.shapes(),
-                    modifier = Modifier.size(32.dp)
+        val isExternalTrack = track.source in listOf("deezer", "tidal", "qobuz", "youtube", "youtube_music", "spotify", "vk") ||
+            track.user?.urn?.startsWith("deezer:") == true ||
+            track.user?.urn?.startsWith("tidal:") == true ||
+            track.user?.urn?.startsWith("qobuz:") == true
+        if (!isExternalTrack && (track.playbackCount > 0 || track.likesCount > 0 || track.repostsCount > 0)) {
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        Icons.Rounded.Info,
-                        contentDescription = "Details",
-                        modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    StatItem(
+                        icon = Icons.Rounded.PlayArrow,
+                        count = track.playbackCount
                     )
+                    StatItem(
+                        icon = Icons.Rounded.Favorite,
+                        count = track.likesCount,
+                        tint = if (viewModel.uiIsLiked) animatedColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                        onClick = hapticAction(HapticKind.UI) { viewModel.navigateToTrackDetails(track.id, 0) }
+                    )
+                    StatItem(
+                        icon = Icons.Rounded.Repeat,
+                        count = track.repostsCount,
+                        onClick = hapticAction(HapticKind.UI) { viewModel.navigateToTrackDetails(track.id, 1) }
+                    )
+                    StatItem(
+                        icon = Icons.AutoMirrored.Rounded.Comment,
+                        count = track.commentCount
+                    )
+                    IconButton(
+                        onClick = hapticAction(HapticKind.UI) { viewModel.navigateToTrackDetails(track.id, 0) },
+                        shapes = IconButtonDefaults.shapes(),
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Rounded.Info,
+                            contentDescription = "Details",
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
@@ -531,7 +579,7 @@ fun DesktopTrackInfoTabContent(
 
                 track.genre?.let { genre ->
                     Row(
-                        modifier = Modifier.clickable { viewModel.navigateToTag(genre) },
+                        modifier = Modifier.hapticClickable { viewModel.navigateToTag(genre) },
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -564,7 +612,7 @@ fun DesktopTrackInfoTabContent(
                         ) {
                             tags.forEach { tag ->
                                 SuggestionChip(
-                                    onClick = { viewModel.navigateToTag(tag.removePrefix("#")) },
+                                    onClick = hapticAction(HapticKind.UI) { viewModel.navigateToTag(tag.removePrefix("#")) },
                                     label = { Text(tag) }
                                 )
                             }
@@ -614,7 +662,7 @@ fun DesktopTrackInfoTabContent(
                     var isSortMenuExpanded by remember { mutableStateOf(false) }
                     Box {
                         OutlinedButton(
-                            onClick = { isSortMenuExpanded = true },
+                            onClick = hapticAction(HapticKind.UI) { isSortMenuExpanded = true },
                             shapes = ButtonDefaults.shapes(),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                         ) {
@@ -638,7 +686,7 @@ fun DesktopTrackInfoTabContent(
                             CommentSort.entries.forEach { sortOption ->
                                 DropdownMenuItem(
                                     text = { Text(stringResource(sortOption.labelResId)) },
-                                    onClick = {
+                                    onClick = hapticAction(HapticKind.UI) {
                                         viewModel.onCommentSortChanged(sortOption)
                                         isSortMenuExpanded = false
                                     }
@@ -687,7 +735,7 @@ fun DesktopTrackInfoTabContent(
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { Toast.makeText(context, loginToCommentMsg, Toast.LENGTH_SHORT).show() }
+                            .hapticClickable { Toast.makeText(context, loginToCommentMsg, Toast.LENGTH_SHORT).show() }
                     ) {
                         Box(
                             modifier = Modifier.padding(vertical = 12.dp, horizontal = 16.dp),
@@ -718,7 +766,7 @@ fun DesktopTrackInfoTabContent(
                             shape = RoundedCornerShape(20.dp)
                         )
                         IconButton(
-                            onClick = {
+                            onClick = hapticAction(HapticKind.UI) {
                                 if (newCommentText.isNotBlank()) {
                                     viewModel.postComment(newCommentText, null)
                                     newCommentText = ""
@@ -736,7 +784,7 @@ fun DesktopTrackInfoTabContent(
                             } else {
                                 Icon(
                                     Icons.AutoMirrored.Rounded.Send,
-                                    contentDescription = "Send",
+                                    contentDescription = stringResource(R.string.chat_send),
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
@@ -774,38 +822,15 @@ fun DesktopTrackInfoTabContent(
                     }
                 }
 
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    DesktopCommentRow(
-                        comment = comment,
-                        isReply = false,
-                        isMine = (comment.user?.id == myId && myId != 0L),
-                        isGuest = isGuest,
-                        viewModel = viewModel,
-                        context = context,
-                        loginToInteractMsg = loginToInteractMsg,
-                        onNavigateToArtist = onNavigateToArtist,
-                        onDelete = { commentToDelete = comment }
-                    )
-
-                    comment.replies?.forEach { reply ->
-                        DesktopCommentRow(
-                            comment = reply,
-                            isReply = true,
-                            isMine = (reply.user?.id == myId && myId != 0L),
-                            isGuest = isGuest,
-                            viewModel = viewModel,
-                            context = context,
-                            loginToInteractMsg = loginToInteractMsg,
-                            onNavigateToArtist = onNavigateToArtist,
-                            onDelete = { commentToDelete = reply }
-                        )
-                    }
-
-                    HorizontalDivider(
-                        modifier = Modifier.padding(start = 48.dp, top = 8.dp, bottom = 4.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f)
-                    )
-                }
+                CommentItemUI(
+                    comment = comment,
+                    viewModel = viewModel,
+                    myId = myId,
+                    isGuest = isGuest,
+                    isReply = false,
+                    onDeleteComment = { commentToDelete = it },
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
             }
 
             if (viewModel.isCommentsLoading && organizedComments.isNotEmpty()) {
@@ -821,316 +846,6 @@ fun DesktopTrackInfoTabContent(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun DesktopCommentRow(
-    comment: Comment,
-    isReply: Boolean,
-    isMine: Boolean,
-    isGuest: Boolean,
-    viewModel: PlayerViewModel,
-    context: Context,
-    loginToInteractMsg: String,
-    onNavigateToArtist: (Long) -> Unit,
-    onDelete: () -> Unit
-) {
-    val scope = rememberCoroutineScope()
-    var translatedText by remember { mutableStateOf<String?>(null) }
-    var showTranslation by remember { mutableStateOf(false) }
-    var isTranslating by remember { mutableStateOf(false) }
-
-    val currentLocale = Locale.getDefault()
-    val langName = remember(currentLocale) {
-        currentLocale.getDisplayLanguage(currentLocale)
-            .replaceFirstChar { if (it.isLowerCase()) it.titlecase(currentLocale) else it.toString() }
-    }
-    val langCode = currentLocale.language
-
-    var isTargetLanguage by remember(comment.body, langCode) { mutableStateOf(false) }
-    LaunchedEffect(comment.body, langCode) {
-        val cleanText = comment.body.replace(Regex("[^\\p{L}\\p{Nd}\\s]"), "").trim()
-        if (cleanText.isBlank()) {
-            isTargetLanguage = true
-        } else {
-            val languageIdentifier = com.google.mlkit.nl.languageid.LanguageIdentification.getClient()
-            languageIdentifier.identifyLanguage(cleanText)
-                .addOnSuccessListener { language ->
-                    if (language == langCode || language == "und") {
-                        isTargetLanguage = true
-                    }
-                }
-        }
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = if (isReply) 36.dp else 0.dp, top = 6.dp, bottom = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        AsyncImage(
-            model = comment.user?.avatarUrl,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .size(if (isReply) 28.dp else 36.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .clickable { comment.user?.id?.let { if (it > 0) onNavigateToArtist(it) } }
-        )
-
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text(
-                    text = comment.user?.username ?: stringResource(R.string.comment_anonymous),
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.clickable { comment.user?.id?.let { if (it > 0) onNavigateToArtist(it) } }
-                )
-                if (comment.user?.verified == true) {
-                    Icon(
-                        Icons.Rounded.Verified,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(12.dp)
-                    )
-                }
-
-                comment.trackTimestamp?.let { ts ->
-                    if (ts > 0) {
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
-                            modifier = Modifier.clickable { viewModel.seekTo(ts) }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    Icons.Rounded.PlayArrow,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(10.dp),
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(Modifier.width(2.dp))
-                                Text(
-                                    text = makeTimeString(ts),
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Text(
-                    text = getRelativeTime(comment.createdAt, context),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                )
-            }
-
-            val displayBody = if (showTranslation && !translatedText.isNullOrEmpty()) translatedText!! else comment.body
-            CommentBodyText(
-                body = displayBody,
-                onMentionClick = { mention ->
-                    viewModel.resolveAndNavigateToArtist(mention)
-                }
-            )
-
-            if (translatedText == null && !isTranslating && !isTargetLanguage) {
-                Text(
-                    text = stringResource(R.string.comment_translate, langName),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable {
-                            isTranslating = true
-                            scope.launch(Dispatchers.IO) {
-                                val res = com.alananasss.kittytune.data.network.FreeTranslator.translateMissing(
-                                    listOf(comment.body),
-                                    langCode
-                                )
-                                val t = res[comment.body.trim()]
-                                withContext(Dispatchers.Main) {
-                                    if (t != null && t.lowercase() != comment.body.trim().lowercase()) {
-                                        translatedText = t
-                                        showTranslation = true
-                                    } else {
-                                        translatedText = ""
-                                    }
-                                    isTranslating = false
-                                }
-                            }
-                        }
-                        .padding(vertical = 2.dp)
-                )
-            } else if (isTranslating) {
-                Text(
-                    text = stringResource(R.string.comment_translating),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    modifier = Modifier.padding(vertical = 2.dp)
-                )
-            } else if (!translatedText.isNullOrEmpty()) {
-                Text(
-                    text = if (showTranslation) stringResource(R.string.comment_see_original) else stringResource(
-                        R.string.comment_translate,
-                        langName
-                    ),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable { showTranslation = !showTranslation }
-                        .padding(vertical = 2.dp)
-                )
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 2.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (isMine) {
-                    IconButton(
-                        onClick = onDelete,
-                        shapes = IconButtonDefaults.shapes(),
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Icon(
-                            Icons.Outlined.Delete,
-                            contentDescription = "Delete",
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                    Spacer(Modifier.width(4.dp))
-                }
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable {
-                            if (isGuest) {
-                                Toast.makeText(context, loginToInteractMsg, Toast.LENGTH_SHORT).show()
-                            } else {
-                                viewModel.startReplying(comment)
-                            }
-                        }
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Rounded.Reply,
-                        contentDescription = "Reply",
-                        tint = if (isGuest) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f) else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        text = stringResource(R.string.comment_reply),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isGuest) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f) else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Spacer(Modifier.weight(1f))
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .clickable {
-                            if (isGuest) {
-                                Toast.makeText(context, loginToInteractMsg, Toast.LENGTH_SHORT).show()
-                            } else {
-                                viewModel.toggleCommentLike(comment)
-                            }
-                        }
-                        .padding(4.dp)
-                ) {
-                    val isLiked = comment.isLiked
-                    Icon(
-                        imageVector = if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                        contentDescription = "Like",
-                        tint = if (isLiked) Color(0xFFFF4081) else MaterialTheme.colorScheme.onSurfaceVariant.let {
-                            if (isGuest) it.copy(alpha = 0.3f) else it
-                        },
-                        modifier = Modifier.size(14.dp)
-                    )
-                    if (comment.likesCount > 0) {
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = formatCount(comment.likesCount),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CommentBodyText(body: String, onMentionClick: (String) -> Unit) {
-    val mentionPattern = remember { """@[\w-]+""".toRegex() }
-    val urlPattern = remember { """https?://[^\s]+""".toRegex() }
-    val tertiaryColor = MaterialTheme.colorScheme.tertiary
-    val primaryColor = MaterialTheme.colorScheme.primary
-
-    val annotatedString = remember(body, tertiaryColor, primaryColor) {
-        buildAnnotatedString {
-            append(body)
-            for (match in mentionPattern.findAll(body)) {
-                val username = match.value.removePrefix("@")
-                addLink(
-                    LinkAnnotation.Clickable(
-                        tag = "MENTION",
-                        styles = TextLinkStyles(
-                            style = SpanStyle(
-                                color = tertiaryColor,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        ),
-                        linkInteractionListener = { onMentionClick(username) }
-                    ),
-                    match.range.first, match.range.last + 1
-                )
-            }
-            for (match in urlPattern.findAll(body)) {
-                addLink(
-                    LinkAnnotation.Url(
-                        url = match.value,
-                        styles = TextLinkStyles(
-                            style = SpanStyle(
-                                color = primaryColor,
-                                textDecoration = TextDecoration.Underline
-                            )
-                        )
-                    ),
-                    match.range.first, match.range.last + 1
-                )
-            }
-        }
-    }
-
-    SelectionContainer {
-        Text(
-            text = annotatedString,
-            style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 19.sp),
-            color = MaterialTheme.colorScheme.onSurface
-        )
     }
 }
 
@@ -1178,7 +893,9 @@ fun TabletFullScreenPlayerView(
     isBlurMode: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val track = viewModel.currentTrack ?: return
+    val track = viewModel.uiCurrentTrack ?: return
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val playerPrefs = remember { com.alananasss.kittytune.data.local.PlayerPreferences(context) }
     var showEffectsSheet by remember { mutableStateOf(false) }
     var showQueueSheet by remember { mutableStateOf(false) }
 
@@ -1201,7 +918,7 @@ fun TabletFullScreenPlayerView(
                 IconButton(onClick = onToggleSplitMode, shapes = IconButtonDefaults.shapes()) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.ViewSidebar,
-                        contentDescription = "Split View",
+                        contentDescription = stringResource(R.string.player_side_player),
                         tint = mainContentColor
                     )
                 }
@@ -1219,7 +936,7 @@ fun TabletFullScreenPlayerView(
                 modifier = Modifier.weight(1f).padding(horizontal = 16.dp)
             ) {
                 Text(
-                    text = stringResource(R.string.player_playing_now),
+                    text = viewModel.playbackDeviceLabel ?: stringResource(R.string.player_playing_now),
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium
@@ -1231,12 +948,13 @@ fun TabletFullScreenPlayerView(
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                     color = mainContentColor,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.hapticClickable { viewModel.navigateToContext() }
                 )
             }
 
             IconButton(
-                onClick = { viewModel.showTrackOptions(track, fromPlayer = true) },
+                onClick = hapticAction(HapticKind.UI) { viewModel.showTrackOptions(track, fromPlayer = true) },
                 shapes = IconButtonDefaults.shapes()
             ) {
                 Icon(
@@ -1291,7 +1009,7 @@ fun TabletFullScreenPlayerView(
                                 )
                                 .clip(RoundedCornerShape(20.dp))
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .clickable {
+                                .hapticClickable {
                                     if (viewModel.hasLyrics) {
                                         viewModel.openLyrics()
                                     }
@@ -1329,27 +1047,46 @@ fun TabletFullScreenPlayerView(
                         )
                         Spacer(Modifier.height(2.dp))
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.clickable {
-                                viewModel.navigateToTrackArtist(track)
-                            }
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = track.displayArtist.ifBlank { stringResource(R.string.unknown_artist) },
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                                color = subContentColor,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            if (track.user?.verified == true) {
-                                Spacer(Modifier.width(4.dp))
-                                Icon(
-                                    imageVector = Icons.Rounded.Verified,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(16.dp)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .weight(1f, fill = false)
+                                    .hapticClickable {
+                                        viewModel.navigateToTrackArtist(track)
+                                    }
+                            ) {
+                                Text(
+                                    text = track.displayArtist.ifBlank { stringResource(R.string.unknown_artist) },
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                    color = subContentColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
                                 )
+                                if (track.user?.verified == true) {
+                                    Spacer(Modifier.width(4.dp))
+                                    Icon(
+                                        imageVector = Icons.Rounded.Verified,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
                             }
+                            val aiResult by com.alananasss.kittytune.audio.ai.AiDetectionManager.result.collectAsState()
+                            com.alananasss.kittytune.ui.player.ai.AiDetectionBadge(
+                                result = aiResult,
+                                textColor = mainContentColor,
+                                onClick = { viewModel.showAiDetectionSheet = true },
+                                modifier = Modifier.padding(start = 8.dp)
+                            )
+                            com.alananasss.kittytune.ui.common.TrackSourceBadge(
+                                track = track,
+                                resolvedSource = viewModel.currentStreamSource,
+                                modifier = Modifier.padding(start = 6.dp)
+                            )
                         }
                     }
 
@@ -1367,7 +1104,7 @@ fun TabletFullScreenPlayerView(
                                     .combinedClickable(
                                         onClick = { viewModel.openLyrics() },
                                         onLongClick = {
-                                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                            view.performAppHaptic(HapticFeedbackConstants.LONG_PRESS)
                                             viewModel.openLyrics(forceSheet = true)
                                         }
                                     ),
@@ -1387,9 +1124,9 @@ fun TabletFullScreenPlayerView(
                             shapes = IconButtonDefaults.shapes()
                         ) {
                             Icon(
-                                imageVector = if (viewModel.isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                                contentDescription = "Like",
-                                tint = if (viewModel.isLiked) animatedColor else iconTint,
+                                imageVector = if (viewModel.uiIsLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                                contentDescription = stringResource(R.string.desc_like),
+                                tint = if (viewModel.uiIsLiked) animatedColor else iconTint,
                                 modifier = Modifier.size(28.dp)
                             )
                         }
@@ -1397,7 +1134,7 @@ fun TabletFullScreenPlayerView(
                         if (viewModel.isYourMixActive) {
                             Spacer(Modifier.width(4.dp))
                             IconButton(
-                                onClick = { viewModel.dislikeCurrentTrackInMix() },
+                                onClick = hapticAction(HapticKind.UI) { viewModel.dislikeCurrentTrackInMix() },
                                 shapes = IconButtonDefaults.shapes()
                             ) {
                                 Icon(
@@ -1433,7 +1170,7 @@ fun TabletFullScreenPlayerView(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(
-                        onClick = { viewModel.showSleepTimerDialog = true },
+                        onClick = hapticAction(HapticKind.UI) { viewModel.showSleepTimerDialog = true },
                         shapes = IconButtonDefaults.shapes()
                     ) {
                         Icon(
@@ -1446,7 +1183,7 @@ fun TabletFullScreenPlayerView(
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(
-                            onClick = {
+                            onClick = hapticAction(HapticKind.UI) {
                                 viewModel.trackForMenu = track
                                 viewModel.tracksToAddInBulk = null
                                 viewModel.showAddToPlaylistSheet = true
@@ -1462,7 +1199,7 @@ fun TabletFullScreenPlayerView(
                         }
 
                         IconButton(
-                            onClick = { viewModel.openShareCard(track) },
+                            onClick = hapticAction(HapticKind.UI) { viewModel.openShareCard(track) },
                             shapes = IconButtonDefaults.shapes()
                         ) {
                             Icon(
@@ -1479,7 +1216,7 @@ fun TabletFullScreenPlayerView(
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Rounded.ViewSidebar,
-                                contentDescription = "Sidebar",
+                                contentDescription = stringResource(R.string.player_side_player),
                                 tint = iconTint.copy(alpha = 0.75f),
                                 modifier = Modifier.size(22.dp)
                             )
@@ -1528,15 +1265,15 @@ private fun TabletQueueList(
 ) {
     val view = LocalView.current
     val listState = rememberLazyListState()
-    val queue = viewModel.queueState
-    val currentIndex = viewModel.currentQueueIndex
-    val currentTrack = viewModel.currentTrack
+    val queue = viewModel.uiQueueState
+    val currentIndex = viewModel.uiCurrentQueueIndex
+    val currentTrack = viewModel.uiCurrentTrack
 
     val reorderableState = rememberReorderableLazyListState(
         lazyListState = listState,
         onMove = { from, to ->
             viewModel.moveQueueItem(from.index, to.index)
-            view.performHapticFeedback(HapticFeedbackConstants.SEGMENT_FREQUENT_TICK)
+            view.performAppHaptic(HapticFeedbackConstants.SEGMENT_FREQUENT_TICK)
         }
     )
 
@@ -1595,8 +1332,8 @@ private fun TabletQueueList(
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Shuffle,
-                        contentDescription = "Shuffle",
-                        tint = if (viewModel.shuffleEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        contentDescription = stringResource(R.string.btn_shuffle),
+                        tint = if (viewModel.uiShuffleEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -1610,7 +1347,7 @@ private fun TabletQueueList(
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.OpenInFull,
-                        contentDescription = "Expand Queue",
+                        contentDescription = stringResource(R.string.slot_queue),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp)
                     )
@@ -1657,7 +1394,8 @@ private fun TabletQueueList(
                 ) { index, trackItem ->
                     ReorderableItem(
                         state = reorderableState,
-                        key = trackItem.id
+                        key = trackItem.id,
+                        animateItemModifier = Modifier,
                     ) { isDragging ->
                         val isCurrent = index == currentIndex || trackItem.id == currentTrack?.id
                         val elevation by animateDpAsState(if (isDragging) 8.dp else 0.dp, label = "elevation")
@@ -1677,8 +1415,8 @@ private fun TabletQueueList(
                                 .combinedClickable(
                                     onClick = { viewModel.skipToQueueItem(index) },
                                     onLongClick = {
-                                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                                        viewModel.showTrackOptions(trackItem, fromPlayer = true)
+                                        view.performAppHaptic(HapticFeedbackConstants.LONG_PRESS)
+                                        viewModel.showTrackOptions(trackItem, fromPlayer = true, queueIndex = index)
                                     }
                                 )
                         ) {
@@ -1701,7 +1439,7 @@ private fun TabletQueueList(
                                             .clip(RoundedCornerShape(10.dp))
                                             .background(MaterialTheme.colorScheme.surfaceVariant)
                                     )
-                                    if (isCurrent && viewModel.isPlaying) {
+                                    if (isCurrent && viewModel.uiIsPlaying) {
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxSize()
@@ -1729,7 +1467,7 @@ private fun TabletQueueList(
 
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.clickable {
+                                        modifier = Modifier.hapticClickable {
                                             trackItem.user?.id?.let { if (it > 0) onNavigateToArtist(it) }
                                         }
                                     ) {
@@ -1762,13 +1500,13 @@ private fun TabletQueueList(
                                 }
 
                                 IconButton(
-                                    onClick = { viewModel.showTrackOptions(trackItem, fromPlayer = true) },
+                                    onClick = { viewModel.showTrackOptions(trackItem, fromPlayer = true, queueIndex = index) },
                                     shapes = IconButtonDefaults.shapes(),
                                     modifier = Modifier.size(28.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.MoreVert,
-                                        contentDescription = "Options",
+                                        contentDescription = stringResource(R.string.btn_options),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(18.dp)
                                     )
@@ -1784,10 +1522,10 @@ private fun TabletQueueList(
                                         .size(28.dp)
                                         .draggableHandle(
                                             onDragStarted = {
-                                                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                                view.performAppHaptic(HapticFeedbackConstants.LONG_PRESS)
                                             },
                                             onDragStopped = {
-                                                view.performHapticFeedback(HapticFeedbackConstants.GESTURE_END)
+                                                view.performAppHaptic(HapticFeedbackConstants.GESTURE_END)
                                             }
                                         )
                                 )

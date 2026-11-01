@@ -2,6 +2,7 @@ package com.alananasss.kittytune.data.sync
 
 import com.alananasss.kittytune.KittyTuneApp
 import com.google.gson.Gson
+import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -119,6 +120,7 @@ object SyncService {
         deviceId = SyncLog.deviceId,
         deviceName = SyncLog.deviceName,
         platform = PLATFORM,
+        addresses = rankedCandidateAddresses(),
     )
 
     fun pairingCode(): String = Base64.getUrlEncoder().withoutPadding()
@@ -127,8 +129,12 @@ object SyncService {
     /** @return the pairing details in [code], or null when it is not one of ours. */
     fun parsePairingCode(code: String): PairingPayload? = runCatching {
         val json = String(Base64.getUrlDecoder().decode(code.trim()))
-        gson.fromJson(json, PairingPayload::class.java)
-            ?.takeIf { it.host.isNotBlank() && it.secret.isNotBlank() && it.port in 1..65535 }
+        gson.fromJson(json, PairingPayload::class.java)?.let { payload ->
+            val host = payload.host.ifBlank { payload.addresses.firstOrNull().orEmpty() }
+            if (host.isNotBlank() && payload.secret.isNotBlank() && payload.port in 1..65535) {
+                if (payload.host.isBlank()) payload.copy(host = host) else payload
+            } else null
+        }
     }.getOrNull()
 
     /**
@@ -261,6 +267,8 @@ object SyncService {
         val applied = SyncLog.merge(request.events)
         // Awaited, so the marks and the count we report describe work that has actually happened.
         SyncApply.applyNow(applied)
+        SyncPlayback.accept(request.playback)
+        ConnectManager.importRelayUrl(request.relayUrl)
         SyncLog.setPeerMarks(request.deviceId, request.marks)
 
         val callback = request.callback
@@ -282,8 +290,66 @@ object SyncService {
             marks = SyncLog.marks(),
             events = SyncMerge.eventsToSend(SyncLog.all(), request.marks, request.deviceId),
             callback = selfPairing().takeIf { isRunning },
+            playback = SyncPlayback.current(),
+            relayUrl = ConnectManager.relayUrl.ifBlank { null },
         )
     }
+
+    private data class ScoredAddress(val score: Int, val address: String)
+
+    /**
+     * All IPv4 addresses on this device, ranked by likelihood of being the real LAN interface.
+     *
+     * Virtual/container/VPN interfaces (docker, veth, tun, tap, wg, etc.) are heavily penalised
+     * so that real Wi-Fi and Ethernet LAN interfaces (192.168.x.x, 10.x.x.x, etc.) are placed first.
+     */
+    fun rankedCandidateAddresses(): List<String> = runCatching {
+        val candidates = mutableListOf<ScoredAddress>()
+        val interfaces = java.net.NetworkInterface.getNetworkInterfaces() ?: return emptyList()
+
+        for (ni in interfaces.asSequence()) {
+            if (!ni.isUp || ni.isLoopback) continue
+            val name = ni.name.lowercase()
+            val display = ni.displayName.lowercase()
+
+            val isVirtual = ni.isVirtual ||
+                name.contains("docker") || name.startsWith("veth") ||
+                name.contains("virbr") || name.contains("lxc") ||
+                name.contains("cni") || name.contains("flannel") ||
+                name.contains("calico") || name.contains("tailscale") ||
+                name.startsWith("tun") || name.startsWith("tap") ||
+                name.startsWith("wg") || name.contains("hamachi") ||
+                name.contains("zerotier") || name.contains("dummy") ||
+                display.contains("docker") || display.contains("virtual") ||
+                display.contains("wsl")
+
+            val isPhysicalLan = name.startsWith("wl") || name.startsWith("wi") ||
+                name.startsWith("en") || name.startsWith("eth") || name.startsWith("lan")
+
+            for (addr in ni.inetAddresses.asSequence()) {
+                if (addr !is java.net.Inet4Address || addr.isLoopbackAddress || addr.isLinkLocalAddress || addr.isAnyLocalAddress) {
+                    continue
+                }
+                val ip = addr.hostAddress ?: continue
+                val score = when {
+                    isVirtual -> 10
+                    isPhysicalLan && ip.startsWith("192.168.") -> 100
+                    isPhysicalLan && ip.startsWith("10.") -> 90
+                    isPhysicalLan && ip.matches(Regex("^172\\.(1[6-9]|2[0-9]|3[0-1])\\..*")) -> 70
+                    isPhysicalLan -> 60
+                    ip.startsWith("192.168.") -> 50
+                    ip.startsWith("10.") -> 40
+                    ip.matches(Regex("^172\\.(1[6-9]|2[0-9]|3[0-1])\\..*")) -> 30
+                    else -> 20
+                }
+                candidates.add(ScoredAddress(score, ip))
+            }
+        }
+
+        candidates.sortedByDescending { it.score }
+            .map { it.address }
+            .distinct()
+    }.getOrDefault(emptyList())
 
     /**
      * This device's address on the local network.
@@ -292,15 +358,7 @@ object SyncService {
      * and loopback is only the last resort — which at least fails visibly rather than silently handing out
      * an address that cannot work.
      */
-    fun localAddress(): String = runCatching {
-        java.net.NetworkInterface.getNetworkInterfaces().asSequence()
-            .filter { it.isUp && !it.isLoopback }
-            .flatMap { it.inetAddresses.asSequence() }
-            .filterIsInstance<java.net.Inet4Address>()
-            .firstOrNull { !it.isLoopbackAddress }
-            ?.hostAddress
-            ?: "127.0.0.1"
-    }.getOrDefault("127.0.0.1")
+    fun localAddress(): String = rankedCandidateAddresses().firstOrNull() ?: "127.0.0.1"
 
     /** Constant-time, so a wrong secret cannot be found one character at a time. */
     private fun secretMatches(presented: String?): Boolean {
@@ -369,13 +427,14 @@ object SyncService {
  * between the two verbatim.
  */
 data class PairingPayload(
-    val host: String,
-    val port: Int,
-    val secret: String,
-    val deviceId: String,
-    val deviceName: String,
+    @SerializedName("host") val host: String,
+    @SerializedName("port") val port: Int,
+    @SerializedName("secret") val secret: String,
+    @SerializedName("deviceId") val deviceId: String,
+    @SerializedName("deviceName") val deviceName: String,
     /** "desktop" or "android", for a screen that wants to draw the right icon. Absent in old codes. */
-    val platform: String = "",
+    @SerializedName("platform") val platform: String = "",
+    @SerializedName("addresses") val addresses: List<String> = emptyList(),
 )
 
 /**
@@ -384,17 +443,20 @@ data class PairingPayload(
  * The same shape both ways, so one type describes the request and the response.
  */
 data class SyncExchange(
-    val deviceId: String,
-    val deviceName: String,
-    val marks: Map<String, Long>,
-    val events: List<SyncEvent>,
+    @SerializedName("deviceId") val deviceId: String,
+    @SerializedName("deviceName") val deviceName: String,
+    @SerializedName("marks") val marks: Map<String, Long>,
+    @SerializedName("events") val events: List<SyncEvent>,
     /**
      * How to call the sender back, when it can be called.
      *
      * Null from a device with no listener, and absent entirely from a version that predates mutual
      * pairing — both of which leave the pairing one-directional rather than breaking it.
      */
-    val callback: PairingPayload? = null,
+    @SerializedName("callback") val callback: PairingPayload? = null,
+    /** Latest queue/playhead, absent when talking to an older client. */
+    @SerializedName("playback") val playback: PlaybackSnapshot? = null,
+    @SerializedName("relayUrl") val relayUrl: String? = null,
 )
 
 /** Where the secret goes. Must match the desktop, which refuses anything else. */

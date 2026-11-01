@@ -40,6 +40,9 @@ import com.alananasss.kittytune.ui.icons.Icon
     import android.text.format.DateFormat
     import coil.compose.AsyncImage
     import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.ui.common.hapticClickable
     import com.alananasss.kittytune.domain.InboxMessage
     import com.alananasss.kittytune.domain.Playlist
     import com.alananasss.kittytune.domain.Track
@@ -70,7 +73,7 @@ import com.alananasss.kittytune.ui.icons.Icon
         }
 
         var messageText by remember { mutableStateOf("") }
-        val isMiniPlayerVisible = playerViewModel.currentTrack != null
+        val isMiniPlayerVisible = playerViewModel.uiCurrentTrack != null
 
         val otherUserAvatar by remember {
             derivedStateOf {
@@ -96,7 +99,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
-                                .clickable { onProfileClick(otherUserId) }
+                                .hapticClickable { onProfileClick(otherUserId) }
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             ArtistAvatar(
@@ -238,7 +241,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                     SoundCloudPreviewCard(
                         data = richData,
                         isMe = isMe,
-                        onClick = { onPreviewClick(richData) }
+                        onClick = hapticAction(HapticKind.UI) { onPreviewClick(richData) }
                     )
                     if (formattedTime.isNotEmpty()) {
                         Text(

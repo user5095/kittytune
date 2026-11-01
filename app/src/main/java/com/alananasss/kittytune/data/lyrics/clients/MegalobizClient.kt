@@ -15,10 +15,11 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import com.alananasss.kittytune.data.lyrics.parsers.QRCParser
+import com.alananasss.kittytune.data.zapret.ZapretManager
 
 object MegalobizClient {
     private val client by lazy {
-        OkHttpClient.Builder()
+        ZapretManager.newBuilder()
             .callTimeout(8, TimeUnit.SECONDS)
             .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.SECONDS)
@@ -30,6 +31,9 @@ object MegalobizClient {
     private val LRC_SPAN_REGEX = Regex("""id=["']lrc_[^"']*_details["'][^>]*>(.*?)</span>""", RegexOption.DOT_MATCHES_ALL)
     private val HTML_TAG_REGEX = Regex("""<[^>]+>""")
     private val LINE_REGEX = Regex("""^\[\d{2}:\d{2}\.\d{2,3}].*""")
+    private val LINE_REGEX_TOLERANT = Regex("""((\[\d{1,3}:\d{2}(?:[.:]\d{2,3})?\]\s*)+)(.*)""")
+    private val YRC_LINE_REGEX = Regex("""\[(\d{1,8}),\d{1,8}](.*)""")
+    private val INVISIBLE_CHARS = "\u200B\u200C\u200D\u2060\u00AD\uFEFF"
 
     suspend fun getLyrics(
         title: String,
@@ -84,10 +88,23 @@ object MegalobizClient {
         }
 
     private fun isLineSynced(text: String): Boolean {
-        if (QRCParser.isQrc(text)) return true
+        if (QRCParser.isQrc(normalize(text))) return true
         return text.lineSequence().any { line ->
-            LINE_REGEX.matches(line.trim())
+            val trimmed = line.trim()
+            LINE_REGEX.matches(trimmed) || LINE_REGEX_TOLERANT.matches(trimmed) || YRC_LINE_REGEX.matches(trimmed)
         }
+    }
+
+    private fun normalize(text: String): String {
+        var out = text.replace("\uFEFF", "")
+        for (ch in INVISIBLE_CHARS) {
+            out = out.replace(ch.toString(), "")
+        }
+        var start = 0
+        var end = out.length
+        while (start < end && (out[start].isWhitespace() || out[start] == ' ')) start++
+        while (end > start && (out[end - 1].isWhitespace() || out[end - 1] == ' ')) end--
+        return out.substring(start, end)
     }
 
     private suspend fun fetchHtml(request: Request): String? =

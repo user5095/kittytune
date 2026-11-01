@@ -29,6 +29,9 @@ import com.alananasss.kittytune.ui.icons.Icon
     import androidx.glance.appwidget.GlanceAppWidgetManager
     import androidx.glance.appwidget.state.updateAppWidgetState
     import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.ui.common.hapticClickable
     import com.alananasss.kittytune.ui.theme.SoundTuneTheme
     import kotlinx.coroutines.MainScope
     import kotlinx.coroutines.launch
@@ -112,7 +115,7 @@ import com.alananasss.kittytune.ui.icons.Icon
             containerColor = MaterialTheme.colorScheme.surface,
             floatingActionButton = {
                 ExtendedFloatingActionButton(
-                    onClick = { onConfirm(enabledEffects.toSet(), customSpeeds) },
+                    onClick = hapticAction(HapticKind.UI) { onConfirm(enabledEffects.toSet(), customSpeeds) },
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary
                 ) {
@@ -170,7 +173,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                     ) {
                         Text(stringResource(R.string.player_speed), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Button(
-                            onClick = { showAddSpeedDialog = true },
+                            onClick = hapticAction(HapticKind.UI) { showAddSpeedDialog = true },
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
                         ) {
                             Icon(Icons.Rounded.Add, null, modifier = Modifier.size(18.dp))
@@ -220,7 +223,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                                     Text("${speedItem.value}x", style = MaterialTheme.typography.bodySmall)
                                 }
                             }
-                            IconButton(onClick = { customSpeeds.remove(speedItem) }) {
+                            IconButton(onClick = hapticAction(HapticKind.UI) { customSpeeds.remove(speedItem) }) {
                                 Icon(Icons.Rounded.Delete, stringResource(R.string.btn_delete), tint = MaterialTheme.colorScheme.error)
                             }
                         }
@@ -246,7 +249,7 @@ import com.alananasss.kittytune.ui.icons.Icon
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { if (isSelected) selectedList.remove(key) else selectedList.add(key) }
+                .hapticClickable { if (isSelected) selectedList.remove(key) else selectedList.add(key) }
                 .padding(vertical = 8.dp, horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -314,7 +317,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                 }
             },
             confirmButton = {
-                Button(onClick = {
+                Button(onClick = hapticAction(HapticKind.UI) {
                     if (label.isNotBlank()) {
                         // Round properly to 2 decimals
                         val roundedValue = (speedValue * 20).roundToInt() / 20f

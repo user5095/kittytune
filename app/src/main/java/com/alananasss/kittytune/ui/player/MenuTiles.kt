@@ -42,6 +42,7 @@ object MenuTiles {
         Tile("block_track", R.string.menu_block_track),
         Tile("block_artist", R.string.menu_block_artist),
         Tile("download", R.string.btn_download),
+        Tile("connect", R.string.slot_connect),
     )
 
     val PLAYLIST = listOf(
@@ -107,6 +108,7 @@ object MenuTiles {
         "block_track" -> Icons.Rounded.Block
         "block_artist" -> Icons.Rounded.PersonOff
         "play" -> Icons.Rounded.PlayArrow
+        "connect" -> Icons.Rounded.Devices
         else -> Icons.Rounded.Apps
     }
 }

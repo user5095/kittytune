@@ -1,6 +1,6 @@
 <resources>
     <!-- ═══════════════════════════════════════════════════════════════════════════════ -->
-    <!-- APP & CORE                                                                       -->
+    <!-- APP &amp; CORE                                                                       -->
     <!-- ═══════════════════════════════════════════════════════════════════════════════ -->
     <string name="app_name">KittyTune</string>
     <string name="msg_retrying">Đang thử lại&#8230;</string>
@@ -11,7 +11,7 @@
     <string name="no_results">Không tìm thấy kết quả</string>
     <string name="unknown">Không xác định</string>
     <!-- ═══════════════════════════════════════════════════════════════════════════════ -->
-    <!-- BUTTONS & ACTIONS                                                                -->
+    <!-- BUTTONS &amp; ACTIONS                                                                -->
     <!-- ═══════════════════════════════════════════════════════════════════════════════ -->
     <string name="btn_ok">OK</string>
     <string name="btn_cancel">Hủy</string>
@@ -42,9 +42,8 @@
     <string name="btn_share">Chia sẻ</string>
     <string name="btn_follow">Theo dõi</string>
     <string name="all_filters">Tất cả</string>
-    <string name="captcha_done">Tôi đã hoàn thành Captcha</string>
     <!-- ═══════════════════════════════════════════════════════════════════════════════ -->
-    <!-- NAVIGATION & AUTH                                                                -->
+    <!-- NAVIGATION &amp; AUTH                                                                -->
     <!-- ═══════════════════════════════════════════════════════════════════════════════ -->
     <string name="nav_home">Trang chủ</string>
     <string name="nav_library">Thư viện</string>
@@ -53,22 +52,25 @@
     <string name="nav_search">Tìm kiếm</string>
     <string name="nav_upload">Tải lên</string>
     <string name="welcome_title">Chào mừng đến với\nKittyTune</string>
-    <string name="welcome_subtitle">Khám phá, phát trực tuyến và tải nhạc không giới hạn</string>
+    
     <string name="login_title">Đăng nhập SoundCloud</string>
     <string name="login_soundcloud">Kết nối với SoundCloud</string>
-    <string name="login_guest">Tiếp tục với tư cách Khách</string>
-    <string name="guest_loading">Đang khởi tạo phiên khách&#8230;</string>
+    
     <string name="login_auth_in_progress">Đang xác thực…</string>
     <string name="login_waiting_browser">Đang chờ trình duyệt…</string>
     <string name="login_no_browser_hint">Nếu trình duyệt không mở, hãy nhấn vào bên dưới.</string>
     <string name="login_reopen_browser">Mở lại trình duyệt</string>
-    <string name="permission_notifications">Thông báo</string>
-    <string name="permission_notifications_description">Cho phép KittyTune hiển thị trình điều khiển phát nhạc và trạng thái</string>
-    <string name="permission_grant">Cấp quyền</string>
+    
     <!-- ═══════════════════════════════════════════════════════════════════════════════ -->
-    <!-- HOME & DISCOVERY                                                                 -->
+    <!-- HOME &amp; DISCOVERY                                                                 -->
     <!-- ═══════════════════════════════════════════════════════════════════════════════ -->
     <string name="search_hint">Tìm bài hát, nghệ sĩ&#8230;</string>
+    <string name="search_verified_filter">Đã xác minh</string>
+    <string name="search_verified_track">Bản nhạc đã xác minh</string>
+    <string name="search_verified_count">%1$d đã xác minh</string>
+    <string name="search_verified_no_matches">Không có kết quả đã xác minh. Tắt Đã xác minh để xem tất cả kết quả.</string>
+    <string name="search_verified_unavailable">Không thể so sánh với các nền tảng khác. Đang hiển thị tất cả kết quả.</string>
+    <string name="search_verified_inconclusive">Việc xác minh một số kết quả chưa rõ ràng.</string>
     <string name="home_discovery_title">Khám phá trong ngày</string>
     <string name="home_discovery_subtitle">Các bài hát mới dựa trên gu âm nhạc của bạn</string>
     <string name="home_discovery_context_genre">Dành cho người hâm mộ %1$s</string>
@@ -78,7 +80,6 @@
     <string name="home_stream">Mới nhất từ nghệ sĩ bạn theo dõi</string>
     <string name="radio">Radio</string>
     <string name="home_albums_for_you">Album dành cho bạn</string>
-    <string name="home_top_albums_query">Album hàng đầu</string>
     <string name="home_section_similar">Tương tự %1$s</string>
     <string name="home_section_similar_sub">Vì bạn đã nghe bài hát này</string>
     <string name="home_section_new_crew">Gương mặt mới</string>
@@ -104,9 +105,6 @@
     <string name="home_artists_to_watch">Nghệ sĩ đáng chú ý</string>
     <string name="home_made_for_you">Dành riêng cho bạn</string>
     <string name="home_curated_by_soundcloud">Tuyển chọn bởi SoundCloud</string>
-    <string name="home_hiphop">Hip-Hop &amp; Rap</string>
-    <string name="home_electro">Electro House</string>
-    <string name="home_pop">Pop</string>
     <!-- Offline Home Screen -->
     <string name="home_offline_title">Rất tiếc, không có kết nối</string>
     <string name="home_offline_desc">KittyTune cần Internet để tải bài hát mới. Trong lúc này, bạn vẫn có thể nghe các bản nhạc đã tải xuống.</string>
@@ -115,7 +113,7 @@
     <string name="home_offline_banner">Đang ở chế độ ngoại tuyến</string>
     <string name="offline_banner_action_downloads">Mở danh sách tải xuống? Nhấn vào đây</string>
     <!-- ═══════════════════════════════════════════════════════════════════════════════ -->
-    <!-- EXPLORER & SEARCH                                                                -->
+    <!-- EXPLORER &amp; SEARCH                                                                -->
     <!-- ═══════════════════════════════════════════════════════════════════════════════ -->
     <string name="explorer_title">Khám phá</string>
     <string name="explorer_new_releases">Mới phát hành</string>
@@ -130,12 +128,7 @@
     <string name="search_source_deezer">Deezer</string>
     <string name="search_source_tidal">Tidal</string>
     <string name="search_source_qobuz">Qobuz</string>
-    <string name="charts_select_country">Chọn quốc gia</string>
-    <string name="charts_top_artists">Nghệ sĩ hàng đầu</string>
-    <string name="search_section_moods">Tâm trạng &amp; Hoàn cảnh</string>
     <string name="search_section_genres">Thể loại</string>
-    <string name="genre_official_playlists">Danh sách phát chính thức</string>
-    <string name="genre_community_playlists">Danh sách phát cộng đồng</string>
     <!-- MOODS -->
     <string name="category_mood_feelgood">Thư thái &amp; Tích cực</string>
     <string name="category_mood_calm">Yên bình</string>
@@ -174,7 +167,7 @@
     <string name="category_genre_urbanfr">Urban Pop Pháp</string>
     <string name="category_genre_rnb">R&amp;B và Soul</string>
     <string name="category_genre_rapfr">Rap Pháp</string>
-    <string name="category_genre_reggae">Reggae &amp; Caribbean</string>
+    <string name="category_genre_reggae">Reggae &amp; vùng Caribe</string>
     <string name="category_genre_rock">Rock</string>
     <string name="category_genre_hyperpop">Hyperpop</string>
     <string name="category_genre_scenecore">Scenecore</string>
@@ -197,7 +190,7 @@
     <string name="category_genre_lofi">Lo-Fi</string>
     <string name="category_genre_shoegaze">Shoegaze</string>
     <string name="category_genre_brazil">Brazil</string>
-    <string name="category_genre_celtic">Celtic</string>
+    <string name="category_genre_celtic">Nhạc Celtic</string>
     <string name="category_genre_flamenco">Flamenco</string>
     <string name="category_genre_afrocuban">Afro-Cuba</string>
     <string name="category_genre_gospel">Gospel</string>
@@ -220,18 +213,17 @@
     <string name="search_playlist_hint">Lọc trong danh sách phát</string>
     <string name="lib_offline_mode">Chế độ ngoại tuyến • Chỉ tệp cục bộ</string>
     <string name="lib_guest_mode">Chế độ khách • Đăng nhập để đồng bộ</string>
-    <string name="sort_date_added">Ngày thêm</string>
-    <string name="lib_sort_by_title">Sắp xếp theo</string>
-    <string name="lib_sort_recents">Gần đây</string>
+    
     <string name="lib_sort_recently_added">Đã thêm gần đây</string>
-    <string name="lib_sort_alphabetical">Theo thứ tự bảng chữ cái</string>
-    <string name="lib_sort_creator">Người tạo</string>
+    <string name="lib_sort_manual">Thứ tự tùy chỉnh</string>
+    <string name="lib_reorder_mode">Sắp xếp lại</string>
+    
     <string name="lib_playlists">Danh sách phát</string>
     <string name="lib_artists">Nghệ sĩ</string>
     <string name="lib_albums">Album</string>
     <string name="lib_stations">Trạm phát</string>
     <string name="lib_liked_tracks">Bài hát đã thích</string>
-    <string name="lib_liked_subtitle">Danh sách phát • Tự động</string>
+    
     <string name="lib_liked_subtitle_local">Cục bộ • Trên thiết bị này</string>
     <string name="lib_liked_subtitle_syncing">Đang đồng bộ&#8230;</string>
     <string name="lib_downloads">Đã tải xuống</string>
@@ -263,8 +255,7 @@
     <string name="menu_delete_playlist">Xóa danh sách phát</string>
     <string name="lib_create_folder_title">Thư mục mới</string>
     <string name="lib_create_folder_hint">Tên thư mục</string>
-    <string name="lib_folder">Thư mục</string>
-    <string name="lib_folders">Thư mục</string>
+    
     <string name="lib_folder_empty">Thư mục trống</string>
     <string name="lib_folder_counts_playlist_singular">%1$d danh sách phát</string>
     <string name="lib_folder_counts_playlist_plural">%1$d danh sách phát</string>
@@ -286,7 +277,7 @@
     <string name="dialog_rename_folder_title">Đổi tên thư mục</string>
     <string name="dialog_rename_folder_hint">Tên thư mục</string>
     <string name="select_folder_title">Chọn thư mục</string>
-    <string name="folder_created_toast">Đã tạo thư mục</string>
+    
     <string name="lib_folder_play_ordered">Phát theo thứ tự</string>
     <string name="lib_folder_play_shuffle">Phát ngẫu nhiên</string>
     <string name="lib_folder_play_recursive_ordered">Phát tất cả (gồm thư mục con)</string>
@@ -302,10 +293,12 @@
     <string name="player_like_action">Thích</string>
     <string name="download_comment">Qua KittyTune</string>
     <string name="player_audio_settings">Cài đặt âm thanh</string>
-    <string name="label_volume">Âm lượng: %d%%</string>
+    
     <string name="player_effects">Hiệu ứng</string>
     <string name="player_special_effects">Hiệu ứng âm thanh (FX)</string>
     <string name="audio_fx_long_press_hint">Nhấn giữ một ô để tùy chỉnh cài đặt</string>
+    <string name="fx_active_count">%1$d đang bật</string>
+    <string name="fx_reset_speed">Tốc độ bình thường</string>
     <string name="player_pitch">Cao độ</string>
     <string name="player_speed">Tốc độ</string>
     <string name="pref_precise_speed">Tốc độ chi tiết</string>
@@ -316,7 +309,7 @@
     <string name="effect_8d">Âm thanh 8D</string>
     <string name="effect_muffled">Âm thanh nghẹt</string>
     <string name="effect_reverb">Tiếng vang (Reverb)</string>
-    <string name="effect_rain">Chế độ tiếng mưa</string>
+    
     <string name="effect_vintage_mp3">Máy MP3 cổ điển</string>
     <string name="fx_vintage_mp3_desc">Chất âm máy nghe nhạc MP3 thập niên 2000 Lo-Fi với nén bitrate thấp</string>
     <string name="label_vintage_mp3_compression">Mức nén: %1$d%% (%2$s)</string>
@@ -499,13 +492,12 @@
     <string name="btn_explore_all_effects">Khám phá tất cả hiệu ứng</string>
     <string name="edit_tiles_title">Chỉnh sửa ô tiện ích</string>
     <string name="edit_tiles_subtitle">Chọn các ô để ghim vào thanh truy cập nhanh</string>
-    <string name="pinned_tiles_section">Các ô đã ghim (%1$d)</string>
-    <string name="pinned_tiles_count">Đã ghim %1$d</string>
+    
     <string name="category_power_eq">Nguồn &amp; Bộ cân bằng âm (EQ)</string>
     <string name="category_spatial">Không gian &amp; 3D</string>
     <string name="category_ambience_filters">Môi trường &amp; Không gian phòng</string>
     <string name="category_retro_vintage">Cổ điển &amp; Chất âm xưa</string>
-    <string name="status_active">Đang kích hoạt</string>
+    
     <string name="player_lyrics">Lời bài hát</string>
     <string name="lyrics_no_data">Không có lời bài hát</string>
     <string name="lyrics_manual_search">Tìm kiếm thủ công</string>
@@ -516,7 +508,7 @@
     <string name="lyrics_copy_text">Sao chép văn bản</string>
     <string name="lyrics_sync">Đồng bộ</string>
     <!-- ═══════════════════════════════════════════════════════════════════════════════ -->
-    <!-- MENUS & CONTEXT                                                                  -->
+    <!-- MENUS &amp; CONTEXT                                                                  -->
     <!-- ═══════════════════════════════════════════════════════════════════════════════ -->
     <string name="menu_play_next">Phát tiếp theo</string>
     <string name="menu_make_public">Đặt thành công khai</string>
@@ -538,12 +530,9 @@
     <string name="social_proof_liked_by">được thích bởi</string>
     <string name="social_proof_and">và</string>
     <string name="social_proof_others">người khác</string>
-    <string name="social_proof_single">%1$s đã thích bài hát này</string>
-    <string name="social_proof_two">%1$s và %2$s đã thích bài hát này</string>
-    <string name="social_proof_three">%1$s, %2$s và %3$s đã thích bài hát này</string>
-    <string name="social_proof_multiple">%1$s, %2$s và %3$s người khác đã thích bài hát này</string>
+    
     <string name="vibe_hiphop">Hip-Hop</string>
-    <string name="vibe_electronic">Electronic</string>
+    <string name="vibe_electronic">Điện tử</string>
     <string name="vibe_pop">Pop</string>
     <string name="vibe_rnb">R&amp;B</string>
     <string name="vibe_rock">Rock</string>
@@ -572,7 +561,7 @@
     <string name="context_station">Trạm phát • %1$s</string>
     <string name="context_album">Album • %1$s</string>
     <!-- ═══════════════════════════════════════════════════════════════════════════════ -->
-    <!-- DETAILS & METADATA                                                               -->
+    <!-- DETAILS &amp; METADATA                                                               -->
     <!-- ═══════════════════════════════════════════════════════════════════════════════ -->
     <string name="detail_track_title">Thông tin</string>
     <string name="detail_likers">Lượt thích</string>
@@ -596,6 +585,7 @@
     <string name="detail_show_less">Thu gọn</string>
     <string name="untitled_track">Bài hát không tên</string>
     <string name="unknown_artist">Nghệ sĩ chưa rõ</string>
+    <string name="share_link">Chia sẻ liên kết</string>
     <string name="share_via">Chia sẻ qua</string>
     <string name="generic_title">Tiêu đề</string>
     <string name="generic_artist">Nghệ sĩ</string>
@@ -651,7 +641,7 @@
     <string name="dialog_delete_header_msg">Bạn có chắc chắn muốn xóa ảnh bìa hồ sơ của mình không?</string>
     <string name="profile_avatar_deleted">Đã gỡ ảnh đại diện!</string>
     <string name="profile_banner_deleted">Đã gỡ ảnh bìa!</string>
-    <string name="profile_menu_manage_account">Hồ sơ của tôi</string>
+    
     <string name="profile_menu_login">Đăng nhập</string>
     <string name="profile_menu_achievements">Thành tựu</string>
     <string name="profile_menu_settings">Cài đặt</string>
@@ -671,6 +661,8 @@
     <string name="comment_send_action">Đăng</string>
     <string name="comment_default_avatar">Ảnh đại diện mặc định</string>
     <string name="comment_reply">Trả lời</string>
+    <string name="comment_creator_liked_this">%1$s đã thích bình luận này</string>
+    <string name="comment_artist_fallback">Nghệ sĩ</string>
     <string name="login_to_interact">Đăng nhập để tương tác</string>
     <string name="login_to_comment">Đăng nhập để bình luận</string>
     <string name="dialog_delete_comment_title">Xóa bình luận?</string>
@@ -700,6 +692,7 @@
     <!-- ═══════════════════════════════════════════════════════════════════════════════ -->
     <string name="settings_cat_interface_sub">Chủ đề, trình phát và lời bài hát</string>
     <string name="settings_cat_interface">Giao diện</string>
+    <string name="settings_cat_network">Mạng</string>
     <string name="settings_cat_misc">Khác</string>
     <string name="settings_page_themes">Chủ đề</string>
     <string name="settings_page_themes_sub">Màu sắc, nền và phông chữ</string>
@@ -710,7 +703,7 @@
     <string name="settings_cat_general">Chung</string>
     <string name="settings_cat_general_sub">Ngôn ngữ, màn hình khởi đầu và cập nhật</string>
     <string name="settings_cat_appearance">Giao diện</string>
-    <string name="settings_cat_typography">Phông chữ</string>
+    
     <string name="settings_cat_playback">Phát lại</string>
     <string name="settings_cat_audio">Âm thanh</string>
     <string name="settings_cat_source">Thư viện</string>
@@ -720,13 +713,12 @@
     <string name="pref_privacy_tracking_subtitle">Theo dõi các bài hát và nghệ sĩ bạn nghe nhiều nhất.</string>
     <!-- APPEARANCE -->
     <string name="pref_appearance_title">Giao diện</string>
-    <string name="pref_appearance_subtitle">Chủ đề, màu sắc, ngôn ngữ</string>
+    
     <string name="pref_color_palette_title">Màu sắc &amp; Chủ đề</string>
     <string name="pref_color_palette_subtitle">Tùy chỉnh bảng màu, sắc thái và thông số</string>
     <string name="color_palette_screen_title">Chủ đề</string>
     <string name="pref_color_style_title">Kiểu màu</string>
     <string name="pref_color_spec_title">Đặc tả màu</string>
-    <string name="pref_seed_palette_title">Bảng màu gốc</string>
     <string name="pref_custom_seed_title">Màu tùy chỉnh</string>
     <string name="pref_color_generation_title">Bộ tạo màu</string>
     <string name="color_hex_label">Hex</string>
@@ -734,52 +726,12 @@
     <string name="color_saturation_label">Độ bão hòa</string>
     <string name="color_brightness_label">Độ sáng</string>
     <!-- Colors (Seed Palette) -->
-    <string name="color_group_deep_blues">Xanh dương đậm</string>
-    <string name="color_seed_deep_blue">Xanh thẳm</string>
-    <string name="color_seed_abyss">Vực sâu</string>
-    <string name="color_seed_space_blue">Xanh vũ trụ</string>
-    <string name="color_seed_ink_blue">Xanh mực</string>
-    <string name="color_seed_midnight_indigo">Chàm nửa đêm</string>
-    <string name="color_seed_cosmic_blue">Xanh ngân hà</string>
-    <string name="color_seed_twilight">Hoàng hôn</string>
-    <string name="color_seed_royal_navy">Xanh hải quân hoàng gia</string>
-    <string name="color_seed_midnight">Nửa đêm</string>
-    <string name="color_seed_navy">Xanh hải quân</string>
-    <string name="color_group_blues_cyans">Xanh dương &amp; Xanh lơ</string>
-    <string name="color_seed_sapphire">Lam ngọc (Sapphire)</string>
     <string name="color_seed_electric_blue">Xanh neon điện</string>
-    <string name="color_seed_azure">Xanh da trời</string>
     <string name="color_seed_cyan">Xanh lơ (Cyan)</string>
-    <string name="color_seed_teal">Xanh mòng két</string>
-    <string name="color_group_greens_teals">Xanh lá &amp; Xanh mòng két</string>
-    <string name="color_seed_deep_teal">Mòng két thẫm</string>
-    <string name="color_seed_emerald">Ngọc lục bảo</string>
-    <string name="color_seed_forest">Xanh rừng sâu</string>
-    <string name="color_seed_moss">Xanh rêu</string>
-    <string name="color_seed_lime">Xanh chanh</string>
-    <string name="color_seed_olive">Xanh ô liu</string>
-    <string name="color_group_sunset_warm">Hoàng hôn ấm áp</string>
     <string name="color_seed_gold">Vàng kim</string>
-    <string name="color_seed_amber">Hổ phách</string>
     <string name="color_seed_kitty_orange">Cam Kitty</string>
-    <string name="color_seed_deep_orange">Cam thẫm</string>
-    <string name="color_seed_coral">San hô</string>
-    <string name="color_seed_sand">Màu cát</string>
-    <string name="color_group_pinks_purples">Hồng &amp; Tím</string>
-    <string name="color_seed_crimson">Đỏ thẫm</string>
-    <string name="color_seed_rose">Hoa hồng</string>
-    <string name="color_seed_hot_pink">Hồng cánh sen</string>
-    <string name="color_seed_magenta">Đỏ tươi (Magenta)</string>
     <string name="color_seed_plum">Màu mận</string>
-    <string name="color_seed_deep_purple">Tím đậm</string>
-    <string name="color_seed_indigo">Màu chàm</string>
-    <string name="color_seed_periwinkle">Hoa dừa cạn (Periwinkle)</string>
-    <string name="color_group_neutrals">Trung tính</string>
-    <string name="color_seed_blue_gray">Xám ánh xanh</string>
     <string name="color_seed_slate">Xám phiến đá</string>
-    <string name="color_seed_graphite">Than chì</string>
-    <string name="color_seed_warm_gray">Xám ấm</string>
-    <string name="color_seed_mocha">Mocha</string>
     <string name="pref_start_screen">Màn hình khởi động</string>
     <string name="pref_theme_dynamic">Chủ đề động (Material You)</string>
     <string name="pref_theme_dynamic_sub">Đồng bộ theo hình nền của bạn</string>
@@ -787,14 +739,10 @@
     <string name="pref_theme_track_dynamic_sub">Đồng bộ màu sắc với ảnh bìa bài hát đang phát</string>
     <string name="pref_theme_pure_black">Đen tuyền (AMOLED)</string>
     <string name="pref_theme_pure_black_sub">Tiết kiệm pin trên màn hình OLED</string>
-    <string name="settings_cat_player">Trình phát</string>
-    <string name="pref_new_player_design">Thiết kế trình phát mới</string>
-    <string name="pref_waveform_comments">Dạng sóng kèm bình luận</string>
-    <string name="pref_waveform_comments_desc">Hiển thị sóng âm kèm ảnh đại diện bình luận phong cách SoundCloud thay cho thanh trượt thông thường</string>
+    
     <string name="pref_player_style">Kiểu trình phát</string>
     <string name="pref_language">Ngôn ngữ</string>
-    <string name="pref_language_sub">Ngôn ngữ ứng dụng</string>
-    <string name="settings_cat_app_icon">Biểu tượng ứng dụng</string>
+    
     <string name="pref_app_icon_title">Biểu tượng ứng dụng</string>
     <string name="pref_app_icon_subtitle">Đổi biểu tượng ứng dụng trên màn hình chính</string>
     <string name="icon_name_default">KittyTune</string>
@@ -859,6 +807,18 @@
     <string name="icon_name_united_states">Hoa Kỳ</string>
     <string name="icon_name_uruguay">Uruguay</string>
     <string name="icon_name_uzbekistan">Uzbekistan</string>
+
+    <string name="icon_category_official">Chính thức</string>
+    <string name="icon_category_community">Cộng đồng</string>
+    <string name="icon_by_artist">bởi %1$s</string>
+    <string name="icon_name_shiro_headphones">Tai nghe cam</string>
+    <string name="icon_name_shiro_musical_dream">Giấc mơ âm nhạc</string>
+    <string name="icon_name_shiro_pastel_cat">Mèo pastel</string>
+    <string name="icon_name_shiro_cap_red">Mũ đỏ</string>
+    <string name="icon_name_shiro_cap_purple">Mũ tím</string>
+    <string name="icon_name_shiro_kt_logo">Logo KT</string>
+    <string name="icon_name_shiro_cozy_nap">Giai điệu ấm cúng</string>
+    <string name="icon_name_shiro_cool_cat">Mèo sành điệu</string>
     <string name="theme_system">Hệ thống</string>
     <string name="theme_light">Sáng</string>
     <string name="theme_dark">Tối</string>
@@ -866,6 +826,62 @@
     <string name="style_gradient">Chuyển sắc (Gradient)</string>
     <string name="style_blur">Làm mờ (Blur)</string>
     <string name="style_apple_music">Apple Music</string>
+    <string name="pref_ui_design_style">Kiểu thiết kế giao diện</string>
+    <string name="pref_ui_design_style_sub">Chọn ngôn ngữ thiết kế cho các nút, thanh chuyển đổi và điều hướng</string>
+    <string name="style_material3">Material 3</string>
+    <string name="style_material3_desc">Google Material You với giao diện biểu cảm động</string>
+    <string name="style_liquid_glass">Liquid Glass</string>
+    <string name="style_liquid_glass_desc">Khúc xạ mượt mà, thấu kính quang học và làm mờ nền theo thời gian thực</string>
+    <string name="style_miuix">Miuix</string>
+    <string name="style_miuix_desc">Hệ thống thiết kế lấy cảm hứng từ HyperOS (sắp ra mắt)</string>
+    <string name="pref_liquid_settings_title">Cài đặt Liquid Glass</string>
+    <string name="pref_liquid_settings_desc">Tinh chỉnh khúc xạ quang học, độ mờ và hình dạng</string>
+    <string name="pref_liquid_pick_wallpaper">Đổi hình nền</string>
+    <string name="pref_liquid_reset_wallpaper">Hình nền mặc định</string>
+    <string name="pref_liquid_experimental_title">Thông số thử nghiệm</string>
+    <string name="pref_liquid_experimental_desc">Tinh chỉnh quang học, độ khúc xạ và hình dạng</string>
+    <string name="pref_liquid_corner_radius">Bán kính góc</string>
+    <string name="pref_liquid_blur_radius">Bán kính làm mờ</string>
+    <string name="pref_liquid_refraction_height">Độ cao khúc xạ</string>
+    <string name="pref_liquid_refraction_amount">Cường độ khúc xạ</string>
+    <string name="pref_liquid_chromatic_aberration">Quang sai màu</string>
+    <string name="pref_liquid_bubble_width">Độ rộng bong bóng điều hướng</string>
+    <string name="pref_liquid_depth_effect">Hiệu ứng chiều sâu 3D</string>
+    <string name="pref_liquid_surface_alpha">Độ mờ bề mặt</string>
+    <string name="pref_liquid_reset">Đặt lại về mặc định</string>
+    <string name="pref_liquid_preview_title">Xem trước tương tác</string>
+    <string name="pref_liquid_preview_button">Nút Liquid</string>
+    <string name="pref_liquid_preview_tab1">Nhạc</string>
+    <string name="pref_liquid_preview_tab2">Khám phá</string>
+    <string name="pref_liquid_preview_tab3">Thư viện</string>
+    <string name="pref_liquid_components_title">Thành phần giao diện</string>
+    <string name="pref_liquid_components_desc">Chọn các thành phần giao diện áp dụng phong cách Liquid Glass</string>
+    <string name="pref_liquid_apply_buttons">Nút bấm</string>
+    <string name="pref_liquid_apply_buttons_desc">Nút đầy, nút tông màu, nút viền và nút nổi</string>
+    <string name="pref_liquid_apply_icon_buttons">Nút biểu tượng</string>
+    <string name="pref_liquid_apply_icon_buttons_desc">Hành động trên thanh công cụ và nút biểu tượng tròn</string>
+    <string name="pref_liquid_apply_bottom_bar">Thanh điều hướng &amp; Dock</string>
+    <string name="pref_liquid_apply_bottom_bar_desc">Thanh điều hướng dưới, trình phát mini và dock máy tính bảng</string>
+    <string name="pref_liquid_apply_sliders">Thanh trượt &amp; Thanh tua</string>
+    <string name="pref_liquid_apply_sliders_desc">Thanh tiến trình, âm lượng và tua bài hát</string>
+    <string name="pref_liquid_apply_controls">Công tắc &amp; Điều khiển</string>
+    <string name="pref_liquid_apply_controls_desc">Công tắc lựa chọn, hộp kiểm và nút radio</string>
+    <string name="pref_liquid_apply_chips">Thẻ &amp; Bộ lọc</string>
+    <string name="pref_liquid_apply_chips_desc">Thẻ bộ lọc, nhãn và huy hiệu thể loại</string>
+    <string name="pref_liquid_apply_text_fields">Trường văn bản</string>
+    <string name="pref_liquid_apply_text_fields_desc">Thanh tìm kiếm và trường nhập văn bản</string>
+    <string name="pref_liquid_apply_dialogs">Hộp thoại &amp; Thông báo</string>
+    <string name="pref_liquid_apply_dialogs_desc">Cửa sổ bật lên và hộp thoại thông báo</string>
+    <string name="pref_liquid_highlight_intensity">Độ sáng bóng &amp; Phản chiếu</string>
+    <string name="pref_liquid_effects_title">Hiệu ứng 3D &amp; Chuyển động</string>
+    <string name="pref_liquid_interactive_bounce">Đàn hồi khi chạm</string>
+    <string name="pref_liquid_interactive_bounce_desc">Biến dạng mượt mà và nảy đàn hồi khi chạm vào</string>
+    <string name="pref_liquid_shadows_enabled">Đổ bóng</string>
+    <string name="pref_liquid_shadows_desc">Bóng nổi phía dưới các bề mặt kính</string>
+    <string name="pref_liquid_inner_shadow_enabled">Bóng vát bên trong</string>
+    <string name="pref_liquid_inner_shadow_desc">Bóng chiều sâu nhẹ dọc theo các cạnh bên trong</string>
+    <string name="pref_liquid_vibrancy_enabled">Độ rực rỡ màu sắc</string>
+    <string name="pref_liquid_vibrancy_desc">Tăng độ bão hòa và độ sáng của nền phía dưới kính</string>
     <string name="lang_french">Français</string>
     <string name="lang_english">English</string>
     <string name="lang_german">Deutsch</string>
@@ -886,9 +902,9 @@
     <string name="font_preset_rounded">Bo tròn</string>
     <string name="font_preset_chunky">Nét đậm</string>
     <string name="font_preset_elegant">Thanh lịch</string>
-    <!-- AUDIO & PLAYBACK -->
+    <!-- AUDIO &amp; PLAYBACK -->
     <string name="pref_audio_title">Âm thanh &amp; Phát lại</string>
-    <string name="pref_audio_subtitle">Chất lượng, Tự động phát, Danh sách chờ</string>
+    <string name="pref_audio_subtitle">Bộ cân bằng, phát lại, chuyển tiếp và phản hồi xúc giác</string>
     <string name="pref_autoplay">Tự động phát</string>
     <string name="pref_autoplay_sub">Phát các bài hát tương tự khi hết danh sách chờ</string>
     <string name="pref_stop_on_task_clear">Dừng nhạc khi đóng ứng dụng</string>
@@ -906,12 +922,12 @@
     <string name="pref_download_drm">Tải DRM gốc</string>
     <string name="pref_download_drm_sub">Giữ bật để lưu bộ nhớ đệm DRM gốc phát nội bộ. Tắt để buộc tải bản MP3 không mã hóa qua giải pháp dự phòng YouTube.</string>
     <string name="drm_explanation_text">Các bản nhạc được bảo vệ bằng DRM đã được chủ sở hữu bản quyền mã hóa nhằm ngăn chặn trích xuất và bảo vệ quyền sở hữu trí tuệ.\n\n• Bật (Khuyên dùng): Bài hát được tải ở định dạng chất lượng cao gốc vào bộ nhớ đệm nội bộ bảo mật của KittyTune. Bản nhạc chỉ có thể phát trong ứng dụng và sẽ không xuất hiện trong thư mục tải xuống của bạn.\n\n• Tắt: KittyTune sẽ bỏ qua phiên bản mã hóa và cố gắng tìm kiếm, tải bài hát thông qua YouTube. Tệp sẽ được chuyển đổi thành định dạng MP3 tiêu chuẩn và lưu vào thư mục tải về của bạn. Cảnh báo: Do việc tìm kiếm là tự động, ứng dụng có thể tải nhầm nội dung (chẳng hạn như video ca nhạc hoặc bản cover) nếu bài hát không quá phổ biến.</string>
-    <!-- AUDIO DSP & PERSISTENCE -->
+    <!-- AUDIO DSP &amp; PERSISTENCE -->
     <string name="pref_audio_mono">Âm thanh đơn kênh (Mono)</string>
     <string name="pref_audio_mono_sub">Trộn cả hai kênh thành một, hữu ích cho người khiếm thính hoặc nghe một bên tai</string>
     <string name="pref_norm_title">Chuẩn hóa âm lượng</string>
     <string name="pref_norm_sub">Cân bằng âm lượng giữa các bài hát tương tự Spotify</string>
-    <string name="pref_norm_desc">Chuẩn hóa độ ồn giúp cân bằng các bài hát quá to hoặc quá nhỏ để mang lại trải nghiệm nghe đồng nhất (tiêu chuẩn ITU 1770 qua libebur128). Các bản nhạc được điều chỉnh động theo mức LUFS mục tiêu của bạn, kết hợp bộ hạn chế tích hợp để chống vỡ tiếng.</string>
+    
     <string name="pref_norm_level_quiet">Nhỏ</string>
     <string name="pref_norm_level_normal">Bình thường</string>
     <string name="pref_norm_level_loud">Lớn</string>
@@ -919,7 +935,7 @@
     <string name="pref_save_position_sub">Tiếp tục từ đoạn đang nghe khi khởi động lại</string>
     <!-- LYRICS -->
     <string name="pref_lyrics_title">Lời bài hát</string>
-    <string name="pref_lyrics_subtitle">Hiển thị &amp; Nguồn</string>
+    
     <string name="pref_lyrics_local">Ưu tiên tệp cục bộ</string>
     <string name="pref_lyrics_local_sub">Sử dụng thẻ ID3 nhúng sẵn trong tệp nếu có</string>
     <string name="pref_lyrics_align">Căn lề</string>
@@ -940,14 +956,12 @@
     <string name="pref_lyrics_provider_title">Nhà cung cấp lời bài hát</string>
     <string name="pref_lyrics_provider_max_quality">Chất lượng cao nhất (Musixmatch)</string>
     <string name="pref_lyrics_provider_open_source">Hoàn toàn miễn phí (LrcLib)</string>
-    <string name="pref_lyrics_provider_musixmatch_short" translatable="false">Musixmatch</string>
-    <string name="pref_lyrics_provider_lrclib_short" translatable="false">LRCLib</string>
     <string name="pref_lyrics_providers_category">Nguồn cung cấp lời bài hát</string>
     <string name="pref_lyrics_paxsenix_key">Khóa API Paxsenix</string>
     <string name="pref_lyrics_paxsenix_key_sub">Cần thiết cho Apple Music, Spotify và Paxsenix Musixmatch</string>
     <string name="pref_lyrics_order">Thứ tự ưu tiên nguồn lời</string>
     <string name="pref_lyrics_order_sub">Thứ tự tìm kiếm nguồn lời bài hát</string>
-    <string name="pref_lyrics_enable_provider">Bật %s</string>
+    
     <string name="pref_lyrics_translation_title">Dịch lời bài hát</string>
     <string name="pref_lyrics_translation_sub">Hiển thị bản dịch bên dưới từng dòng lời bài hát (nếu có)</string>
     <string name="pref_lyrics_translation_lang">Ngôn ngữ dịch</string>
@@ -970,17 +984,7 @@
     <string name="pref_animated_artist_profiles">Hồ sơ nghệ sĩ động</string>
     <string name="pref_animated_artist_profiles_desc">Hiển thị video ảnh bìa chuyển động trên màn hình hồ sơ nghệ sĩ</string>
     <string name="pref_player_design">Thiết kế trình phát</string>
-    <string name="player_design_pixel">PixelPlayer</string>
-    <string name="player_design_pixel_desc">Trình phát uyển chuyển với thanh tiến trình lượn sóng</string>
-    <string name="player_design_soundcloud">SoundCloud</string>
-    <string name="player_design_soundcloud_desc">Bố cục SoundCloud nguyên bản với sóng âm thanh, bình luận và cảm xúc</string>
-    <string name="player_design_modern">KittyTune (Hiện đại)</string>
-    <string name="player_design_modern_desc">Bố cục thanh lịch và hiện đại</string>
-    <string name="player_design_classic">Cổ điển</string>
-    <string name="player_design_classic_desc">Bố cục truyền thống đơn giản</string>
-    <string name="player_action_bar_pixel_title">Thanh tác vụ dưới cùng (4 nút)</string>
-    <string name="player_action_bar_pixel_desc">4 nút có thể tùy chỉnh trong thanh điều khiển PixelPlayer</string>
-    <string name="pref_player_bg_style">Kiểu nền trình phát</string>
+    
     <string name="player_now_playing">Đang phát</string>
     <string name="custom_lyrics_title">Nhập tệp lời bài hát (YAML)</string>
     <string name="custom_lyrics_desc_1">Định dạng Lyricsfile là định dạng mở dựa trên YAML dành cho lời bài hát đồng bộ theo từng dòng hoặc từng từ (Karaoke), cho phép căn chỉnh chuẩn xác đến từng từ ngữ.</string>
@@ -1016,7 +1020,6 @@
     <string name="pref_storage_title">Bộ nhớ</string>
     <string name="pref_storage_subtitle">Bộ nhớ đệm và tệp đã tải xuống</string>
     <string name="storage_used">đã dùng</string>
-    <string name="storage_free_formatted">Còn trống %1$s</string>
     <string name="storage_location">Vị trí tải xuống</string>
     <string name="storage_reset">Dọn dẹp</string>
     <string name="storage_cat_audio">Âm nhạc</string>
@@ -1029,10 +1032,8 @@
     <string name="storage_custom_folder">Tùy chỉnh</string>
     <string name="storage_change_btn">Thay đổi</string>
     <string name="storage_change_cta">Chọn vị trí lưu</string>
-    <string name="storage_db_subtitle">Chỉ mục &amp; cài đặt</string>
     <string name="storage_loading">Đang tính toán&#8230;</string>
     <string name="dialog_clean_title">Dọn dẹp</string>
-    <string name="dialog_clean_audio_msg">Xóa tất cả nhạc đã tải xuống?</string>
     <string name="dialog_clean_images_msg">Xóa bộ nhớ đệm hình ảnh? (Ảnh bìa album)</string>
     <string name="dialog_clean_cache_msg">Xóa bộ nhớ đệm của ứng dụng?</string>
     <!-- BACKUP -->
@@ -1067,7 +1068,7 @@
     <string name="music_import_transfer_title">Đang chuyển đổi</string>
     <string name="music_import_transfer_in_progress">Chúng tôi đang chuyển nhạc của bạn sang SoundCloud. Quá trình này có thể mất vài phút.</string>
     <string name="music_import_transfer_percent">Đã hoàn thành %1$d%%</string>
-    <string name="music_import_transfer_percent_short">%1$d%%</string>
+    
     <string name="music_import_transfer_done">Nhạc của bạn đang được chuyển đến!</string>
     <string name="music_import_transfer_done_subtitle">Danh sách phát và bài hát yêu thích sẽ xuất hiện trong thư viện của bạn trong chốc lát.</string>
     <string name="music_import_transfer_error">Đã xảy ra lỗi trong quá trình chuyển. Vui lòng thử lại.</string>
@@ -1075,13 +1076,40 @@
     <string name="music_import_auth_warning_title">Quan trọng</string>
     <string name="music_import_auth_warning_message">Sau khi đăng nhập, nếu trình duyệt hỏi bạn cách mở liên kết, hãy chắc chắn chọn KittyTune thay vì ứng dụng SoundCloud.</string>
     <string name="music_import_auth_warning_ok">OK</string>
+
+    <!-- Portable guest import (TXT/CSV) -->
+    <string name="portable_import_title">Nhập từ TXT/CSV</string>
+    <string name="portable_import_subtitle">Không cần tài khoản — đọc bản xuất Spotify, Deezer, TIDAL, Qobuz hoặc YouTube</string>
+    <string name="portable_import_choose_file">Chọn tệp</string>
+    <string name="portable_import_reading">Đang đọc tệp…</string>
+    <string name="portable_import_empty_title">Mang theo âm nhạc của bạn</string>
+    <string name="portable_import_empty_message">Chọn bản xuất TXT hoặc CSV, KittyTune sẽ khớp từng dòng với danh mục. Không đăng nhập, không tài khoản, không tải lên.</string>
+    <string name="portable_import_formats">TXT, CSV và M3U • tiêu đề/nghệ sĩ hoặc liên kết dịch vụ</string>
+    <string name="portable_import_playlist_name">Tên danh sách phát</string>
+    <string name="portable_import_summary">Tìm thấy %1$d bài • khớp %2$d</string>
+    <string name="portable_import_add_to_likes">Thêm vào bài hát đã thích</string>
+    <string name="portable_import_add_to_likes_desc">Các bài đã khớp cũng sẽ nuôi radio dựa trên lượt thích của bạn.</string>
+    <string name="portable_import_select_all">Chọn tất cả</string>
+    <string name="portable_import_select_none">Bỏ chọn tất cả</string>
+    <string name="portable_import_start">Nhập %1$d bài</string>
+    <string name="portable_import_not_found">Không tìm thấy</string>
+    <string name="portable_import_likely">Có thể</string>
+    <string name="portable_import_matched">Đã khớp</string>
+    <string name="portable_import_done_title">Nhập hoàn tất</string>
+    <string name="portable_import_done_message">Đã nhập %1$d bài. Không khớp được %2$d dòng.</string>
+    <string name="portable_import_open_playlist">Mở danh sách phát</string>
+    <string name="portable_import_done">Xong</string>
+    <string name="portable_import_error_too_large">Tệp quá lớn (tối đa 8 MB)</string>
+    <string name="portable_import_error_unreadable">Không thể đọc tệp đã chọn</string>
+    <string name="portable_import_error_empty_selection">Chưa chọn bài nào đã khớp</string>
+    <string name="portable_import_error_import">Nhập thất bại</string>
     <string name="music_provider_spotify">Spotify</string>
     <string name="music_provider_apple_music">Apple Music</string>
     <string name="music_provider_youtube_music">YouTube Music</string>
     <string name="music_provider_deezer">Deezer</string>
     <string name="music_provider_tidal">Tidal</string>
     <string name="music_provider_amazon_music">Amazon Music</string>
-    <string name="music_provider_resso">Resso</string>
+    
     <string name="music_provider_boomplay">Boomplay</string>
     <string name="backup_error">Lỗi: %1$s</string>
     <string name="backup_in_progress">Đang xử lý&#8230;</string>
@@ -1097,7 +1125,7 @@
     <string name="error_not_enough_space">Không đủ dung lượng bộ nhớ</string>
     <!-- DISCORD -->
     <string name="pref_discord_title">Tích hợp Discord</string>
-    <string name="pref_discord_subtitle">Hiển thị trạng thái hoạt động (Rich Presence)</string>
+    
     <string name="discord_login_title">Đăng nhập Discord</string>
     <string name="discord_rpc_title">Discord RPC</string>
     <string name="discord_status_header">Trạng thái</string>
@@ -1155,7 +1183,7 @@
     <string name="about_credits_filter_community">Cộng đồng</string>
     <string name="about_role_dev">Người sáng lập &amp; Lập trình viên chính</string>
     <string name="about_role_dev_desc">Kiến trúc ứng dụng, tính năng &amp; giao diện UI</string>
-    <string name="about_role_translation">Dịch thuật</string>
+    
     <string name="about_role_translation_ru">Bản dịch tiếng Nga</string>
     <string name="about_role_translation_ru_desc">Bản dịch tiếng Nga đầy đủ trên Crowdin</string>
     <string name="about_role_translation_vi">Bản dịch tiếng Việt</string>
@@ -1173,9 +1201,7 @@
     <string name="about_credits_github_desc">Báo lỗi, gửi PR và đề xuất tính năng mới</string>
     <string name="about_credits_kofi_title">Ủng hộ qua Ko-fi</string>
     <string name="about_credits_kofi_desc">Hỗ trợ chi phí phát triển và duy trì máy chủ</string>
-    <string name="about_credits_stats_contributors">%1$d người đóng góp</string>
-    <string name="about_credits_stats_languages">6 ngôn ngữ</string>
-    <string name="about_credits_stats_open_source">100% Mã nguồn mở</string>
+    
     <string name="about_translate_title">Dịch ứng dụng</string>
     <string name="about_translate_desc">Đóng góp bản dịch trên Crowdin!</string>
     <string name="about_made_with">Phát triển bởi Alan &gt;.&lt;</string>
@@ -1194,6 +1220,10 @@
     <string name="pref_auto_update_sub">Kiểm tra phiên bản mới mỗi khi mở ứng dụng</string>
     <string name="pref_remember_search_filter">Ghi nhớ bộ lọc tìm kiếm</string>
     <string name="pref_remember_search_filter_sub">Giữ bộ lọc đã chọn gần nhất (Nghệ sĩ, Danh sách phát…) khi mở tìm kiếm</string>
+    <string name="pref_verified_filter">Bộ lọc đã xác minh</string>
+    <string name="pref_verified_filter_sub">So sánh kết quả với các nền tảng chính thức và ẩn bản tải lại. Mặc định tắt.</string>
+    <string name="pref_show_playlist_total_duration">Hiển thị tổng thời lượng phát của danh sách phát</string>
+    <string name="pref_show_playlist_total_duration_sub">Hiển thị tổng thời lượng bên cạnh số lượng bài hát trong danh sách phát</string>
     <!-- ═══════════════════════════════════════════════════════════════════════════════ -->
     <!-- ACHIEVEMENTS                                                                     -->
     <!-- ═══════════════════════════════════════════════════════════════════════════════ -->
@@ -1323,7 +1353,7 @@
     <string name="completion_thanks_message">"Mở khóa toàn bộ thành tựu là một kỳ tích phi thường. Niềm đam mê âm nhạc bất tận của bạn chính là lý do ứng dụng này tồn tại.\n\nCảm ơn bạn vì đã đồng hành trong suốt hành trình này.\n\n~ Alan :3"</string>
     <string name="completion_continue">Chạm để tiếp tục</string>
     <!-- ═══════════════════════════════════════════════════════════════════════════════ -->
-    <!-- SYSTEM & NOTIFICATIONS                                                           -->
+    <!-- SYSTEM &amp; NOTIFICATIONS                                                           -->
     <!-- ═══════════════════════════════════════════════════════════════════════════════ -->
     <string name="achievement_unlocked">Đã mở khóa thành tựu!</string>
     <string name="achievement_xp">+%1$d XP</string>
@@ -1343,7 +1373,7 @@
     <string name="widget_search_desc">Tìm kiếm</string>
     <string name="widget_search_hint">Tìm kiếm</string>
     <!-- ═══════════════════════════════════════════════════════════════════════════════ -->
-    <!-- ACCESSIBILITY & EMPTY STATES                                                     -->
+    <!-- ACCESSIBILITY &amp; EMPTY STATES                                                     -->
     <!-- ═══════════════════════════════════════════════════════════════════════════════ -->
     <string name="desc_play">Phát</string>
     <string name="desc_pause">Tạm dừng</string>
@@ -1385,7 +1415,7 @@
     <string name="no_libraries_found">Không tìm thấy thư viện nào</string>
     <string name="license_unknown">Giấy phép không xác định</string>
     <!-- ═══════════════════════════════════════════════════════════════════════════════ -->
-    <!-- SLEEP TIMER & CROSSFADE                                                        -->
+    <!-- SLEEP TIMER &amp; CROSSFADE                                                        -->
     <!-- ═══════════════════════════════════════════════════════════════════════════════ -->
     <!-- Sleep Timer -->
     <string name="sleep_timer_title">Hẹn giờ ngủ</string>
@@ -1431,6 +1461,14 @@
     <string name="listening_stats_period_week_short">Tuần</string>
     <string name="listening_stats_period_month_short">Tháng</string>
     <string name="listening_stats_period_year_short">Năm</string>
+    <string name="listening_stats_previous_period">Kỳ trước</string>
+    <string name="listening_stats_next_period">Kỳ tiếp theo</string>
+    <string name="listening_stats_period_week_current">Tuần này</string>
+    <string name="listening_stats_period_week_last">Tuần trước</string>
+    <string name="listening_stats_period_month_current">Tháng này</string>
+    <string name="listening_stats_period_month_last">Tháng trước</string>
+    <string name="listening_stats_period_year_current">Năm nay</string>
+    <string name="listening_stats_period_year_last">Năm ngoái</string>
     <string name="stats_sort_time">Theo thời gian</string>
     <string name="stats_sort_plays">Theo lượt nghe</string>
     <string name="stats_sort_name">A–Z</string>
@@ -1442,24 +1480,14 @@
     <string name="listening_stats_title">Thống kê nghe nhạc</string>
     <string name="listening_stats_subtitle">Thói quen nghe nhạc của bạn</string>
     <string name="listening_stats_period_week">Tuần này</string>
-    <string name="listening_stats_period_month">Tháng này</string>
+    
     <string name="listening_stats_period_all">Mọi thời đại</string>
-    <string name="listening_stats_period_year">Năm nay</string>
-    <string name="listening_stats_vs_previous">so với %1$s</string>
-    <string name="listening_stats_more">nhiều hơn %1$s</string>
-    <string name="listening_stats_less">ít hơn %1$s</string>
-    <string name="listening_stats_when">Khi nào bạn nghe</string>
+    
     <string name="listening_stats_night">Ban đêm</string>
     <string name="listening_stats_morning">Buổi sáng</string>
     <string name="listening_stats_afternoon">Buổi chiều</string>
     <string name="listening_stats_evening">Buổi tối</string>
-    <string name="listening_stats_streak_title">Chuỗi dài nhất</string>
-    <string name="listening_stats_streak_days">%1$d ngày</string>
-    <string name="listening_stats_streak_one">%1$d ngày</string>
-    <string name="listening_stats_busiest_day">Ngày nghe nhiều nhất</string>
-    <string name="listening_stats_peak_hour">Giờ cao điểm</string>
-    <string name="listening_stats_active_days">Ngày có nghe</string>
-    <string name="listening_stats_per_day">Mỗi ngày</string>
+    
     <string name="listening_stats_avg_play">Ø mỗi bài</string>
     <string name="listening_stats_time_listened">Thời gian đã nghe</string>
     <string name="listening_stats_plays">Lượt phát</string>
@@ -1467,35 +1495,29 @@
     <string name="listening_stats_unique_artists">Nghệ sĩ</string>
     <string name="listening_stats_top_tracks">Bài hát hàng đầu</string>
     <string name="listening_stats_top_artists">Nghệ sĩ hàng đầu</string>
-    <string name="listening_stats_top_track_label">Bài hát nghe nhiều nhất</string>
-    <string name="listening_stats_top_artist_label">Nghệ sĩ nghe nhiều nhất</string>
-    <string name="listening_stats_play_count">%1$d lượt phát</string>
-    <string name="listening_stats_habits">Thói quen nghe nhạc</string>
-    <string name="listening_stats_manual_replays">Phát lại thủ công</string>
-    <string name="listening_stats_manual_replays_desc">Bài hát bạn chủ động bấm nghe lại</string>
+    
     <string name="listening_stats_skip_rate">Tỷ lệ bỏ qua</string>
-    <string name="listening_stats_skip_rate_desc">Đã bỏ qua %1$d bài hát</string>
+    
     <string name="listening_stats_completion_rate">Độ hoàn thành</string>
     <string name="listening_stats_completion_rate_desc">Bài hát được nghe trọn vẹn</string>
-    <string name="listening_stats_repeat_loops">Vòng lặp phát lại</string>
-    <string name="listening_stats_repeat_loops_desc">Tự động lặp lại 1 bài</string>
-    <string name="listening_stats_avg_listen">Thời lượng nghe TB</string>
-    <string name="listening_stats_avg_listen_desc">Thời lượng trung bình mỗi bài</string>
-    <string name="listening_stats_total_sessions">Tổng sự kiện</string>
-    <string name="listening_stats_total_sessions_desc">Tất cả các lượt phát lại</string>
-    <string name="listening_stats_insights">Góc nhìn chi tiết</string>
-    <string name="listening_stats_insight_top_track">%1$s là bài hát yêu thích nhất, bạn đã nghe %2$d lần!</string>
-    <string name="listening_stats_insight_replays">Bạn đã chủ động nghe lại các bài hát %1$d lần, thật đáng nể!</string>
-    <string name="listening_stats_insight_skips">Bạn bỏ qua %1$s%% bài hát, một gu nghe nhạc rất chọn lọc!</string>
-    <string name="listening_stats_insight_repeat">Bạn đã dùng chế độ Lặp lại 1 bài %1$d lần, đam mê bất tận!</string>
-    <string name="listening_stats_insight_variety">Bạn đã khám phá %1$d nghệ sĩ khác nhau, gu âm nhạc thật đa dạng!</string>
+    
     <string name="listening_stats_empty_title">Chưa có số liệu thống kê</string>
     <string name="listening_stats_empty_desc">Hãy bắt đầu nghe nhạc để xem các số liệu của bạn tại đây!</string>
-    <string name="listening_stats_duration_zero">Không có dữ liệu</string>
+    
     <string name="listening_stats_duration_days_hrs">%1$d ngày %2$d giờ</string>
     <string name="listening_stats_duration_hr_min">%1$d giờ %2$d phút</string>
     <string name="listening_stats_duration_min_sec">%1$d phút %2$d giây</string>
     <string name="listening_stats_duration_sec">%1$d giây</string>
+    <string name="playlist_duration_hours">%1$d giờ</string>
+    <string name="playlist_duration_days">%1$d ngày</string>
+    <string name="playlist_duration_months">%1$d tháng</string>
+    <string name="playlist_duration_months_days">%1$d tháng %2$d ngày</string>
+    <string name="playlist_duration_year">%1$d năm</string>
+    <string name="playlist_duration_years">%1$d năm</string>
+    <string name="playlist_duration_year_months">%1$d năm %2$d tháng</string>
+    <string name="playlist_duration_years_months">%1$d năm %2$d tháng</string>
+    <string name="playlist_duration_year_days">%1$d năm %2$d ngày</string>
+    <string name="playlist_duration_years_days">%1$d năm %2$d ngày</string>
 
     <string name="stats_style_overview">Tổng quan</string>
     <string name="stats_style_compact">Gọn</string>
@@ -1539,6 +1561,7 @@
     <string name="automix_overlap_4bars">4 khuông nhạc</string>
     <string name="automix_overlap_8bars">8 khuông nhạc</string>
     <string name="automix_overlap_custom">Thời lượng tùy chỉnh</string>
+    <string name="automix_overlap_custom_value">Thời lượng: %d giây</string>
     <string name="automix_start_offset">Độ lệch bắt đầu</string>
     <string name="automix_start_offset_desc">Chọn vị trí bắt đầu phát bài hát tiếp theo trong quá trình chuyển tiếp</string>
     <string name="automix_start_offset_auto">Tự động (bỏ qua intro thông minh)</string>
@@ -1555,8 +1578,6 @@
     <string name="pref_automix_indicator_title">Hiển thị chỉ báo tự động hòa âm</string>
     <string name="pref_automix_indicator_desc">Hiển thị đếm ngược và huy hiệu trên trình phát khi tự động hòa âm</string>
     <string name="pref_bottom_menu_title">Thanh điều hướng</string>
-    <string name="pref_explorer_grid_title">Chế độ lưới khám phá</string>
-    <string name="pref_explorer_grid_subtitle">Hiển thị danh mục khám phá dưới dạng ô vuông thành 2 cột</string>
     <string name="pref_library_category_layout_title">Bố cục danh mục thư viện</string>
     <string name="pref_library_category_layout_subtitle">Chọn giữa các nút liên kết và một nút thả xuống kiểu máy tính</string>
     <string name="pref_library_category_layout_connected">Các nút liên kết</string>
@@ -1585,8 +1606,7 @@
     <string name="fab_settings_no_playlists">Không tìm thấy danh sách phát nào trong thư viện.</string>
     <string name="fab_settings_hint">Mẹo: Chỉ các danh sách phát đã thêm vào thư viện mới xuất hiện ở đây. Hãy nhấn thích danh sách phát để dùng làm lối tắt!</string>
     <string name="fab_settings_radio">Radio • YouTube</string>
-    <string name="welcome_warning_title">Rất khuyến khích</string>
-    <string name="welcome_warning_desc">KittyTune cần quyền thông báo để hiển thị trình phát nhạc khi chạy nền. Nếu không cấp quyền, bạn sẽ không thể tạm dừng hay chuyển bài bên ngoài ứng dụng.\n\nBạn có chắc chắn muốn bỏ qua không?</string>
+    
     <string name="sort_first_added">Thêm vào đầu tiên</string>
     <string name="sort_recently_added">Thêm gần đây nhất</string>
     <string name="sort_title_az">Tiêu đề (A-Z)</string>
@@ -1594,7 +1614,7 @@
     <string name="action_play">Phát</string>
     <string name="action_pause">Tạm dừng</string>
     <string name="recognize_music">Tìm bài hát</string>
-    <!-- Music Recognition & Recognition History -->
+    <!-- Music Recognition &amp; Recognition History -->
     <string name="recognition_history_title">Lịch sử</string>
     <string name="dialog_clear_history_title">Xóa lịch sử?</string>
     <string name="dialog_clear_history_msg">Bạn có chắc chắn muốn xóa toàn bộ lịch sử nhận diện bài hát?</string>
@@ -1607,13 +1627,13 @@
     <string name="recognition_tap_to_identify">Chạm để nhận diện bài hát</string>
     <string name="recognition_listening">Đang lắng nghe&#8230;</string>
     <string name="recognition_listening_desc">Đang nghe giai điệu xung quanh bạn</string>
-    <string name="recognition_processing">Đang phân tích&#8230;</string>
+    
     <string name="recognition_listen_on_kittytune">Nghe trên KittyTune</string>
     <string name="btn_retry">Thử lại</string>
     <string name="recognition_track_not_found">Không tìm thấy bài hát</string>
     <string name="recognition_tap_to_identify_device">Chạm để nhận diện từ ứng dụng</string>
     <string name="recognition_listening_device_desc">Nghe nhạc phát từ các ứng dụng trên thiết bị này</string>
-    <string name="recognition_source_mic">Microphone</string>
+    <string name="recognition_source_mic">Micrô</string>
     <string name="recognition_source_device">Thiết bị này</string>
     <string name="recognition_device_not_supported">Ghi âm nội bộ yêu cầu Android 10 trở lên</string>
     <string name="recognition_notif_listening_device">Đang nghe âm thanh thiết bị&#8230;</string>
@@ -1621,6 +1641,12 @@
     <string name="recognition_notif_channel_desc">Được dùng khi nhận diện âm thanh nội bộ thiết bị</string>
     <string name="recognition_notif_stop">Dừng</string>
     <string name="recognition_notif_track_found">Đã tìm thấy: %1$s - %2$s</string>
+    <string name="recognition_recognized_at">Nhận diện lúc %1$s</string>
+    <string name="recognition_released">Phát hành %1$s</string>
+    <string name="stat_plays">Lượt nghe</string>
+    <string name="stat_likes">Lượt thích</string>
+    <string name="stat_reposts">Đăng lại</string>
+    <string name="stat_comments">Bình luận</string>
     <!-- About Screen Redesign -->
     <string name="about_kofi_title">Ủng hộ KittyTune</string>
     <string name="about_kofi_desc">Dự án này hoàn toàn miễn phí và có mã nguồn mở. Nếu bạn yêu thích sản phẩm, hãy cân nhắc ủng hộ sự phát triển bằng cách mời tôi một ly cà phê trên Ko-fi!</string>
@@ -1658,7 +1684,7 @@
     <string name="upload_picker_hero_subtitle">Các định dạng hỗ trợ: MP3, WAV, FLAC, AAC, OGG, M4A, AIFF</string>
     <string name="upload_picker_btn">Chọn một tệp âm thanh</string>
     <string name="upload_picker_max_size">Kích thước tệp tối đa: 5 GB</string>
-    <string name="upload_file_change">Thay đổi</string>
+    
     <string name="upload_artwork_label">Ảnh bìa</string>
     <string name="upload_artwork_change">Đổi ảnh bìa</string>
     <string name="upload_field_title">Tiêu đề *</string>
@@ -1683,7 +1709,7 @@
     <string name="genre_disco">Disco</string>
     <string name="genre_drum_bass">Drum &amp; Bass</string>
     <string name="genre_dubstep">Dubstep</string>
-    <string name="genre_electronic">Electronic</string>
+    <string name="genre_electronic">Nhạc điện tử</string>
     <string name="genre_folk">Folk &amp; Ca sĩ kiêm Nhạc sĩ</string>
     <string name="genre_hip_hop_rap">Hip-hop &amp; Rap</string>
     <string name="genre_house">House</string>
@@ -1691,7 +1717,7 @@
     <string name="genre_jazz_blues">Jazz &amp; Blues</string>
     <string name="genre_latin">Latin</string>
     <string name="genre_metal">Metal</string>
-    <string name="genre_piano">Piano</string>
+    <string name="genre_piano">Dương cầm (Piano)</string>
     <string name="genre_pop">Pop</string>
     <string name="genre_r_b_soul">R&amp;B &amp; Soul</string>
     <string name="genre_reggae">Reggae</string>
@@ -1721,19 +1747,16 @@
     <string name="upload_visibility_title">Quyền riêng tư</string>
     <string name="upload_visibility_public">Công khai</string>
     <string name="upload_visibility_private">Không công khai (Riêng tư)</string>
-    <string name="upload_toggle_comments">Cho phép bình luận</string>
-    <string name="upload_toggle_downloads">Cho phép tải xuống</string>
+    
     <string name="upload_toggle_explicit">Nội dung nhạy cảm / Người lớn</string>
-    <string name="upload_advanced_title">Cài đặt nâng cao</string>
+    
     <string name="upload_field_caption">Lời dẫn</string>
     <string name="upload_field_caption_hint">Thêm lời dẫn&#8230;</string>
     <string name="upload_field_caption_helper">Mở đầu cuộc trò chuyện với cộng đồng SoundCloud bằng cách thêm lời dẫn cho bài đăng của bạn. Lời dẫn sẽ xuất hiện trên bảng tin của những người theo dõi bạn.</string>
-    <string name="upload_field_label">Hãng đĩa</string>
-    <string name="upload_field_license">Giấy phép</string>
+    
     <string name="upload_field_release_date">Ngày phát hành (YYYY-MM-DD)</string>
     <string name="upload_field_isrc">Mã ISRC</string>
-    <string name="upload_field_publisher">Nhà xuất bản</string>
-    <string name="upload_field_composer">Nhạc sĩ / Nhà soạn nhạc</string>
+    
     <string name="upload_field_purchase_title">Tiêu đề liên kết mua nhạc</string>
     <string name="upload_field_purchase_url">Đường dẫn liên kết mua nhạc</string>
     <string name="upload_btn_submit">Tải lên bài hát</string>
@@ -1765,16 +1788,16 @@
     <string name="upload_eligibility_limit_reached">Bạn đã đạt đến giới hạn tải lên bài hát trên SoundCloud.</string>
     <string name="upload_replace_file_next_pro_notice">Yêu cầu gói SoundCloud Artist Pro</string>
     <string name="upload_error_replace_file_next_pro">Yêu cầu thay thế tệp âm thanh bị SoundCloud từ chối. API giới hạn tính năng này cho người đăng ký gói SoundCloud Artist Pro.</string>
-    <string name="upload_schedule_banner_title">Lên lịch phát hành với Artist Pro</string>
+    
     <string name="upload_schedule_section_title">Lên lịch</string>
     <string name="upload_schedule_toggle_title">Đặt ngày và giờ để công khai bài hát của bạn.</string>
     <string name="upload_schedule_toggle_subtitle">Bài hát của bạn sẽ ở trạng thái riêng tư cho đến thời điểm được ấn định.</string>
     <string name="upload_schedule_date_picker_title">Chọn ngày xuất bản</string>
-    <string name="upload_schedule_time_picker_title">Chọn giờ xuất bản</string>
+    
     <string name="upload_schedule_free_notice">Khả dụng cho tất cả người dùng: Khác với ứng dụng chính thức chỉ giới hạn giao diện cho người dùng Artist Pro, SoundCloud API chấp nhận việc lên lịch phát hành cho mọi tài khoản mà không yêu cầu gói thuê bao.</string>
     <string name="upload_error_schedule_next_pro">Việc lên lịch phát hành bị SoundCloud từ chối. Tính năng này yêu cầu gói thuê bao Artist Pro.</string>
     <!-- Storefront / Products -->
-    <string name="upload_storefront_banner_title">Quảng bá sản phẩm của bạn</string>
+    
     <string name="upload_storefront_banner_subtitle">Thêm liên kết đến đồ lưu niệm, vé sự kiện, âm nhạc và nhiều hơn thế.</string>
     <string name="upload_storefront_btn_add">Thêm liên kết</string>
     <string name="upload_storefront_btn_edit">Chỉnh sửa cửa hàng</string>
@@ -1790,13 +1813,13 @@
     <string name="upload_storefront_delete_confirmation">Bạn có chắc chắn muốn xóa gian hàng sản phẩm cho bài hát này?</string>
     <string name="upload_error_storefront_next_pro">Yêu cầu tạo gian hàng sản phẩm bị SoundCloud từ chối. API giới hạn tính năng này cho người đăng ký gói SoundCloud Artist Pro.</string>
     <string name="upload_field_url_invalid">Vui lòng nhập một URL hợp lệ (ví dụ: https://example.com)</string>
-    <!-- Upload Category Tabs & Metadata -->
+    <!-- Upload Category Tabs &amp; Metadata -->
     <string name="upload_tab_basic_info">Thông tin</string>
     <string name="upload_tab_metadata">Chi tiết</string>
     <string name="upload_tab_permissions">Bản quyền</string>
-    <string name="upload_tab_storefront">Cửa hàng</string>
+    
     <string name="upload_tab_advanced">Nâng cao</string>
-    <string name="upload_tab_advanced_badge">MỚI</string>
+    
     <string name="upload_advanced_snippet_title">Đoạn nghe thử</string>
     <string name="upload_advanced_snippet_desc">Chọn 20 giây ấn tượng nhất của bài hát để phát khi người nghe khám phá. Kéo khung chọn để thiết lập đoạn nghe thử theo ý bạn.</string>
     <string name="upload_advanced_snippet_current">Đoạn nghe thử hiện tại</string>
@@ -1830,7 +1853,7 @@
     <string name="upload_license_share_alike_desc">Cho phép người khác phân phối tác phẩm phái sinh chỉ theo điều kiện giấy phép tương đương với giấy phép quản lý tác phẩm gốc của bạn.</string>
     <string name="upload_section_codes_ids">Mã &amp; Nhận dạng</string>
     <string name="upload_section_copyright">Bản quyền &amp; Sở hữu</string>
-    <string name="upload_section_buy_link">Liên kết mua</string>
+    
     <string name="upload_commerce_choice_buy_link">Liên kết mua</string>
     <string name="upload_commerce_choice_storefront">Cửa hàng nghệ sĩ</string>
     <string name="upload_section_commerce_title">Liên kết mua &amp; Cửa hàng</string>
@@ -1853,7 +1876,7 @@
     <string name="upload_error_audio_stream_load">Không thể tải luồng phát nghe thử</string>
     <string name="upload_error_storefront_save">Lưu thông tin cửa hàng thất bại</string>
     <string name="upload_error_storefront_delete">Xóa cửa hàng thất bại</string>
-    <!-- Permissions Tab (Accès & Mode silencieux) -->
+    <!-- Permissions Tab (Accès &amp; Mode silencieux) -->
     <string name="upload_perm_section_access">Quyền truy cập</string>
     <string name="upload_perm_direct_downloads">Cho phép tải trực tiếp</string>
     <string name="upload_perm_direct_downloads_desc_on">Bài hát này sẽ cho phép tải trực tiếp ở định dạng gốc lúc tải lên.</string>
@@ -1880,7 +1903,7 @@
     <string name="upload_perm_display_stats">Hiển thị số liệu thống kê</string>
     <string name="upload_perm_display_stats_desc_on">Thống kê của bài hát này sẽ được hiển thị công khai.</string>
     <string name="upload_perm_display_stats_desc_off">Thống kê của bài hát này được đặt ở chế độ riêng tư.</string>
-    <!-- Track Info Checklist & Header -->
+    <!-- Track Info Checklist &amp; Header -->
     <string name="track_details_file_name">Tên tệp</string>
     <string name="track_details_replace_file">Thay thế tệp</string>
     <string name="track_details_pick_image_content_description">Ảnh bìa bài hát</string>
@@ -1894,7 +1917,7 @@
     <string name="track_info_checklist_bottomsheet_button">Tôi đã hiểu</string>
     <string name="track_info_checklist_completed_step">Đã hoàn thành</string>
     <string name="track_info_checklist_not_completed_step">Chưa hoàn thành</string>
-    <string name="track_info_checklist_x_out_of_y_steps_completed">Đã hoàn thành %1$d trên tổng số %2$d bước</string>
+    
     <string name="upload_crop_artwork_title">Cắt ảnh bìa</string>
     <string name="upload_crop_artwork_desc">Điều chỉnh và cắt ảnh cho bài hát của bạn</string>
     <string name="playlist_crop_artwork_desc">Điều chỉnh và cắt ảnh cho danh sách phát của bạn</string>
@@ -1911,15 +1934,14 @@
     <string name="upload_field_artist">Nghệ sĩ *</string>
     <string name="upload_field_artist_required">Vui lòng nhập tên nghệ sĩ hợp lệ</string>
     <string name="upload_field_hint_artist">Sử dụng dấu phẩy để thêm nhiều nghệ sĩ.</string>
-    <!-- Track Edit & Delete -->
+    <!-- Track Edit &amp; Delete -->
     <string name="menu_edit_track">Chỉnh sửa bài hát</string>
     <string name="edit_track_title">Chỉnh sửa bài hát</string>
     <string name="edit_track_save_button">Lưu thay đổi</string>
     <string name="edit_track_delete_button">Xóa bài hát</string>
     <string name="edit_track_delete_dialog_title">Xóa bài hát?</string>
     <string name="edit_track_delete_dialog_message">Bạn có chắc chắn muốn xóa vĩnh viễn bài hát này khỏi SoundCloud? Hành động này không thể hoàn tác.</string>
-    <string name="edit_track_saved_success">Đã lưu thay đổi! (˶ᵔ ᵕ ᵔ˶)</string>
-    <string name="edit_track_deleted_success">Xóa bài hát thành công.</string>
+    
     <!-- Library Uploads Category -->
     <string name="lib_your_uploads">Tệp bạn đã tải lên</string>
     <string name="empty_uploads_title">Chưa có bài tải lên nào</string>
@@ -1958,7 +1980,7 @@
     <string name="transfer_guest_warn_btn_delete_confirm">Xóa và tiếp tục</string>
     <string name="transfer_guest_warn_btn_cancel">Hủy</string>
     <!-- Geographic Availability (Géo-blocage) -->
-    <string name="upload_perm_section_geo_blocking">Phạm vi lãnh thổ</string>
+    
     <string name="upload_perm_geo_title">Phạm vi lãnh thổ</string>
     <string name="upload_perm_geo_subtitle">Chọn nơi bài hát của bạn có thể được phát trên toàn thế giới</string>
     <string name="upload_perm_geo_mode_everywhere">Toàn cầu</string>
@@ -1970,18 +1992,11 @@
     <string name="upload_perm_geo_exclusive_explanation">Bài hát này sẽ chỉ có thể phát được tại các quốc gia đã chọn.</string>
     <string name="upload_perm_geo_blocked_explanation">Bài hát này sẽ bị chặn và không thể nghe được tại các quốc gia đã chọn.</string>
     <string name="upload_perm_geo_suggestions_label">Gợi ý nhanh</string>
-    <string name="player_style_customization_title">Kiểu dáng và tùy biến trình phát</string>
-    <string name="player_style_soundcloud_desc">Chế độ trải nghiệm SoundCloud (Thẻ 1:1)</string>
-    <string name="player_style_hybrid_desc">Chế độ tiêu chuẩn với Dạng sóng</string>
-    <string name="player_style_classic_desc">Chế độ tiêu chuẩn cổ điển (Thanh trượt phẳng)</string>
-    <string name="player_customization_title">Tùy biến trình phát</string>
-    <string name="player_customization_subtitle">Kiểu dáng, hiệu ứng thị giác và thanh tác vụ</string>
+    
     <string name="player_style_classic_short">Cổ điển</string>
     <string name="player_style_hybrid_short">Kết hợp</string>
     <string name="player_style_group">KIỂU TRÌNH PHÁT</string>
-    <string name="player_mode_soundcloud">SoundCloud</string>
-    <string name="player_mode_hybrid">Lai (Hybrid)</string>
-    <string name="player_mode_classic">Cổ điển</string>
+    
     <string name="player_visual_options_group">HIỂN THỊ &amp; HIỆU ỨNG THỊ GIÁC</string>
     <string name="player_opt_comment_bubbles_title">Bóng bóng bình luận</string>
     <string name="player_opt_comment_bubbles_subtitle">Hiển thị avatar và văn bản của người dùng đúng mốc thời gian</string>
@@ -2015,7 +2030,7 @@
     <string name="player_slot_n">Nút %1$d</string>
     <string name="player_slot_change">Thay đổi</string>
     <string name="player_slot_active">Đang kích hoạt</string>
-    <string name="player_slot_edit">Chỉnh sửa</string>
+    
     <string name="slot_like">Thích</string>
     <string name="slot_comments">Bình luận</string>
     <string name="slot_share">Chia sẻ</string>
@@ -2052,7 +2067,7 @@
     <string name="proxy_host_hint">127.0.0.1 hoặc proxy.example.com</string>
     <string name="proxy_port">Cổng (Port)</string>
     <string name="proxy_port_hint">8080 hoặc 1080</string>
-    <string name="proxy_auth_header">Xác thực</string>
+    
     <string name="proxy_auth_enable">Xác thực proxy</string>
     <string name="proxy_auth_enable_desc">Bật nếu máy chủ proxy yêu cầu tài khoản và mật khẩu</string>
     <string name="proxy_username">Tên người dùng</string>
@@ -2069,10 +2084,10 @@
     <string name="proxy_info_title">Tại sao nên dùng proxy?</string>
     <string name="proxy_info_desc">SoundCloud và các máy chủ truyền phát đa phương tiện bị chặn hoặc bóp băng thông tại một số khu vực. Thiết lập proxy cục bộ (V2Ray, Clash, Shadowsocks, Tor, v.v.) hoặc proxy từ xa cho phép KittyTune phát nhạc, tải siêu dữ liệu, tải ảnh bìa và nghe các bài nhạc được bảo vệ bằng DRM một cách mượt mà không bị gián đoạn.</string>
     <string name="proxy_status_enabled">%1$s • %2$s:%3$d</string>
-    <string name="proxy_status_disabled">Đã tắt</string>
+    
     <string name="proxy_port_invalid">Số cổng không hợp lệ</string>
     <string name="proxy_host_empty">Địa chỉ máy chủ không được để trống</string>
-    <string name="proxy_saved_applied">Đã lưu và áp dụng cấu hình proxy</string>
+    
     <string name="proxy_import_clipboard">Nhập từ khay nhớ tạm</string>
     <string name="proxy_import_success">Đã nhập cấu hình proxy từ khay nhớ tạm thành công!</string>
     <string name="proxy_import_error">Không tìm thấy liên kết proxy hợp lệ trong khay nhớ tạm</string>
@@ -2083,8 +2098,7 @@
     <string name="proxy_profile_delete">Xóa hồ sơ</string>
     <string name="proxy_profile_active">Đang dùng</string>
     <string name="proxy_profile_saved_toast">Lưu cấu hình thành công!</string>
-    <string name="proxy_profile_empty_name">Tên hồ sơ không được để trống</string>
-    <string name="proxy_no_profiles">Chưa có cấu hình proxy nào được lưu</string>
+    
     <string name="proxy_playback_error">Phát thất bại: vui lòng kiểm tra cài đặt proxy của bạn</string>
     <string name="network_playback_error">Phát thất bại: vui lòng kiểm tra kết nối mạng Internet</string>
     <string name="restricted_playback_error">Bài hát này chỉ có thể phát với gói đăng ký SoundCloud Go+, và không tìm thấy nguồn thay thế nào</string>
@@ -2092,7 +2106,7 @@
     <string name="spotify_verified">Xác minh bởi Spotify</string>
     <string name="spotify_monthly_listeners">%1$s người nghe hàng tháng</string>
     <string name="spotify_world_rank">Hạng #%1$d trên thế giới</string>
-    <string name="spotify_following_btn">Đang theo dõi</string>
+    
     <string name="spotify_discography">Danh mục đĩa nhạc</string>
     <string name="spotify_popular_releases">Bản phát hành phổ biến</string>
     <string name="spotify_singles_eps">Đĩa đơn và EP</string>
@@ -2102,7 +2116,7 @@
     <string name="spotify_fans_also_like">Người hâm mộ cũng thích</string>
     <string name="menu_go_album">Đến album</string>
     <string name="select_artist_title">Chọn một nghệ sĩ</string>
-    <string name="spotify_credits_title">Thông tin đóng góp</string>
+    
     <string name="spotify_credits_performers">Nghệ sĩ biểu diễn</string>
     <string name="spotify_credits_writers">Tác giả sáng tác</string>
     <string name="spotify_credits_producers">Nhà sản xuất</string>
@@ -2111,23 +2125,25 @@
     <string name="spotify_credits_featured_artist">Nghệ sĩ góp mặt</string>
     <string name="spotify_credits_composer">Nhạc sĩ / Nhà soạn nhạc</string>
     <string name="spotify_credits_lyricist">Tác giả lời bài hát</string>
-    <string name="spotify_credits_producer">Nhà sản xuất</string>
+    
     <string name="spotify_streams_formatted">lượt phát</string>
     <string name="spotify_radio_title">Radio %1$s</string>
+    <string name="tidal_radio_title">Radio %1$s</string>
+    <string name="deezer_radio_title">Radio %1$s</string>
+    <string name="qobuz_radio_title">Radio %1$s</string>
     <string name="playlist_details_saves">%1$s lượt lưu</string>
     <string name="playlist_creator_badge">Người tạo danh sách phát</string>
-    <string name="profile_public_playlists">Danh sách phát công khai</string>
-    <string name="profile_num_playlists">%1$d danh sách phát</string>
+    
     <string name="profile_member_since">Thành viên từ %1$s</string>
     <string name="user_type_artist">Nghệ sĩ</string>
     <string name="user_type_profile">Hồ sơ cá nhân</string>
     <string name="user_type_verified_artist">Nghệ sĩ đã xác minh</string>
     <string name="filter_artists">Nghệ sĩ</string>
     <string name="filter_profiles">Hồ sơ</string>
-    <!-- Accounts Settings & SoundCloud Account -->
+    <!-- Accounts Settings &amp; SoundCloud Account -->
     <string name="settings_cat_accounts">Tài khoản</string>
     <string name="pref_accounts_title">Quản lý tài khoản</string>
-    <string name="pref_accounts_subtitle">SoundCloud, Discord và các nền tảng khác</string>
+    <string name="pref_accounts_subtitle">Dịch vụ phát trực tuyến, thứ tự nguồn và nhập dữ liệu</string>
     <string name="pref_account_soundcloud_title">SoundCloud</string>
     <string name="pref_account_soundcloud_subtitle_connected">Đã kết nối với tên %1$s</string>
     <string name="pref_account_soundcloud_subtitle_guest">Chưa kết nối (Chế độ khách)</string>
@@ -2141,30 +2157,26 @@
     <string name="account_section_identity">Chi tiết tài khoản</string>
     <string name="account_label_username">Tên người dùng</string>
     <string name="account_label_display_name">Tên hiển thị</string>
-    <string name="account_label_email">Địa chỉ Email</string>
-    <string name="account_label_email_private">Đã ẩn / Riêng tư</string>
+    
     <string name="account_label_user_id">ID người dùng</string>
     <string name="account_label_user_urn">URN người dùng</string>
     <string name="account_label_permalink">Đường dẫn liên kết tĩnh</string>
     <string name="account_label_profile_url">URL trang cá nhân</string>
-    <string name="account_label_member_since">Tham gia từ</string>
+    
     <string name="account_label_location">Vị trí</string>
     <string name="account_label_location_empty">Chưa chỉ định</string>
     <string name="account_label_bio">Tiểu sử</string>
     <string name="account_label_bio_empty">Chưa có tiểu sử</string>
-    <string name="account_section_plan">Gói thuê bao &amp; Huy hiệu</string>
-    <string name="account_label_plan">Gói tài khoản</string>
-    <string name="account_label_plan_free">SoundCloud Miễn phí</string>
-    <string name="account_label_plan_pro">SoundCloud Pro / Next Pro</string>
+    
     <string name="account_label_verified">Tài khoản đã xác minh</string>
-    <string name="account_label_badges">Huy hiệu</string>
+    
     <string name="account_section_stats">Thư viện &amp; Hoạt động</string>
     <string name="account_stat_tracks">Bài hát đã tải lên</string>
     <string name="account_stat_playlists">Danh sách phát</string>
     <string name="account_stat_likes">Lượt thích</string>
     <string name="account_stat_followers">Người theo dõi</string>
     <string name="account_stat_following">Đang theo dõi</string>
-    <string name="account_stat_comments">Bình luận</string>
+    
     <string name="account_stat_reposts">Lượt chia sẻ lại</string>
     <string name="account_stat_quota">Hạn mức tải lên</string>
     <string name="account_quota_unlimited">Tải lên không giới hạn</string>
@@ -2177,12 +2189,10 @@
     <string name="account_info_loading">Đang tải thông tin tài khoản…</string>
     <string name="account_info_error">Không thể tải thông tin tài khoản</string>
     <string name="account_connected_status">Đã kết nối</string>
-    <string name="account_guest_status">Khách</string>
+    
     <string name="accounts_screen_title">Tài khoản</string>
     <string name="accounts_connected_section">Nền tảng đã kết nối</string>
-    <string name="accounts_other_platforms_title">Nền tảng khác</string>
-    <string name="accounts_other_platforms_desc">Hỗ trợ tích hợp thêm tài khoản (Spotify, YouTube Music, Apple Music) sẽ được ra mắt trong các bản cập nhật sắp tới.</string>
-    <string name="accounts_platform_coming_soon">Sắp ra mắt</string>
+    
     <!-- VKontakte (VK) Account -->
     <string name="pref_account_vk_title">VKontakte (VK)</string>
     <string name="pref_account_vk_subtitle_connected">Đã kết nối với tên %1$s</string>
@@ -2207,11 +2217,11 @@
     <string name="account_vk_manual_dialog_title">Xác thực VK thủ công</string>
     <string name="account_vk_manual_dialog_desc">Nhập cookie remixsid hoặc token truy cập Kate Mobile OAuth của bạn.</string>
     <string name="account_vk_label_remixsid">Cookie remixsid / Token</string>
-    <string name="account_vk_label_remixdsid">Cookie remixdsid (không bắt buộc)</string>
+    
     <string name="account_vk_label_user_id">VK User ID (vd: 123456789)</string>
     <string name="account_vk_manual_save">Lưu &amp; Kết nối</string>
     <string name="account_vk_login_success">Đã kết nối với VKontakte thành công!</string>
-    <string name="account_vk_login_error">Không thể kết nối với VK: %1$s</string>
+    
     <string name="account_vk_section_stats">Thư viện nhạc VK</string>
     <string name="account_vk_stat_tracks">Bài hát đã lưu</string>
     <string name="account_vk_stat_playlists">Danh sách phát</string>
@@ -2224,20 +2234,14 @@
     <string name="lib_vk_not_connected">Chưa kết nối VKontakte</string>
     <string name="lib_vk_connect_desc">Kết nối tài khoản VK để xem và nghe trực tuyến các bài hát cũng như danh sách phát đã lưu của bạn.</string>
     <string name="lib_vk_connect_action">Kết nối tài khoản VK</string>
-    <string name="accounts_platform_spotify_desc">Đồng bộ thư viện, danh sách phát và các bản nhạc hàng đầu trên Spotify</string>
-    <string name="accounts_platform_ytm_desc">Nhập và nghe trực tuyến danh sách phát từ YouTube Music</string>
-    <string name="accounts_platform_apple_desc">Kết nối và đồng bộ thư viện nhạc Apple Music</string>
-    <!-- Subscriptions & Extended Info -->
+    
+    <!-- Subscriptions &amp; Extended Info -->
     <string name="account_section_subscriptions">Gói dịch vụ &amp; Đăng ký</string>
     <string name="account_label_creator_sub">Gói Nghệ sĩ / Nhà sáng tạo</string>
     <string name="account_label_consumer_sub">Gói Người nghe / Phổ thông</string>
-    <string name="account_plan_creator_next_pro">SoundCloud Next Pro</string>
-    <string name="account_plan_creator_pro_unlimited">SoundCloud Pro Unlimited</string>
-    <string name="account_plan_creator_next_plus">SoundCloud Next Plus (Artist Pro)</string>
+    
     <string name="account_plan_creator_free">Gói sáng tạo tiêu chuẩn (Miễn phí)</string>
-    <string name="account_plan_consumer_go_plus">SoundCloud Go+</string>
-    <string name="account_plan_consumer_go">SoundCloud Go</string>
-    <string name="account_plan_consumer_free">Nghe nhạc miễn phí</string>
+    
     <string name="account_btn_manage_subscription">Quản lý gói đăng ký</string>
     <string name="account_status_active">Đang kích hoạt</string>
     <string name="account_active_subscriptions_title">Các gói đang sử dụng</string>
@@ -2251,7 +2255,7 @@
     <string name="account_label_default_license">Giấy phép tải lên mặc định</string>
     <string name="account_label_spotlight_limit">Giới hạn mục nổi bật (Spotlight)</string>
     <string name="account_label_spotlight_desc">Cho phép tối đa %1$d bài hát nổi bật</string>
-    <string name="account_label_last_modified">Cập nhật hồ sơ lần cuối</string>
+    
     <string name="account_label_station">Trạm radio của nghệ sĩ</string>
     <string name="account_license_all_rights">Mọi quyền được bảo lưu</string>
     <string name="account_license_cc">Creative Commons</string>
@@ -2259,36 +2263,14 @@
     <string name="account_email_primary_tag">Chính</string>
     <string name="account_email_resend_confirm">Chạm để gửi lại thư xác nhận</string>
     <string name="account_email_confirm_sent">Đã gửi email xác nhận</string>
-    <string name="account_section_security_connections">Bảo mật &amp; Tài khoản đã liên kết</string>
-    <string name="account_password_2fa">Mật khẩu &amp; 2FA</string>
-    <string name="account_password_2fa_desc">Quản lý mật khẩu và xác thực hai yếu tố</string>
-    <string name="account_connected_apps">Ứng dụng đã kết nối</string>
-    <string name="account_connected_apps_desc">SoundCloud Web, Di động, Ứng dụng &amp; Thiết bị</string>
-    <string name="account_social_connections">Đăng nhập mạng xã hội</string>
-    <string name="account_social_connections_desc">Tài khoản liên kết Google, Apple, Facebook</string>
-    <string name="account_verification_badge">Huy hiệu xác minh</string>
-    <string name="account_verification_badge_request">Yêu cầu xác minh nghệ sĩ</string>
-    <string name="account_section_preferences_privacy">Tùy chọn &amp; Quyền riêng tư</string>
-    <string name="account_pref_notifications">Thông báo</string>
-    <string name="account_pref_notifications_desc">Thông báo đẩy và cảnh báo qua email</string>
-    <string name="account_pref_privacy">Quyền riêng tư &amp; Dữ liệu</string>
-    <string name="account_pref_privacy_desc">Dữ liệu cá nhân, theo dõi và phân tích</string>
-    <string name="account_pref_advertising">Tùy chọn quảng cáo</string>
-    <string name="account_pref_advertising_desc">Quảng cáo hướng mục tiêu và sự đồng ý của đối tác</string>
-    <string name="account_section_legal_resources">Pháp lý &amp; Tài nguyên nghệ sĩ</string>
-    <string name="account_legal_terms">Điều khoản sử dụng</string>
-    <string name="account_legal_privacy">Chính sách bảo mật</string>
-    <string name="account_legal_cookies">Chính sách Cookie</string>
-    <string name="account_legal_artist_resources">SoundCloud cho Nghệ sĩ</string>
-    <string name="account_legal_imprint">Thông tin pháp lý (Imprint)</string>
-    <string name="account_legal_transparency">Báo cáo minh bạch</string>
+    
     <string name="account_label_dob">Ngày sinh</string>
     <string name="account_label_gender">Giới tính</string>
     <string name="account_gender_male">Nam</string>
     <string name="account_gender_female">Nữ</string>
     <string name="account_gender_other">Khác</string>
     <string name="account_gender_unspecified">Không xác định</string>
-    <string name="account_btn_delete_account">Xóa tài khoản</string>
+    
     <string name="account_action_copy">Sao chép địa chỉ</string>
     <string name="account_vk_diagnose">Chẩn đoán kết nối</string>
     <string name="account_vk_diagnose_subtitle">Kiểm tra phiên kết nối VK và khả năng tìm kiếm</string>
@@ -2296,7 +2278,7 @@
     <string name="account_vk_diagnose_copied">Đã sao chép báo cáo</string>
     <string name="account_vk_diagnose_copy">Sao chép</string>
     <string name="sync_devices">Thiết bị</string>
-    <string name="sync_advanced">Nâng cao</string>
+    
     <string name="sync_pair_device">Ghép nối với máy tính</string>
     <string name="sync_state_syncing">Đang đồng bộ…</string>
     <string name="sync_state_not_paired">Chưa có thiết bị nào</string>
@@ -2315,11 +2297,11 @@
     <string name="sync_listener_sub">Cho phép máy tính chủ động bắt đầu đồng bộ thay vì phải đợi điện thoại gửi lệnh. Chỉ có hiệu lực khi KittyTune đang mở.</string>
     <string name="sync_address">Thiết bị này</string>
     <string name="sync_events_held_title">Nhật ký đồng bộ</string>
-    <string name="sync_have_a_code">Dán mã thay thế</string>
+    
     <string name="sync_pair">Ghép nối</string>
     <string name="sync_only_inbound">Thiết bị này đồng bộ bằng cách tiếp nhận kết nối đến.</string>
     <string name="sync_forget_all">Quên tất cả thiết bị</string>
-    <string name="listening_stats_timeline">Theo từng tháng</string>
+    
     <string name="trim_title">Cắt bài hát này</string>
     <string name="trim_sub">Bỏ qua một số đoạn của bài hát trong lúc phát. Tệp gốc sẽ không bị thay đổi và bạn có thể xóa thiết lập cắt bất cứ lúc nào để nghe lại bài gốc.</string>
     <string name="trim_mode_cut">Cắt bỏ đoạn</string>
@@ -2339,11 +2321,11 @@
     <string name="sync_peer_code">Mã ghép nối từ máy tính của bạn</string>
     <string name="sync_now">Đồng bộ ngay</string>
     <string name="sync_bad_code">Đây không phải là mã ghép nối hợp lệ.</string>
-    <string name="sync_done">Đã đồng bộ với %1$s: Đã nhận %2$d, đã gửi %3$d.</string>
+    
     <string name="sync_unauthorized">Mã kết nối bị từ chối. Hãy tạo một mã mới trên máy tính của bạn và dán vào đây.</string>
     <string name="sync_failed">Không thể tiếp cận thiết bị: %1$s</string>
     <string name="sync_events_held">%1$d sự kiện trong nhật ký.</string>
-    <string name="sync_scan_code">Quét mã</string>
+    
     <string name="sync_scan_aim">Hướng camera vào mã trên máy tính của bạn</string>
     <string name="sync_scan_found">Đã tìm thấy mã, đang ghép nối…</string>
     <string name="sync_scan_no_camera">KittyTune cần quyền truy cập camera để quét mã ghép nối. Bạn cũng có thể dán mã thủ công thay thế.</string>
@@ -2360,6 +2342,14 @@
     <!-- Haptic Vibrations (Haptic Vibes) -->
     <string name="pref_haptics_title">Rung phản hồi</string>
     <string name="pref_haptics_subtitle">Rung phản hồi đồng bộ theo nhịp điệu bài hát</string>
+    <string name="pref_haptics_app_section">Phản hồi xúc giác ứng dụng</string>
+    <string name="pref_haptics_app_sub">Phản hồi vật lý khi chạm vào nút, điều hướng và kéo thanh trượt</string>
+    <string name="label_haptics_title">Haptics</string>
+    <string name="haptic_mode_disabled">Đã tắt</string>
+    <string name="haptic_mode_enabled">Đã bật</string>
+    <string name="haptic_mode_stronger">Rất mạnh</string>
+    <string name="pref_haptics_buttons">Nút &amp; Thẻ</string>
+    <string name="pref_haptics_buttons_sub">Rung khi nhấp vào nút và chọn bài hát</string>
     <string name="pref_haptics_enable">Rung phản hồi âm nhạc</string>
     <string name="pref_haptics_enable_sub">Rung thiết bị theo thời gian thực theo âm trầm và tiết tấu</string>
     <string name="pref_haptics_strength">Cường độ rung</string>
@@ -2374,25 +2364,38 @@
     <string name="pref_haptics_queue">Rung khi sắp xếp danh sách phát</string>
     <string name="pref_haptics_queue_sub">Rung khi kéo thả các bài hát trong hàng đợi</string>
     <string name="slot_haptics">Rung phản hồi</string>
-    <!-- Audio Providers & Integrations -->
+    <!-- Audio Providers &amp; Integrations -->
     <string name="audio_providers_title">Nguồn âm thanh &amp; Tích hợp</string>
     <string name="provider_order">Thứ tự nguồn âm thanh</string>
-    <string name="provider_order_settings_desc">Kéo các nguồn âm thanh để sắp xếp thứ tự ưu tiên mà KittyTune sẽ thử</string>
     <string name="provider_order_summary">Kéo các nguồn lên trên để ưu tiên thử trước khi phát nhạc và tải xuống.</string>
     <string name="provider_order_reset">Đặt lại thứ tự nguồn</string>
     <string name="audio_provider_soundcloud">SoundCloud</string>
     <string name="audio_provider_tidal">TIDAL</string>
     <string name="audio_provider_deezer">Deezer</string>
-    <string name="audio_provider_instagram">Instagram</string>
     <string name="audio_provider_youtube_music">YouTube Music</string>
-    <string name="audio_provider_apple_music">Apple Music</string>
-    <string name="audio_provider_amazon_music">Amazon Music</string>
     <string name="audio_provider_qobuz">Qobuz</string>
     <string name="qobuz_integration">Qobuz</string>
     <string name="qobuz_country">Quốc gia Qobuz</string>
     <string name="qobuz_country_desc">Nhập mã quốc gia gồm 2 chữ cái cho các yêu cầu Qobuz (ví dụ: US, FR, VN).</string>
     <string name="qobuz_custom_instances">Máy chủ tùy chỉnh Qobuz</string>
-    <string name="qobuz_custom_instances_desc">Các máy chủ phân giải tùy chỉnh (mỗi dòng một URL).</string>
+    <string name="qobuz_account">Tài khoản Qobuz</string>
+    <string name="qobuz_account_desc_connected">Đã kết nối — đài phát thanh chính thức của Qobuz đã dùng được.</string>
+    <string name="qobuz_account_desc_disconnected">Đăng nhập tài khoản Qobuz để mở khóa đài phát thanh chính thức của Qobuz.</string>
+    <string name="qobuz_account_disconnect">Đăng xuất</string>
+    <string name="qobuz_account_login_failed">Đăng nhập thất bại — kiểm tra email và mật khẩu.</string>
+    <string name="qobuz_account_login">Đăng nhập Qobuz</string>
+    <string name="qobuz_sign_in_google">Google</string>
+    <string name="qobuz_google_config_title">Đăng nhập Google</string>
+    <string name="qobuz_google_config_desc">Client id và redirect dùng cho đăng nhập Google</string>
+    <string name="qobuz_google_client_id">ID ứng dụng (Client ID)</string>
+    <string name="qobuz_google_redirect">URL chuyển hướng</string>
+    <string name="qobuz_google_config_hint">Server client id mà Google dùng để ký id token (ứng dụng Qobuz chính thức dùng một cái riêng). Nó phải ghi tên package và dấu vân tay chữ ký của ứng dụng này, nếu không Google sẽ từ chối — hãy đăng ký client riêng trong Google Cloud Console nếu cần.</string>
+    <string name="qobuz_facebook_config_title">Đăng nhập Facebook</string>
+    <string name="qobuz_facebook_config_desc">Client id và redirect dùng cho đăng nhập Facebook</string>
+    <string name="qobuz_facebook_client_id">ID ứng dụng (Client ID)</string>
+    <string name="qobuz_facebook_redirect">URL chuyển hướng</string>
+    <string name="qobuz_facebook_config_hint">Client id chính thức của Qobuz dùng được ngay. Hãy đăng ký ứng dụng riêng nếu bạn muốn.</string>
+    
     <string name="qobuz_custom_instances_placeholder">https://qobuz-dll.vercel.app/</string>
     <string name="qobuz_custom_instances_helper">Thêm URL cơ sở của máy chủ phân giải Qobuz (mỗi dòng một URL). Các máy chủ sẽ được thử theo thứ tự.</string>
     <string name="qobuz_custom_instances_desc_default">Máy chủ mặc định (https://qobuz-dll.vercel.app/)</string>
@@ -2403,23 +2406,19 @@
     <string name="qobuz_quality_cd">CD FLAC / 16-bit 44.1kHz</string>
     <string name="qobuz_quality_mp3_320">MP3 320 kbps</string>
     <string name="deezer_integration">Deezer</string>
-    <string name="deezer_integration_desc">Phân giải âm thanh Deezer thông qua máy chủ dzmedia hoặc tài khoản của bạn.</string>
     <string name="deezer_resolver_url">URL máy chủ phân giải Deezer</string>
     <string name="deezer_resolver_url_desc">Điểm cuối hiện tại: %1$s</string>
     <string name="deezer_resolver_url_placeholder">https://yesitworkssomehow-funny-deeza-api-and-yeah.hf.space/get_url</string>
     <string name="deezer_resolver_url_helper">Sử dụng điểm cuối /get_url tương thích dzmedia.</string>
-    <string name="deezer_proxy_url">Proxy Deezer</string>
+    
     <string name="deezer_proxy_mode">Chế độ proxy Deezer</string>
     <string name="deezer_proxy_direct">Trực tiếp</string>
     <string name="deezer_proxy_render">Máy chủ Render</string>
     <string name="deezer_proxy_custom">URL tùy chỉnh</string>
     <string name="deezer_proxy_custom_url">URL proxy Deezer tùy chỉnh</string>
-    <string name="deezer_proxy_url_desc">Proxy hiện tại: %1$s</string>
     <string name="deezer_proxy_url_placeholder">proxy.example.com:3128 hoặc https://your-dzmedia.onrender.com</string>
     <string name="deezer_proxy_url_helper">Chỉ sử dụng cho proxy HTTP host:port tùy chỉnh hoặc URL cơ sở dzmedia khác.</string>
     <string name="deezer_proxy_disabled">Kết nối trực tiếp</string>
-    <string name="deezer_proxy_direct_desc">Kết nối trực tiếp đến máy chủ đa phương tiện của Deezer.</string>
-    <string name="deezer_proxy_render_desc">Tự động sử dụng %1$s.</string>
     <string name="deezer_clear_proxy">Xóa proxy Deezer</string>
     <string name="deezer_audio_quality">Chất lượng âm thanh Deezer</string>
     <string name="deezer_quality_flac">FLAC</string>
@@ -2466,7 +2465,6 @@
     <!-- Lyrics UI and Animation Settings -->
     <string name="pref_lyrics_ui_style_title">Kiểu giao diện lời bài hát</string>
     <string name="pref_lyrics_ui_style_enhanced">Apple Music (Mocharealm, Mặc định)</string>
-    <string name="lyrics_ui_style_enhanced_short">Apple Music</string>
     <string name="pref_lyrics_ui_style_classic">Cổ điển</string>
     <string name="pref_lyrics_effects_category">Hiệu ứng hình ảnh &amp; Hoạt ảnh</string>
     <string name="pref_lyrics_line_blur_title">Làm mờ các dòng không phát</string>
@@ -2477,9 +2475,9 @@
     <string name="pref_lyrics_glow_factor_title">Cường độ phát sáng</string>
     <string name="pref_lyrics_fill_transition_title">Độ mượt mà của hiệu ứng lấp đầy</string>
     <string name="pref_lyrics_line_spacing_title">Khoảng cách dòng</string>
-    <string name="lyrics_resume_autoscroll">Tiếp tục</string>
+    
     <string name="pref_lyrics_font_title">Phông chữ lời bài hát</string>
-    <string name="pref_lyrics_font_desc">Chọn phông chữ hiển thị lời bài hát</string>
+    
     <string name="pref_lyrics_font_apple">Apple (SF Pro Display)</string>
     <string name="pref_lyrics_font_apple_short">Apple</string>
     <string name="pref_lyrics_font_app_default">Mặc định ứng dụng (Google Sans Flex / Hệ thống)</string>
@@ -2506,12 +2504,11 @@
     <string name="setup_auth_soundcloud_title">Kết nối với SoundCloud</string>
     <string name="setup_auth_soundcloud_badge">Trải nghiệm trọn vẹn</string>
     <string name="setup_auth_soundcloud_desc">Đồng bộ lượt thích, danh sách phát, bài đăng lại và nghệ sĩ trực tiếp với tài khoản SoundCloud của bạn.</string>
-    <string name="setup_auth_soundcloud_btn">Kết nối với SoundCloud</string>
-    <string name="setup_auth_continue">Tiếp tục với SoundCloud</string>
+    
     <string name="setup_auth_guest_title">Tiếp tục với tư cách Khách</string>
     <string name="setup_auth_guest_badge">Truy cập tức thì</string>
     <string name="setup_auth_guest_desc">Nghe ngay bất kỳ bài hát nào mà không cần đăng nhập. Tất cả mục yêu thích và lịch sử nghe nhạc sẽ được lưu trữ cục bộ.</string>
-    <string name="setup_auth_guest_btn">Tiếp tục với tư cách Khách</string>
+    
     <string name="setup_auth_footer_hint">Bạn có thể kết nối hoặc thay đổi tài khoản bất cứ lúc nào trong Cài đặt.</string>
     <string name="setup_permission_media_title">Quyền truy cập tệp âm thanh</string>
     <string name="setup_permission_media_description">KittyTune cần quyền truy cập vào các tệp âm thanh của bạn để khám phá nhạc cục bộ và các bản nhạc đã lưu trong bộ nhớ đệm.</string>
@@ -2549,7 +2546,7 @@
     <string name="setup_all_set_body">KittyTune đã được tinh chỉnh theo sở thích của bạn và sẵn sàng khởi chạy. Chúc bạn có những phút giây thưởng thức âm nhạc tuyệt vời!</string>
     <string name="setup_finish_btn">Bắt đầu nghe nhạc</string>
     <string name="setup_support_title">Ủng hộ KittyTune</string>
-    <string name="setup_support_desc">KittyTune là dự án hoàn toàn miễn phí và mã nguồn mở. Nếu bạn yêu thích ứng dụng, hãy cân nhắc ủng hộ sự phát triển của dự án trên Ko-fi!</string>
+    
     <string name="setup_support_desc_short">100% miễn phí &amp; mã nguồn mở trên Ko-fi</string>
     <string name="home_support_banner_title">Bạn thích KittyTune chứ?</string>
     <string name="home_support_banner_desc">KittyTune hoàn toàn miễn phí, không quảng cáo và mã nguồn mở. Hãy ủng hộ dự án một ngôi sao trên GitHub hoặc một ly cà phê!</string>
@@ -2593,7 +2590,7 @@
     <string name="dj_flow_unknown">—</string>
     <string name="dj_flow_bpm_value">%1$d BPM</string>
     <string name="dj_flow_bar_beat">Nhịp %1$d/4 · Phách %2$d/16</string>
-    <string name="dj_flow_ask_button">Bạn muốn nghe gì?</string>
+    
     <string name="dj_flow_next_up">Tiếp theo</string>
     <string name="dj_flow_unknown_track">Không rõ</string>
     <string name="dj_flow_match_summary">khớp %1$d%%</string>
@@ -2608,12 +2605,12 @@
     <string name="pref_haptics_contrast_off">Tắt</string>
     <string name="pref_haptics_contrast_full">Tối đa</string>
 
-    <!-- App Logs & Diagnostics -->
+    <!-- App Logs &amp; Diagnostics -->
     <string name="logs_title">Nhật ký ứng dụng &amp; Chẩn đoán</string>
     <string name="logs_subtitle">Xem, sao chép hoặc chia sẻ nhật ký để hỗ trợ khắc phục sự cố</string>
-    <string name="logs_copy_all">Sao chép tất cả</string>
+    
     <string name="logs_copy_summary">Sao chép chẩn đoán</string>
-    <string name="logs_copy_logcat">Sao chép Logcat</string>
+    
     <string name="logs_share">Chia sẻ nhật ký</string>
     <string name="logs_copied_toast">Đã sao chép nhật ký vào khay nhớ tạm!</string>
     <string name="logs_tab_diagnostics">Chẩn đoán</string>
@@ -2632,18 +2629,16 @@
     <string name="logs_save_logcat">Lưu Logcat</string>
     <string name="logs_saved_toast">Đã lưu nhật ký thành công!</string>
     <string name="logs_save_failed_toast">Không thể lưu nhật ký vào tệp.</string>
-    <!-- Settings Parity & Search -->
+    <!-- Settings Parity &amp; Search -->
     <string name="homepage_search">Tìm kiếm cài đặt</string>
-    <string name="search_settings_hint">Tìm kiếm cài đặt…</string>
-    <string name="settings_search_results">Kết quả tìm kiếm</string>
+    
     <string name="settings_search_no_results">Không tìm thấy cài đặt nào</string>
     <string name="search_no_recent_results">Không có kết quả tìm kiếm gần đây</string>
-    <string name="search_no_results">Không có kết quả</string>
+    
     <string name="search_suggestion_no_match">Không có kết quả cho \"%1$s\"</string>
     <string name="settings_search_recent_header">Tìm kiếm gần đây</string>
     <string name="settings_search_clear_recent">Xóa</string>
-    <string name="settings_search_clear_history">Xóa lịch sử</string>
-
+    
     <!-- Theme Presets -->
     <string name="theme_presets_title">Chủ đề có sẵn</string>
     <string name="theme_preset_ocean">Đại dương</string>
@@ -2652,68 +2647,31 @@
     <string name="theme_preset_rose">Hoa hồng</string>
     <string name="theme_preset_lavender">Oải hương</string>
     <string name="theme_preset_mint">Bạc hà</string>
-    <string name="theme_preset_default">KittyTune</string>
+    
     <string name="theme_custom_short">Tùy chỉnh</string>
     <string name="theme_amoled">AMOLED</string>
 
     <string name="pref_show_remaining_time">Thời gian còn lại</string>
     <string name="pref_show_remaining_time_desc">Hiển thị thời gian còn lại (-00:14) thay vì tổng thời lượng trên thanh phát nhạc</string>
     <string name="pref_volume_slider_title">Thanh trượt âm lượng</string>
-    <string name="volume_horizontal">Nằm ngang</string>
+    
     <string name="volume_vertical">Thẳng đứng</string>
-    <string name="volume_style_title">Kiểu âm lượng</string>
-    <string name="volume_style_same">Giống thanh tiến trình</string>
-    <string name="player_buttons_title">Các nút phát nhạc</string>
-    <string name="player_buttons_desc">Hiện hoặc ẩn các nút trên thanh phát nhạc theo sở thích của bạn</string>
-    <string name="player_button_like">Thích</string>
-    <string name="player_button_like_desc">Hiển thị trái tim bên cạnh ảnh bìa để thích bài hát</string>
-    <string name="player_button_lyrics">Lời bài hát</string>
-    <string name="player_button_lyrics_desc">Mở ngay lập tức lời bài hát đồng bộ</string>
-    <string name="player_button_miniplayer">Trình phát thu nhỏ</string>
-    <string name="player_button_miniplayer_desc">Chuyển sang cửa sổ nổi Hình-trong-hình (PiP)</string>
-    <string name="player_button_panel">Bảng cài đặt</string>
-    <string name="player_button_panel_desc">Mở bảng điều khiển bên hông với chi tiết bài hát, lời và hiệu ứng</string>
-    <string name="player_button_queue">Hàng đợi</string>
-    <string name="player_button_queue_desc">Truy cập trực tiếp vào hàng đợi các bài hát tiếp theo</string>
-    <string name="player_button_shuffle">Phát ngẫu nhiên</string>
-    <string name="player_button_shuffle_desc">Bật hoặc tắt tính năng phát ngẫu nhiên bài hát</string>
-    <string name="player_button_repeat">Lặp lại</string>
-    <string name="player_button_repeat_desc">Lặp lại bài hát hoặc danh sách phát hiện tại</string>
-
+    
     <!-- Menu Tiles (3 dots sheet) -->
-    <string name="menu_tiles_title">Các nút trong menu</string>
+    
     <string name="menu_tiles_desc">Nhấn giữ một nút trong menu bài hát hoặc danh sách phát để di chuyển, nhấp chuột phải để ẩn. Khôi phục các nút đã ẩn tại đây.</string>
     <string name="menu_tiles_reset">Đặt lại thứ tự</string>
     <string name="menu_tiles_track">Menu bài hát</string>
     <string name="menu_tiles_reorder_desc">Kéo để sắp xếp lại. Menu bài hát sẽ theo thứ tự này.</string>
-    <string name="menu_tiles_playlist">Menu danh sách phát</string>
-
+    
     <!-- Player Shape -->
-    <string name="player_shape_title">Kiểu dáng trình phát</string>
-    <string name="player_shape_desc">Chọn giao diện tổng thể của thanh phát nhạc</string>
-    <string name="player_shape_default">Tiêu chuẩn</string>
-    <string name="player_shape_default_desc">Thanh liền mạch tinh tế</string>
-    <string name="player_shape_rounded">Bo tròn</string>
-    <string name="player_shape_rounded_desc">Các góc bo mềm mại hiện đại</string>
-    <string name="player_shape_floating">Thanh nổi</string>
-    <string name="player_shape_floating_desc">Viên con nhộng lơ lửng</string>
-
+    
     <!-- Floating Bar Details -->
-    <string name="floating_bar_title">Thanh nổi</string>
-    <string name="floating_bar_corner">Bán kính góc</string>
-    <string name="floating_bar_width">Chiều rộng</string>
-    <string name="floating_bar_margin">Khoảng cách đáy</string>
-    <string name="floating_bar_translucent">Trong mờ</string>
-    <string name="floating_bar_translucent_sub">Nội dung màn hình hiển thị mờ ảo qua thanh phát nhạc</string>
-
+    
     <string name="settings_group_window">Cửa sổ và văn bản</string>
     <string name="settings_group_covers">Ảnh bìa &amp; Hình ảnh</string>
     <string name="player_advanced_title">Điều khiển &amp; Độ nhạy</string>
-    <string name="player_advanced_desc">Độ nhạy và hành vi tua bài hát</string>
-    <string name="pref_seek_wheel">Độ nhạy tua</string>
-    <string name="pref_screensaver_title">Làm mờ khi không hoạt động</string>
-    <string name="pref_screensaver_desc">Làm mờ giao diện phát sau một thời gian không hoạt động</string>
-
+    
     <string name="menu_block_track">Ẩn bài hát</string>
     <string name="menu_unblock_track">Bỏ ẩn bài hát</string>
     <string name="track_hidden_toast">Đã ẩn bài hát</string>
@@ -2735,13 +2693,9 @@
     <string name="block_model_card_title">Bộ phát hiện nơ-ron ArtifactNet</string>
     <string name="block_model_card_subtitle">Mô hình nơ-ron cục bộ (~17 MB)</string>
     <string name="block_model_desc_what">Phân tích âm thanh để tìm các dấu vết vi mô của các trình tạo nhạc AI (Suno, Udio, v.v.) hoàn toàn ngay trên thiết bị.</string>
-    <string name="block_model_desc_why">Cho phép tự động bỏ qua nhạc AI và hiển thị nhãn độ tin cậy trong trình phát mà không gửi bất kỳ dữ liệu âm thanh nào lên máy chủ.</string>
-    <string name="block_model_disclaimer">Nhận diện bằng mạng nơ-ron mang tính xác suất và không hoàn toàn tuyệt đối. Có thể xảy ra các trường hợp nhận diện nhầm. Bạn có thể điều chỉnh ngưỡng độ nhạy bên dưới.</string>
-    <string name="block_model_feat_offline">Ngoại tuyến</string>
-    <string name="block_model_feat_autoskip">Tự động bỏ qua</string>
-    <string name="block_model_feat_privacy">100% Cục bộ</string>
+    
     <string name="block_model_status_ready">Đã cài đặt mô hình (17,2 MB) · Sẵn sàng ngoại tuyến</string>
-    <string name="block_model_status_not_installed">Chưa cài đặt · Tải xuống 17,2 MB</string>
+    
     <string name="block_model_downloading">Đang tải mô hình… %d%%</string>
     <string name="block_model_download_btn">Tải xuống mô hình (17 MB)</string>
     <string name="block_model_delete_btn">Gỡ cài đặt mô hình</string>
@@ -2771,6 +2725,9 @@
     <string name="ai_badge_scanning">AI…</string>
     <string name="ai_badge_ai_tag">AI %d%%</string>
     <string name="ai_badge_human_tag">Người %d%%</string>
+    <string name="ai_chip_ai_detected">Đã phát hiện AI</string>
+    <string name="ai_chip_high_confidence">Độ tin cậy AI cao</string>
+    <string name="ai_chip_human_audio">Âm thanh con người</string>
     <string name="ai_sheet_title_ai">Đã phát hiện âm thanh do AI tạo</string>
     <string name="ai_sheet_title_human">Âm thanh nguyên bản</string>
     <string name="ai_sheet_title_analyzing">Đang phân tích âm thanh…</string>
@@ -2791,7 +2748,7 @@
     <string name="block_ai_spare_favorites">Bỏ qua bài hát yêu thích</string>
     <string name="block_ai_spare_favorites_sub">Không bao giờ tự động bỏ qua các bài hát bạn đã thích</string>
     <string name="block_ai_window_title">Cửa sổ phân tích</string>
-    <string name="block_ai_window_sub">Thời lượng âm thanh phân tích trước khi quyết định</string>
+    
     <string name="block_ai_window_dialog_title">Cửa sổ phân tích AI</string>
     <string name="block_ai_window_4s_title">4 giây (Khuyến nghị)</string>
     <string name="block_ai_window_4s_desc">Ưu điểm: Độ chính xác tối đa, phân tích liên tục không lặp lại nhân tạo.\nNhược điểm: Phát hiện sau ~4 giây phát (có độ trễ nhẹ trước khi bỏ qua).</string>
@@ -2811,6 +2768,8 @@
     <string name="notif_btn_add_playlist_sub">Thêm nhanh bài hát hiện tại vào danh sách phát đã dùng gần nhất</string>
     <string name="notif_btn_haptics">Rung theo nhạc</string>
     <string name="notif_btn_haptics_sub">Bật hoặc tắt rung theo nhịp</string>
+    <string name="notif_btn_haptics_on">Rung theo nhạc: bật</string>
+    <string name="notif_btn_haptics_off">Rung theo nhạc: tắt</string>
     <string name="notif_btn_share">Chia sẻ</string>
     <string name="notif_btn_share_sub">Chia sẻ liên kết bài hát</string>
     <string name="notif_btn_download">Tải xuống</string>
@@ -2819,27 +2778,22 @@
     <string name="notif_btn_off_sub">Không hiển thị nút bổ sung</string>
     <string name="notif_dislike_toast">Đã chặn bài hát và bỏ qua</string>
     <string name="notif_added_to_playlist">Đã thêm vào \"%s\"</string>
+    <string name="notif_added_to_playlist_unnamed">Đã thêm vào danh sách phát</string>
+    <string name="notif_no_track_playing">Không có bài nào đang phát</string>
     <string name="notif_no_playlist_available">Chưa có danh sách phát nào</string>
 
     <!-- YEARLY PLAYBACK / SOUNDCLOUD WRAPPED -->
     <string name="yearly_playback_title">SoundCloud Wrapped</string>
     <string name="yearly_playback_menu_title">SoundCloud Wrapped</string>
-    <string name="yearly_playback_home_badge">Tổng kết 2025</string>
-    <string name="yearly_playback_home_title">Năm 2025 Trong Âm Nhạc Của Bạn</string>
-    <string name="yearly_playback_home_subtitle">Sống lại những bài hát, nghệ sĩ và khoảnh khắc đã tạo nên năm của bạn</string>
-    <string name="yearly_playback_home_action">Xem story</string>
-    <string name="yearly_playback_stats_banner_title">Story 2025 Của Bạn</string>
-    <string name="yearly_playback_stats_banner_sub">Mở trải nghiệm tổng kết năm toàn màn hình</string>
-    <string name="yearly_playback_stats_play_action">Phát story</string>
-
+    
     <!-- YEARLY PLAYBACK / SOUNDCLOUD WRAPPED -->
-    <string name="yearly_playback_hub_title">SoundCloud Wrapped</string>
+    
     <string name="yearly_playback_hub_subtitle">Các cột mốc âm nhạc &amp; tổng kết hàng năm của bạn</string>
-    <string name="yearly_playback_in_prep_badge">Đang chuẩn bị</string>
+    
     <string name="yearly_playback_in_prep_title">SoundCloud Wrapped %1$s</string>
     <string name="yearly_playback_in_prep_desc">Wrapped %1$s của bạn đang được chuẩn bị. Hãy tiếp tục nghe nhạc, bản tổng kết sẽ ra mắt vào cuối năm ( ˘ ᵕ ˘ ) ♬</string>
     <string name="yearly_playback_in_prep_status">Ra mắt vào cuối năm</string>
-    <string name="yearly_playback_in_prep_toast">SoundCloud Wrapped %1$s hiện đang được chuẩn bị và sẽ có sẵn vào cuối năm!</string>
+    
     <string name="yearly_playback_archives_title">Lưu trữ</string>
     <string name="yearly_playback_archives_subtitle">Xem lại các mùa SoundCloud Wrapped trước đây</string>
     <string name="yearly_playback_locked_badge">Không đủ điều kiện</string>
@@ -2855,7 +2809,7 @@
     <string name="yearly_playback_playlist_404_title">Playback không khả dụng</string>
     <string name="yearly_playback_playlist_404_desc">Danh sách phát Playback này không khả dụng hoặc chưa được SoundCloud tạo cho tài khoản của bạn.</string>
 
-    <!-- SHARE SCREENSHOT & SOCIAL OPTIONS -->
+    <!-- SHARE SCREENSHOT &amp; SOCIAL OPTIONS -->
     <string name="share_screenshot_title">Chia sẻ ảnh chụp màn hình</string>
     <string name="share_screenshot_subtitle">Chia sẻ hình ảnh kèm liên kết bài hát để bạn bè cũng có thể thưởng thức.</string>
     <string name="share_option_whatsapp">WhatsApp</string>
@@ -2879,18 +2833,15 @@
 %3$s</string>
     <string name="share_tracktitle_link">Nghe %1$s trên #SoundCloud
 %2$s</string>
-    <string name="share_playlist_artist_link">Nghe %1$s, danh sách phát của %2$s trên #SoundCloud
-%3$s</string>
+    
     <string name="share_playback_link">Nghe Playback 2025 của tôi trên #SoundCloud
 %1$s</string>
 
     <!-- YOUR MIX -->
     <string name="mix_all_known">Mọi bài hát tìm thấy đều đã có trong thư viện của bạn. Hãy thử một nghệ sĩ hoặc thể loại khác.</string>
-    <string name="mix_artist_hint">Yeat, Fred again.., …</string>
     <string name="mix_basis">Dựa trên %1$s</string>
     <string name="mix_basis_more">+%1$d bài nữa</string>
     <string name="mix_building">Đang tạo bản phối của bạn…</string>
-    <string name="mix_by_genre">Hoặc theo thể loại</string>
     <string name="mix_card_subtitle">Kích hoạt bản phối cá nhân, tạo riêng cho gu âm nhạc của bạn</string>
     <string name="mix_customise">Tùy chỉnh bản phối</string>
     <string name="mix_customise_sub">Xây dựng dựa trên một nghệ sĩ hoặc một thể loại cụ thể.</string>
@@ -2899,14 +2850,13 @@
     <string name="mix_enable">Bật bản phối</string>
     <string name="mix_genre_custom">Phối theo “%1$s”</string>
     <string name="mix_genre_search_hint">Tìm kiếm thể loại, hoặc nhập thẻ bất kỳ</string>
-    <string name="mix_in_the_style_of">Theo phong cách của nghệ sĩ</string>
     <string name="mix_needs_history">Hãy nghe một vài bài trước — bản phối được xây dựng từ thói quen nghe nhạc của bạn.</string>
     <string name="mix_no_seeds">Không tìm thấy nghệ sĩ đó trên SoundCloud. Hãy thử nhập tên chính xác.</string>
     <string name="mix_nothing_found">Không có kết quả trả về. Kiểm tra kết nối mạng và thử lại.</string>
     <string name="mix_playing">Đang phát bản phối</string>
     <string name="mix_resume">Tiếp tục bản phối</string>
     <string name="mix_start">Bắt đầu phối nhạc</string>
-    <string name="mix_subtitle">Xây dựng từ những gì bạn thực sự nghe, không chỉ những bài bạn đã nhấn thích.</string>
+    
     <string name="mix_title">Bản phối của bạn</string>
     <string name="mix_track_count">%1$d bài hát</string>
     <string name="mix_trusted_sources_sub">Ưu tiên các nghệ sĩ có nhiều người theo dõi hơn. Tắt tùy chọn này để thoải mái khám phá các bản remix, bootleg và nghệ sĩ độc lập nhỏ.</string>
@@ -2944,7 +2894,6 @@
     <string name="keywords_animated_covers">ảnh bìa động, video bìa, ảnh bìa video</string>
     <string name="keywords_animated_artist_profiles">hồ sơ nghệ sĩ động, video nghệ sĩ, biểu ngữ</string>
     <string name="keywords_font">phông chữ, kiểu chữ, phông tùy chỉnh, độ đậm, kiểu văn bản</string>
-    <string name="keywords_explorer_grid">lưới khám phá, bố cục lưới, hiển thị lưới</string>
     <string name="keywords_library_layout">thư viện, bộ lọc, danh mục, bố cục, nút bấm</string>
     <string name="keywords_achievements">thành tích, cúp, phần thưởng, huy hiệu, thông báo</string>
     <string name="keywords_stats">thống kê, thống kê nghe nhạc, lịch sử, tổng kết, thời gian nghe, bài hát hàng đầu</string>
@@ -2994,9 +2943,459 @@
     <string name="data_saver_metered_only">Chỉ khi dùng mạng di động</string>
     <string name="data_saver_metered_only_sub">Khi dùng Wi-Fi, mọi thứ sẽ trở lại chất lượng bạn đã chọn</string>
     <string name="data_saver_forced_eco">Tiết kiệm — bắt buộc bởi Trình tiết kiệm</string>
-    <string name="provider_data_saver_title">Tắt khi dùng dữ liệu di động</string>
-    <string name="provider_data_saver_sub">Qobuz, TIDAL và Deezer sẽ không được dùng trên mạng di động — chỉ SoundCloud và YouTube. Kết nối Wi-Fi để nghe lại Hi-Res.</string>
+    <string name="data_saver_lyrics_restrict_title">Giới hạn nguồn lời bài hát</string>
+    <string name="data_saver_lyrics_restrict_sub">Khi bật Tiết kiệm dữ liệu, chỉ các nguồn lời bài hát đã chọn được truy vấn. Tìm kiếm tự động và thủ công đều tuân theo.</string>
+    <string name="data_saver_lyrics_sources_title">Nguồn lời bài hát được phép</string>
+    <string name="data_saver_lyrics_dialog_title">Nguồn lời bài hát khi tiết kiệm dữ liệu</string>
+    <string name="data_saver_lyrics_dialog_desc">Chỉ các nguồn đã chọn được truy vấn khi Tiết kiệm dữ liệu đang bật. Ít yêu cầu hơn nghĩa là ít dữ liệu và ít chờ hơn trên kết nối yếu.</string>
+    <string name="data_saver_lyrics_select_one">Chọn ít nhất một nguồn.</string>
+    <string name="keywords_data_saver_lyrics">nguồn lời bài hát, nhà cung cấp lời, musixmatch, lrclib, tiết kiệm dữ liệu, lời bài hát mạng</string>
     <string name="provider_enabled_hint">SoundCloud và YouTube Music là các nguồn cơ bản và luôn khả dụng.</string>
     <string name="provider_disabled_suffix">(tắt)</string>
     <string name="keywords_data_saver">tiet kiem du lieu, traffic, mang di dong, 4g, 5g, tiet kiem, bang thong, mang</string>
+    <string name="lyrics_searching">Đang tìm lời bài hát…</string>
+    <string name="pref_track_source_badge_title">Chỉ báo nguồn âm thanh</string>
+    <string name="pref_track_source_badge_desc">Hiển thị biểu tượng nền tảng (YouTube, SoundCloud, v.v.) cho bài hát đang phát</string>
+    <string name="pref_track_source_badge_both">Biểu tượng &amp; chữ</string>
+    <string name="pref_track_source_badge_icon">Chỉ biểu tượng</string>
+    <string name="pref_track_source_badge_text">Chỉ chữ</string>
+    <string name="pref_track_source_badge_hidden">Tắt</string>
+    <string name="pref_full_player_source_title">Chỉ báo nguồn âm thanh</string>
+    <string name="pref_full_player_source_desc">Hiển thị biểu tượng nguồn (YouTube, SoundCloud, v.v.) cho bài hát đang phát</string>
+    
+    <!-- Settings subpage folders -->
+    <string name="settings_cat_misc_sub">Chung, bộ lọc nội dung, Discord và giới thiệu</string>
+    <string name="settings_audio_playback_sub">Tự động phát, hàng đợi, tiếp tục và tốc độ</string>
+    <string name="settings_audio_quality_title">Âm thanh &amp; Đầu ra</string>
+    <string name="settings_audio_quality_sub">Bộ cân bằng, chuẩn hóa âm lượng và âm thanh mono</string>
+    <string name="settings_audio_transitions_title">Chuyển tiếp &amp; Trộn</string>
+    <string name="settings_audio_transitions_sub">Chuyển bài mượt mà và DJ automix</string>
+    <string name="settings_audio_sleep_sub">Thời gian mờ dần và tùy chọn hẹn giờ ngủ</string>
+
+    <string name="sources_services_sub">SoundCloud, Qobuz, TIDAL, Deezer, VK</string>
+
+    <string name="storage_cache_sub">Giới hạn và dọn dẹp bộ nhớ đệm âm thanh, hình ảnh</string>
+    
+    <string name="storage_local_files_sub">Thư mục đã quét và thư viện cục bộ</string>
+    <string name="storage_backup_sub">Xuất và nhập cài đặt cùng dữ liệu ứng dụng</string>
+
+    <string name="sync_paired_devices_title">Thiết bị đã ghép đôi</string>
+    <string name="sync_paired_devices_sub">Trạng thái đồng bộ, kết nối và quản lý thiết bị</string>
+    <string name="sync_options_title">Dữ liệu đồng bộ</string>
+    <string name="sync_options_sub">Chọn dữ liệu cần đồng bộ giữa các thiết bị</string>
+    <string name="sync_advanced_title">Đồng bộ nâng cao</string>
+    <string name="sync_advanced_sub">Chi tiết kết nối, cổng và khắc phục sự cố</string>
+
+    <string name="network_proxy_sub">Cấu hình proxy HTTP và SOCKS5</string>
+    <string name="network_zapret_sub">Vượt DPI trong ứng dụng, không cần VPN hay proxy</string>
+    <!-- Zapret: vượt DPI trong ứng dụng -->
+    <string name="zapret_title">Zapret</string>
+    <string name="zapret_info_title">Không VPN, không proxy, không cần app khác</string>
+    <string name="zapret_info_desc">Zapret vượt chặn bằng cách chia nhỏ các gói tin đầu tiên của kết nối để bộ lọc không thấy bạn yêu cầu trang nào và cho qua. Cùng nguyên tắc như zapret trên PC, nhưng tích hợp sẵn trong ứng dụng. Chỉ hoạt động trong KittyTune. Hãy kiểm tra dịch vụ bên dưới để đạt kết quả tốt nhất.</string>
+    <string name="zapret_enable">Bật Zapret</string>
+    <string name="zapret_enable_desc">Vượt chặn DPI cho lưu lượng của ứng dụng</string>
+    <string name="zapret_status_enabled">Bật • %1$d tên miền • %2$s</string>
+    
+    <string name="zapret_strategy">Chiến lược</string>
+    <string name="zapret_strategy_split2">Chia ×2</string>
+    <string name="zapret_strategy_split2_desc">Bắt tay nhanh, vượt chặn SNI cơ bản</string>
+    <string name="zapret_strategy_multi">Chia nhỏ</string>
+    <string name="zapret_strategy_multi_desc">Bắt tay chậm hơn, mạnh hơn trước DPI nghiêm ngặt</string>
+    <string name="zapret_check">Kiểm tra dịch vụ</string>
+    <string name="zapret_checking">Đang kiểm tra…</string>
+    <string name="zapret_reachable">Hoạt động</string>
+    <string name="zapret_blocked">Bị chặn</string>
+    <string name="zapret_covered">Đã vượt</string>
+    <string name="zapret_add">Thêm</string>
+    <string name="zapret_add_blocked">Vượt các mục bị chặn (%1$d)</string>
+    <string name="zapret_added">Đã cập nhật danh sách: %1$d tên miền</string>
+    <string name="zapret_nothing_to_add">Mọi mục bị chặn đều đã được vượt</string>
+    <string name="zapret_own_title">Do KittyTune vượt chặn</string>
+    <string name="zapret_remove_own">Gỡ</string>
+    <string name="zapret_copy_list">Sao chép danh sách cho zapret PC</string>
+    <string name="zapret_copied">Đã sao chép danh sách. Dán vào list-general-user.txt của zapret trên PC</string>
+    <string name="keywords_zapret">zapret, dpi, vượt chặn, kiểm duyệt, chặn, youtube, discord</string>
+
+    <string name="misc_general_sub">Ngôn ngữ, màn hình khởi động và cập nhật</string>
+    <string name="pref_lyrics_reveal_words_title">Sáng lần lượt từng từ</string>
+    <string name="pref_lyrics_reveal_words_sub">Các dòng không có thời gian theo từ sẽ sáng nhanh lần lượt từng từ thay vì cùng lúc</string>
+    <string name="wave_title">Làn sóng của tôi</string>
+    <string name="wave_subtitle">Nhạc bất tận dành cho bạn. Học từ lượt thích và bỏ qua.</string>
+    <string name="wave_nothing_yet">Chưa có gì để tạo làn sóng</string>
+    <string name="wave_mode_balanced">Kết hợp</string>
+    <string name="wave_mode_favorites">Yêu thích</string>
+    <string name="wave_mode_discover">Khám phá</string>
+    <string name="wave_mode_popular">Phổ biến</string>
+    <string name="wave_now_playing">Hiện đang trong làn sóng của bạn</string>
+    <string name="chart_kind_country">Quốc gia của bạn</string>
+    <string name="chart_kind_top">Top 50</string>
+    <string name="chart_kind_trending">Mới &amp; đang lên</string>
+    <string name="chart_genre_all">Tất cả</string>
+    <string name="chart_genre_pop">Pop</string>
+    <string name="chart_genre_hiphop">Hip-hop</string>
+    <string name="chart_genre_electronic">Điện tử</string>
+    <string name="chart_genre_rock">Rock</string>
+    <string name="chart_genre_rnb">R&amp;B</string>
+    <string name="chart_genre_country">Đồng quê</string>
+    <string name="chart_genre_latin">Latin</string>
+    <string name="chart_genre_folk">Dân ca</string>
+    <string name="chart_country_ru">Nga</string>
+    <string name="chart_country_us">Hoa Kỳ</string>
+    <string name="chart_country_uk">Vương quốc Anh</string>
+    <string name="chart_country_de">Đức</string>
+    <string name="chart_country_fr">Pháp</string>
+    <string name="chart_country_hu">Hungary</string>
+    <string name="chart_country_vn">Việt Nam</string>
+    <string name="chart_country_fi">Phần Lan</string>
+    <string name="chart_country_se">Thụy Điển</string>
+    <string name="chart_country_no">Na Uy</string>
+    <string name="chart_country_pl">Ba Lan</string>
+    <string name="chart_country_it">Ý</string>
+    <string name="chart_country_es">Tây Ban Nha</string>
+    <string name="chart_country_nl">Hà Lan</string>
+    <string name="chart_country_ca">Canada</string>
+    <string name="chart_country_au">Úc</string>
+    <string name="chart_country_jp">Nhật Bản</string>
+    <string name="chart_country_br">Brazil</string>
+    <string name="chart_country_mx">Mexico</string>
+    <string name="chart_country_ie">Ireland</string>
+    <string name="chart_country_at">Áo</string>
+    <string name="chart_country_cz">Séc</string>
+    <string name="artist_clips_title">Video âm nhạc</string>
+    <string name="artist_clip_views">%s lượt xem</string>
+    <string name="artist_clip_failed">Không thể phát video này</string>
+    <string name="home_from_your_artists">Mới từ nghệ sĩ của bạn</string>
+    <string name="home_from_your_artists_sub">Nghệ sĩ bạn thích mới phát hành, theo thứ Sáu ra mắt</string>
+    <string name="home_releases_this_friday">Thứ Sáu này</string>
+    <string name="home_releases_last_friday">Thứ Sáu trước</string>
+    <string name="home_releases_earlier">Trước đó</string>
+    <string name="sort_now">Đang được nghe</string>
+    <string name="sort_all_time">Mọi thờс đại</string>
+    <string name="sort_likes">Nhiều lượt thích</string>
+    <string name="like_all_prompt_title">Thích các bài này?</string>
+    <string name="like_all_prompt_text">Album này có %1$d bài, trong đó %2$d bài rất ngắn hoặc rất dài: intro, ghi âm, im lặng dài.</string>
+    <string name="like_all_prompt_skip_odd">Bỏ qua bài lạ</string>
+    <string name="like_all_prompt_all">Thích tất cả</string>
+    <string name="night_screen_title">Màn hình đêm</string>
+    <string name="night_screen_since">Kể từ khi bật màn hình đêm</string>
+    <string name="night_screen_tap_to_wake">Chạm vào bất kể đâu để thức</string>
+    <string name="deezer_proxy_url">Proxy Deezer</string>
+    <string name="connect_devices_title">Thiết bị khả dụng</string>
+    <string name="connect_pair_hint">Ghép nối điện thoại và máy tính trong phần đồng bộ thiết bị.</string>
+    <string name="connect_offline">Ngoại tuyến</string>
+    <string name="connect_headphones_title">Tiếp tục với tai nghe</string>
+    <string name="connect_headphones_desc">Kết nối để chuyển phát từ PC. Ngắt kết nối để tạm dừng.</string>
+    <string name="connect_headphones_hint">Khi ứng dụng đang mở. Mở lại sau khi dừng để tiếp tục. Loa Bluetooth cũng có thể được nhận diện là tai nghe.</string>
+    <string name="connect_playing_on">Đang phát trên %1$s</string>
+    <string name="category_introducing_buzzing">Đang sốt</string>
+    <string name="player_side_player">Trình phát cạnh</string>
+    <string name="yearly_playback_tracks_played">Bài hát đã phát</string>
+    <string name="yearly_playback_unique_tracks">Bài hát duy nhất</string>
+    <string name="edit_playlist_title">Chỉnh sửa danh sách phát</string>
+    <string name="edit_playlist_field_title">Tiêu đề *</string>
+    <string name="edit_playlist_field_permalink">Liên kết cố định *</string>
+    <string name="edit_playlist_permalink_hint">Chỉ sử dụng số, chữ thường, dấu gạch dưới hoặc dấu gạch nối.</string>
+    <string name="edit_playlist_field_description">Mô tả</string>
+    <string name="edit_playlist_privacy">Quyền riêng tư</string>
+    <string name="edit_playlist_public">Công khai</string>
+    <string name="edit_playlist_private">Riêng tư</string>
+    <string name="edit_playlist_type">Loại danh sách phát</string>
+    <string name="edit_playlist_release_date">Ngày phát hành (YYYY-MM-DD) *</string>
+    <string name="edit_playlist_pick_date">Chọn</string>
+    <string name="edit_playlist_genre">Thể loại</string>
+    <string name="edit_playlist_custom_genre">Thể loại tùy chỉnh</string>
+    <string name="edit_playlist_tags">Thẻ</string>
+    <string name="edit_playlist_add_tags">Thêm thẻ</string>
+    <string name="artist_monthly_listeners">%,d người nghe hàng tháng</string>
+    <string name="artist_resume">Tiếp tục</string>
+    <string name="artist_trailer">Đoạn giới thiệu</string>
+    <string name="artist_trailer_playing">Đang phát đoạn giới thiệu</string>
+    <string name="beta_updates_subtitle">Nhận các bản dựng phát hành sớm để thử nghiệm các tính năng mới</string>
+    <string name="beta_updates_title">Cập nhật Beta</string>
+    <string name="beta_warning_message">Các bản dựng beta có thể không ổn định và chứa lỗi. Sau khi bật, kiểm tra cập nhật cũng sẽ cung cấp các bản phát hành trước.</string>
+    <string name="beta_warning_title">Bật cập nhật beta?</string>
+    <string name="btn_enable">Bật</string>
+    <string name="category_ambiances_title">Cảm xúc</string>
+    <string name="category_discover_more_tracks">Khám phá thêm bài hát</string>
+    <string name="category_genre_electro">Điện tử</string>
+    <string name="category_genre_soul">Soul</string>
+    <string name="category_genre_techno">Techno</string>
+    <string name="category_introducing">Giới thiệu</string>
+    <string name="category_kind_genre">Thể loại</string>
+    <string name="category_mood_athome">Ở nhà</string>
+    <string name="category_mood_chill">Thư giãn</string>
+    <string name="category_mood_study">Học tập</string>
+    <string name="category_no_content">Không có nội dung</string>
+    <string name="category_play_all">Phát</string>
+    <string name="category_profiles">Hồ sơ</string>
+    <string name="category_see_all">Xem tất cả</string>
+    <string name="category_tab_albums">Album</string>
+    <string name="category_tab_all">Tất cả</string>
+    <string name="category_tab_playlists">Danh sách phát</string>
+    <string name="category_tab_trending">Thịnh hành</string>
+    <string name="chart_failed">Không thể tải bảng xếp hạng. Vui lòng thử lại sau giây lát.</string>
+    <string name="chart_section_title">Bảng xếp hạng</string>
+    <string name="dialog_upload_yaml_title">Tải lên lời bài hát tùy chỉnh</string>
+    <string name="home_clips_title">Clip</string>
+    <string name="keywords_charts">bảng xếp hạng, hàng đầu, xu hướng, phổ biến</string>
+    <string name="keywords_my_wave">mywave, làn sóng, đài phát thanh, luồng, kết hợp, gợi ý</string>
+    <string name="lyrics_badge_line_sync">Thời gian theo từng dòng</string>
+    <string name="lyrics_badge_plain">Văn bản thuần túy</string>
+    <string name="lyrics_badge_word_sync">Thời gian từng từ</string>
+    <string name="lyrics_provider_all">Tất cả nguồn</string>
+    <string name="lyrics_search_clear">Xóa</string>
+    <string name="lyrics_search_now_showing">Đang hiển thị: %1$s</string>
+    <string name="lyrics_sync_drift_active">%1$s tại %2$s, %3$s tại %4$s, đều nhau ở giữa. Các nút ở trên thay đổi điểm gần bạn hơn.</string>
+    <string name="lyrics_sync_drift_hint">Đồng bộ điểm bắt đầu và ghim lại, sau đó ghim điểm gần cuối và đồng bộ tại đó. Độ lệch sẽ thay đổi đều ở giữa.</string>
+    <string name="lyrics_sync_drift_title">Bị lệch ở đoạn cuối?</string>
+    <string name="lyrics_sync_end_too_close">Ghim điểm kết thúc ít nhất 20 giây sau điểm bắt đầu</string>
+    <string name="lyrics_sync_pin_end">Ghim kết thúc tại đây</string>
+    <string name="lyrics_sync_pin_start">Ghim bắt đầu tại đây</string>
+    <string name="lyrics_sync_point_end">Kết thúc %1$s</string>
+    <string name="lyrics_sync_point_start">Bắt đầu %1$s</string>
+    <string name="lyrics_sync_single">Quay lại một độ lệch</string>
+    <string name="pref_home_charts_desc">Hiển thị thẻ bảng xếp hạng trên màn hình chính</string>
+    <string name="pref_home_my_wave_desc">Hiển thị thẻ MyWave trên màn hình chính</string>
+    <string name="queue_clear_upcoming">Xóa các bài hát tiếp theo</string>
+    <string name="queue_played">Đã phát</string>
+    <string name="queue_time_left">Còn lại %1$s</string>
+    <string name="queue_up_next">Tiếp theo</string>
+    <string name="queue_remove">Xóa khỏi hàng đợi</string>
+    <string name="screensaver_focus_mode">Trình bảo vệ màn hình &amp; Chế độ tập trung</string>
+    <string name="screensaver_since_sleep">Từ lúc chuyển chế độ</string>
+    <string name="screensaver_tap_to_wake">Chạm vào bất cứ đâu để đánh thức</string>
+    <string name="search_clear_all">Xóa tất cả</string>
+    <string name="search_kind_artist">Nghệ sĩ</string>
+    <string name="search_kind_playlist">Danh sách phát</string>
+    <string name="search_kind_track">Bài hát · %1$s</string>
+    <string name="search_recent_searches">Tìm kiếm gần đây</string>
+    <string name="search_remove_recent">Xóa khỏi tìm kiếm gần đây</string>
+    <string name="search_section_other_genres">Danh mục khác</string>
+    <string name="search_section_personalized">Dành cho bạn</string>
+    <string name="search_see_less">Thu gọn</string>
+    <string name="search_see_more">Xem thêm</string>
+    <string name="search_showing_results_for">Hiển thị kết quả cho “%1$s”</string>
+    <string name="search_top_result">Kết quả hàng đầu</string>
+    <string name="slot_connect">Kết nối</string>
+    <string name="sync_playback_sub">Tiếp tục bài hát và hàng đợi mới nhất khi mở thiết bị khác</string>
+    <string name="sync_playback_title">Hàng đợi và vị trí phát lại</string>
+    <string name="time_hours">%1$d giờ</string>
+    <string name="time_hours_minutes">%1$d giờ %2$02d phút</string>
+    <string name="time_minutes">%1$d phút</string>
+    <string name="time_seconds">%1$d giây</string>
+    <string name="together_accept">Chấp nhận</string>
+    <string name="together_add_tracks">Thêm bài hát</string>
+    <string name="together_automix_host_only">Chỉ người chủ trì mới có thể bật/tắt automix</string>
+    <string name="together_bad_code">Mã đó có vẻ không đúng</string>
+    <string name="together_become_host">Nhận làm chủ trì</string>
+    <string name="together_code">Mã %s</string>
+    <string name="together_code_copied">Đã sao chép mã</string>
+    <string name="together_code_hint">ABCD-EFGH</string>
+    <string name="together_create">Tạo danh sách phát chung</string>
+    <string name="together_decline">Từ chối</string>
+    <string name="together_empty">Chưa có gì — tìm kiếm bên dưới và đề xuất bài hát đầu tiên.</string>
+    <string name="together_forget">Quên</string>
+    <string name="together_hint">Cùng nghe đồng bộ trên điện thoại và máy tính</string>
+    <string name="together_join">Tham gia</string>
+    <string name="together_leave">Rời khỏi</string>
+    <string name="together_listen">Nghe cùng</string>
+    <string name="together_listening_now">Đang nghe: %s</string>
+    <string name="together_name_hint">Tên danh sách phát</string>
+    <string name="together_nobody">Không có ai đang nghe</string>
+    <string name="together_offline">Đang kết nối lại…</string>
+    <string name="together_play_next">Phát tiếp theo</string>
+    <string name="together_preview">Xem trước</string>
+    <string name="together_suggest">Đề xuất</string>
+    <string name="together_suggested_by">Được đề xuất bởi %s</string>
+    <string name="together_suggestions">Đề xuất</string>
+    <string name="together_title">Together</string>
+    <string name="together_tracks">Bài hát</string>
+    <string name="together_up_next">Tiếp theo</string>
+    <string name="together_your_name">Tên của bạn</string>
+    <string name="track_sorted_by_followers">Sắp xếp theo người theo dõi</string>
+    <string name="vk_import_another">Nhập liên kết khác</string>
+    <string name="vk_import_done">Hoàn tất: %1$d trong số %2$d bài hát đã có trong danh sách phát “%3$s”</string>
+    <string name="vk_import_empty">Danh sách phát này trống.</string>
+    <string name="vk_import_failed">Không thể kết nối với VK: %1$s</string>
+    <string name="vk_import_hint">Liên kết tới danh sách phát VK</string>
+    <string name="vk_import_load">Tìm</string>
+    <string name="vk_import_missing">Không tìm thấy (%1$d)</string>
+    <string name="vk_import_not_playlist">Không có danh sách phát nào trong liên kết này. Hãy mở danh sách phát trong VK và sao chép liên kết.</string>
+    <string name="vk_import_not_vk">Đó không phải là liên kết VK.</string>
+    <string name="vk_import_note">Các bài hát được tìm kiếm trên SoundCloud và YouTube Music theo tiêu đề, nghệ sĩ và thời lượng. Không cần đăng nhập VK.</string>
+    <string name="vk_import_open">Mở danh sách phát</string>
+    <string name="vk_import_paste">Dán</string>
+    <string name="vk_import_platform">VK Music</string>
+    <string name="vk_import_platform_sub">Danh sách phát và album qua liên kết, không cần đăng nhập</string>
+    <string name="vk_import_private">VK không thể mở danh sách phát này: danh sách này là riêng tư hoặc liên kết không có khóa truy cập. Trong VK, nhấn Chia sẻ, sau đó Sao chép liên kết và dán vào đây.</string>
+    <string name="vk_import_progress">Đang tìm bài hát: %1$d trong số %2$d · %3$d đã tìm thấy</string>
+    <string name="vk_import_start">Nhập danh sách phát</string>
+    <string name="vk_import_sub">Dán liên kết tới danh sách phát hoặc album</string>
+    <string name="vk_import_title">Nhập từ VK Music</string>
+    <string name="vk_import_tracks">%1$d bài hát</string>
+    <string name="desc_fullscreen">Toàn màn hình</string>
+    <string name="connect_cant_find">Không tìm thấy thiết bị?</string>
+    <string name="connect_devices_hero">Kết nối với thiết bị</string>
+    <string name="connect_error_connection">Lỗi kết nối: %1$s</string>
+    <string name="connect_feedback_auto_cancelled">Đã hủy chuyển đổi tự động.</string>
+    <string name="connect_feedback_local_file">Tệp cục bộ này chỉ khả dụng trên thiết bị nguồn.</string>
+    <string name="connect_feedback_offline">Thiết bị đang ngoại tuyến.</string>
+    <string name="connect_feedback_prepare_failed">Không thể mở bài hát trên thiết bị này.</string>
+    <string name="connect_feedback_timeout">Thiết bị không phản hồi kịp thời. Hãy thử lại.</string>
+    <string name="connect_feedback_track_changed">Bài hát đã thay đổi trong khi chuyển. Hãy chọn lại thiết bị.</string>
+    <string name="connect_independent_desc">Giữ hàng đợi riêng và tắt điều khiển từ xa từ các thiết bị khác</string>
+    <string name="connect_independent_title">Phát độc lập</string>
+    <string name="connect_listening_on">ĐANG PHÁT TRÊN</string>
+    <string name="connect_pair_action">Ghép nối thiết bị</string>
+    <string name="connect_playing_here">Đang phát trên thiết bị này</string>
+    <string name="connect_relay_desc">Địa chỉ máy chủ của bạn. Sử dụng cùng một địa chỉ trên cả hai thiết bị.</string>
+    <string name="connect_relay_title">Kết nối Internet (Relay)</string>
+    <string name="connect_relay_url_error">Hãy sử dụng địa chỉ https:// hoặc wss://</string>
+    <string name="connect_relay_url_label">Địa chỉ máy chủ</string>
+    <string name="connect_service_name">KittyTune Connect</string>
+    <string name="connect_status_offline">Ngoại tuyến</string>
+    <string name="connect_status_playing">Đang phát · %1$s</string>
+    <string name="connect_this_phone">Điện thoại này</string>
+    <string name="slot_devices">Thiết bị phát</string>
+    <string name="pref_developer_options_title">Tùy chọn nhà phát triển</string>
+    <string name="pref_developer_options_subtitle">Lớp phủ gỡ lỗi, nhật ký và công cụ chẩn đoán</string>
+    <string name="dev_section_audio_debug">Gỡ lỗi âm thanh &amp; chuyển bài</string>
+    <string name="dev_section_logs">Nhật ký &amp; Chẩn đoán</string>
+    <string name="dev_section_ai_debug">Chẩn đoán nhận diện AI</string>
+    <string name="dev_clear_ai_cache">Xóa bộ nhớ đệm nhận diện AI</string>
+    <string name="dev_clear_ai_cache_desc">Xóa kết quả AI đã lưu và buộc phân tích lại</string>
+    <string name="dev_ai_cache_cleared">Đã xóa bộ nhớ đệm nhận diện AI</string>
+    <string name="dev_dj_debug_sheet">Bảng gỡ lỗi DJ Flow</string>
+    <string name="dev_dj_debug_sheet_desc">Mở bộ điều khiển chuyển bài DJ thời gian thực và trình kiểm tra nhịp</string>
+    <string name="dev_view_logs">Xem nhật ký ứng dụng</string>
+    <string name="dev_view_logs_desc">Kiểm tra logcat thời gian thực, chẩn đoán và các sự cố gần đây</string>
+    <string name="dev_export_logs">Chia sẻ nhật ký ứng dụng</string>
+    <string name="dev_export_logs_desc">Chia sẻ nhật ký hoạt động của ứng dụng để báo lỗi</string>
+    <string name="dev_clear_logs">Xóa nhật ký sự cố</string>
+    <string name="dev_logs_cleared">Đã xóa nhật ký sự cố</string>
+    <string name="home_reposts_from_friends">Bài đăng lại từ người bạn theo dõi</string>
+    <string name="qobuz_account_login_success">Đăng nhập Qobuz thành công!</string>
+    <string name="qobuz_enter_token">Đăng nhập bằng mã token</string>
+    <string name="qobuz_forgot_or_google_account">Tài khoản Google hoặc quên mật khẩu?</string>
+    <string name="qobuz_google_help_desc">Google giới hạn đăng nhập trực tiếp chỉ cho ứng dụng Qobuz chính thức trên Android (lỗi 16). Tài khoản Qobuz tạo bằng Google mặc định chưa có mật khẩu.\n\nĐể kết nối trong KittyTune, chỉ cần đặt mật khẩu cho tài khoản bằng địa chỉ email Google của bạn.</string>
+    <string name="qobuz_google_help_title">Đăng nhập tài khoản Google</string>
+    <string name="qobuz_logging_in">Đang đăng nhập Qobuz…</string>
+    <string name="qobuz_open_website">Mở trang web Qobuz</string>
+    <string name="qobuz_reset_password_failed">Không thể gửi email tạo mật khẩu. Vui lòng kiểm tra lại địa chỉ email.</string>
+    <string name="qobuz_reset_password_sent">Qobuz đã gửi email! Hãy kiểm tra hộp thư để tạo mật khẩu, sau đó quay lại đây để đăng nhập.</string>
+    <string name="qobuz_send_reset_password">Gửi email tạo mật khẩu</string>
+    <string name="qobuz_token_login_desc">Dán trực tiếp user_auth_token Qobuz của bạn nếu có.</string>
+    <string name="qobuz_token_login_title">Token phiên</string>
+    <string name="qobuz_token_not_found">Chưa tìm thấy token phiên. Vui lòng đăng nhập trên trang trước.</string>
+    <string name="qobuz_token_saved">Đã lưu token phiên Qobuz!</string>
+    <string name="qobuz_web_login">Đăng nhập Web (Google / Trình duyệt)</string>
+    <string name="qobuz_web_login_desc">Đăng nhập Qobuz trong WebView. Hỗ trợ đăng nhập Google và trình duyệt, KittyTune sẽ tự động lấy token phiên của bạn.</string>
+    <string name="storage_audio_subtitle">%1$d bài hát đã tải xuống</string>
+    <string name="storage_cat_app">Ứng dụng</string>
+    <string name="storage_delete_all_confirm">Xóa tất cả %1$d bài hát đã tải xuống khỏi bộ nhớ?</string>
+    <string name="storage_delete_count">Xóa (%1$d)</string>
+    <string name="storage_delete_selected_playlists_confirm">Xóa nội dung tải xuống của %1$d danh sách phát đã chọn (%2$s)?</string>
+    <string name="storage_delete_selected_tracks_confirm">Xóa %1$d bài hát đã chọn (%2$s) khỏi thiết bị?</string>
+    <string name="storage_delete_single_playlist_confirm">Xóa các bài hát và tệp đã tải xuống của danh sách phát \"%1$s\"?</string>
+    <string name="storage_delete_single_track_confirm">Xóa \"%1$s\" khỏi các bài hát đã tải xuống?</string>
+    <string name="storage_deselect_all">Bỏ chọn tất cả</string>
+    <string name="storage_downloaded_empty">Chưa có nội dung tải xuống</string>
+    <string name="storage_downloaded_music">Nhạc đã tải xuống</string>
+    <string name="storage_downloaded_playlists_summary">%1$d danh sách phát — chạm để xem</string>
+    <string name="storage_downloaded_summary">Bài hát: %1$d · %2$s — chạm để xem</string>
+    <string name="storage_freed_space_hint">Giải phóng %1$s</string>
+    <string name="storage_gauge_bottom_no_music">KittyTune: %1$s · Còn trống %2$s cho tải xuống</string>
+    <string name="storage_gauge_bottom_with_music">KittyTune: %1$s (%2$s nhạc) · Còn trống %3$s cho tải xuống</string>
+    <string name="storage_group_downloads">Tải xuống</string>
+    <string name="storage_manage_downloads_title">Quản lý tải xuống</string>
+    <string name="storage_no_search_results">Không tìm thấy nội dung tải xuống cho \"%1$s\"</string>
+    <string name="storage_search_downloads_hint">Tìm trong mục tải xuống…</string>
+    <string name="storage_select_all">Chọn tất cả</string>
+    <string name="storage_selected_format">Đã chọn %1$d</string>
+    <string name="storage_size_cached">đã lưu đệm</string>
+    <string name="storage_system_label">Hệ thống</string>
+    <string name="storage_tab_playlists">Danh sách phát</string>
+    <string name="storage_tab_tracks">Bài hát</string>
+    <string name="storage_total_summary">/ %1$s</string>
+    <string name="zapret_status_vpn_paused">Đã tạm dừng • VPN đang bật</string>
+    <string name="zapret_vpn_active_notice">Kết nối VPN đang hoạt động. Zapret tự động tạm dừng để tránh xung đột và tiết kiệm pin. Lưu lượng mạng được xử lý trực tiếp qua VPN của bạn.</string>
+
+    <string name="pref_haptics_sliders">Thanh trượt &amp; Tua</string>
+    <string name="pref_haptics_sliders_sub">Rung theo từng bước khi kéo thanh trượt</string>
+    <string name="pref_haptics_test_title">Thử phản hồi</string>
+    <string name="pref_haptics_test_sub">Chạm vào thẻ để cảm nhận chế độ hiện tại</string>
+    <string name="haptic_test_light">Nhẹ</string>
+    <string name="haptic_test_medium">Vừa</string>
+    <string name="haptic_test_heavy">Mạnh</string>
+    <string name="haptic_test_confirm">Xác nhận</string>
+    <string name="equalizer_mode_manual">Thủ công</string>
+    <string name="equalizer_mode_auto">Tự động</string>
+    <string name="equalizer_auto_detected">Tai nghe đã phát hiện</string>
+    <string name="equalizer_auto_no_device">Không phát hiện tai nghe</string>
+    <string name="equalizer_auto_no_device_sub">Kết nối tai nghe hoặc tìm kiếm mẫu bên dưới.</string>
+    <string name="equalizer_auto_search_hint">Tìm mẫu tai nghe (ví dụ: HD 650)</string>
+    <string name="equalizer_auto_search_action">Tìm kiếm</string>
+    <string name="equalizer_auto_suggestions">Mẫu phổ biến</string>
+    <string name="equalizer_auto_no_results">Không tìm thấy cấu hình.</string>
+    <string name="equalizer_auto_results">Cấu hình tìm thấy</string>
+    <string name="equalizer_auto_apply">Áp dụng</string>
+    <string name="equalizer_auto_applied">Đã áp dụng cấu hình</string>
+    <string name="equalizer_auto_restore">Tự động áp dụng khi thiết bị này kết nối lại</string>
+    <string name="equalizer_auto_restored">Đã khôi phục Auto EQ: %1</string>
+    <string name="equalizer_auto_remove">Xóa cấu hình</string>
+    <string name="equalizer_auto_credit">Cấu hình từ AutoEq, dựa trên đo kiểm của oratory1990, crinacle, Rtings và Squiglink.</string>
+    <string name="equalizer_auto_import">Nhập EQ</string>
+    <string name="equalizer_auto_error">Không thể tải cấu hình.</string>
+    <string name="equalizer_auto_retry">Thử lại</string>
+
+    <string name="theme_preset_accents_title">Mẫu tuyển chọn</string>
+    <string name="theme_preset_accents_subtitle">Màu sắc hài hòa sẵn sàng sử dụng</string>
+    <string name="color_hint_muted">Dịu</string>
+    <string name="color_hint_balanced">Cân bằng</string>
+    <string name="color_hint_vivid">Rực rỡ</string>
+    <string name="color_hint_dark">Tối</string>
+    <string name="color_hint_default">Mặc định</string>
+    <string name="color_hint_bright">Sáng</string>
+    <string name="color_spec_2025_label">SPEC 2025 (M3)</string>
+    <string name="color_spec_2021_label">SPEC 2021 (Cũ)</string>
+    <string name="color_hex_copied">Đã sao chép mã hex</string>
+    <string name="color_palette_system_dynamic">Động theo hệ thống</string>
+    <string name="mix_artists_section">Nghệ sĩ</string>
+    <string name="mix_genres_section">Thể loại &amp; thẻ</string>
+    <string name="mix_artist_search_placeholder">Tìm kiếm hoặc thêm nghệ sĩ…</string>
+    <string name="mix_start_with_count">Bắt đầu trộn (đã chọn %1$d)</string>
+    <string name="mix_suggested_artists">Nghệ sĩ đề xuất</string>
+    <string name="mix_followers_count">%1$s người theo dõi</string>
+    <string name="mix_in_library">Trong thư viện</string>
+    <string name="mix_selected_chip_remove">Xóa %1$s</string>
+
+    <!-- Lyrics Quick Settings & Full Player Background -->
+    <string name="lyrics_quick_tab_look">Giao diện</string>
+    <string name="lyrics_quick_tab_layout">Bố cục</string>
+    <string name="lyrics_quick_tab_features">Tính năng</string>
+    <string name="full_player_bg_style">Hình nền trình phát</string>
+    <string name="full_player_bg_apple_music">Chuyển động (Apple Music)</string>
+    <string name="full_player_bg_apple_music_fact">Lưới chuyển động mượt mà với shader AGSL</string>
+    <string name="full_player_bg_blur">Làm mờ</string>
+    <string name="full_player_bg_gradient">Chuyển sắc</string>
+    <string name="full_player_bg_pure_black">Đen tuyền</string>
+    <string name="lyrics_content_title">Nội dung &amp; nguồn</string>
+    <string name="lyrics_quick_scrolling">Cuộn</string>
+    <string name="lyrics_style_standard">Tiêu chuẩn</string>
+    <string name="lyrics_style_scale">Thu phóng</string>
+    <string name="lyrics_style_focus">Tiêu điểm</string>
+    <string name="lyrics_style_scale_focus">Thu phóng &amp; Tiêu điểm</string>
+    <string name="pref_lyrics_display_style">Kiểu hiệu ứng lời bài hát</string>
+    <string name="pref_lyrics_active_scale_title">Phóng to dòng đang phát</string>
+    <string name="pref_lyrics_active_scale_desc">Làm dòng hiện tại lớn hơn các dòng khác</string>
+    <string name="pref_lyrics_one_line_title">Chế độ một dòng</string>
+    <string name="pref_lyrics_one_line_sub">Chỉ hiển thị dòng đang phát</string>
+    <string name="pref_lyrics_backing_title">Hát bè</string>
+    <string name="pref_lyrics_backing_sub">Làm mờ hoặc tạo kiểu riêng cho bè</string>
+    <string name="pref_lyrics_horizontal_margin_title">Lề ngang</string>
+    <string name="pref_lyrics_vertical_offset_title">Độ lệch dọc</string>
+    <string name="pref_lyrics_reset_typography">Đặt lại kiểu chữ</string>
+    <string name="pref_lyrics_autoscroll_speed">Tốc độ cuộn lời bài hát thường</string>
+    <string name="pref_lyrics_speed_this_track">Tốc độ cho bài hát này</string>
+    <string name="pref_lyrics_speed_this_track_sub">Lưu tốc độ cuộn riêng cho bài hát này</string>
 </resources>

@@ -27,6 +27,9 @@ import com.alananasss.kittytune.ui.icons.Icon
     import androidx.lifecycle.viewmodel.compose.viewModel
     import coil.compose.AsyncImage
     import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.ui.common.hapticClickable
     import com.alananasss.kittytune.domain.ActivityItem
     import com.alananasss.kittytune.ui.library.getRelativeTime
 
@@ -183,7 +186,7 @@ import com.alananasss.kittytune.ui.icons.Icon
         val targetImage = item.track?.fullResArtwork ?: item.playlist?.fullResArtwork
         val timeString = getRelativeTime(item.createdAt, androidx.compose.ui.platform.LocalContext.current)
 
-        val onClick = {
+        val onClick = hapticAction(HapticKind.UI) {
             when {
                 item.track != null -> onNavigate("track_detail/${item.track.id}")
                 item.playlist != null -> onNavigate("playlist_detail/${item.playlist.id}")

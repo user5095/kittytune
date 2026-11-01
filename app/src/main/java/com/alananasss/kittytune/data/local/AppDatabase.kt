@@ -189,6 +189,11 @@
         @Query("SELECT * FROM play_history WHERE numericId = :numericId OR id = :id LIMIT 1")
         suspend fun getHistoryItemById(numericId: Long, id: String): HistoryItem?
 
+        // Rows written by the trailer flow, which described the artist they came from
+        // under a hashed id. They are repaired on start-up, not shown as they are.
+        @Query("SELECT * FROM play_history WHERE originalUrl LIKE 'trailer:%'")
+        suspend fun getTrailerRoutedHistoryItems(): List<HistoryItem>
+
         @Query("DELETE FROM play_history WHERE id = :itemId")
         suspend fun deleteHistoryItem(itemId: String)
 
@@ -229,6 +234,9 @@
 
         @Query("DELETE FROM play_history WHERE originalUrl = 'your_mix' OR originalUrl LIKE '%your_mix%' OR id = 'your_mix' OR id LIKE '%your_mix%'")
         suspend fun deleteMixHistory()
+
+        @Query("DELETE FROM play_history WHERE originalUrl = 'my_wave' OR originalUrl LIKE '%my_wave%' OR id = 'my_wave' OR id LIKE '%my_wave%' OR id LIKE '%wave%' OR title = 'MyWave' OR title LIKE '%MyWave%'")
+        suspend fun deleteWaveHistory()
 
         // listening stats
         //
@@ -273,6 +281,9 @@
          */
         @Query("SELECT * FROM listening_stats WHERE timestamp >= :since ORDER BY timestamp DESC LIMIT :limit")
         suspend fun getRecentEventsAfter(since: Long, limit: Int): List<ListeningStatsEvent>
+
+        @Query("SELECT * FROM listening_stats WHERE timestamp >= :since AND timestamp < :until ORDER BY timestamp DESC LIMIT :limit")
+        suspend fun getRecentEventsBetween(since: Long, until: Long, limit: Int): List<ListeningStatsEvent>
 
         /** Listening time inside a closed range, for comparing a span against the one before it. */
         @Query("SELECT COALESCE(SUM(listenDurationMs), 0) FROM listening_stats WHERE timestamp >= :since AND timestamp < :until")
@@ -523,9 +534,10 @@
             LibraryItemMeta::class,
             TrackTrimRow::class,
             BeatInfoEntity::class,
-            BlockedContent::class
+            BlockedContent::class,
+            QueueHistoryEntity::class
         ],
-        version = 25,
+        version = 27,
         exportSchema = false
     )
     abstract class AppDatabase : RoomDatabase() {
@@ -534,6 +546,7 @@
         abstract fun folderDao(): FolderDao
         abstract fun beatInfoDao(): BeatInfoDao
         abstract fun blockedContentDao(): BlockedContentDao
+        abstract fun queueHistoryDao(): QueueHistoryDao
 
         companion object {
             val MIGRATION_16_17 = object : Migration(16, 17) {
@@ -665,6 +678,42 @@
                 }
             }
 
+            /**
+             * Automix key/energy blends (PR #77): track body energy — loudness and pace in one 0..1
+             * number — for sizing transitions against a big energy gap.
+             */
+            val MIGRATION_25_26 = object : Migration(25, 26) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE beat_info ADD COLUMN energy REAL")
+                }
+            }
+
+            /**
+             * Preserves historical listening queues when new ones are started (issue #68).
+             */
+            val MIGRATION_26_27 = object : Migration(26, 27) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS queue_history (
+                            id TEXT NOT NULL PRIMARY KEY,
+                            title TEXT NOT NULL,
+                            trackCount INTEGER NOT NULL,
+                            tracksJson TEXT NOT NULL,
+                            currentIndex INTEGER NOT NULL,
+                            currentPositionMs INTEGER NOT NULL,
+                            contextJson TEXT,
+                            firstTrackArtworkUrl TEXT,
+                            firstTrackTitle TEXT,
+                            firstTrackArtist TEXT,
+                            savedAt INTEGER NOT NULL
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL("CREATE INDEX IF NOT EXISTS index_queue_history_savedAt ON queue_history(savedAt)")
+                }
+            }
+
             @Volatile private var INSTANCE: AppDatabase? = null
             fun getDatabase(context: Context): AppDatabase {
                 return INSTANCE ?: synchronized(this) {
@@ -673,7 +722,7 @@
                         AppDatabase::class.java,
                         "soundtune_db"
                     )
-                        .addMigrations(MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25)
+                        .addMigrations(MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27)
                         .fallbackToDestructiveMigration()
                         .build()
                     INSTANCE = instance

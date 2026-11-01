@@ -25,6 +25,7 @@ import com.alananasss.kittytune.domain.GraphQlFollowsRequest
 import com.alananasss.kittytune.domain.GraphQlFollowsVariables
 import com.alananasss.kittytune.domain.Playlist
 import com.alananasss.kittytune.domain.PlaylistLikeItem
+import com.alananasss.kittytune.domain.StationLibraryItem
 import com.alananasss.kittytune.domain.SystemPlaylist
 import com.alananasss.kittytune.domain.Track
 import com.alananasss.kittytune.domain.User
@@ -81,7 +82,9 @@ sealed class LibraryItem(open val timestamp: Long, open val key: String, open va
             } else if (permalink != null && permalink == "vk_likes") {
                 "vk_likes"
             } else if (permalink != null && permalink.startsWith("yt_radio:")) {
-                "yt_radio:$permalink"
+                // Already a route. Prefixing it again would make the same saved radio
+                // get a different library key (pins/folders) than it does everywhere else.
+                permalink
             } else if (playlist.urn?.startsWith("soundcloud:system-playlists:") == true) {
                 "system_playlist:${playlist.urn}"
             } else {
@@ -132,11 +135,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     val folderStack: List<Long> get() = _folderStack
 
     fun navigateToFolder(folder: LibraryFolder) {
+        isReorderMode = false
         _folderStack.add(folder.id)
         currentFolderId = folder.id
     }
 
     fun navigateUp(): Boolean {
+        isReorderMode = false
         if (_folderStack.isNotEmpty()) {
             _folderStack.removeAt(_folderStack.size - 1)
             currentFolderId = _folderStack.lastOrNull()
@@ -150,6 +155,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun navigateToRoot() {
+        isReorderMode = false
         _folderStack.clear()
         currentFolderId = null
     }
@@ -329,6 +335,22 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                         }
                     })
                 }
+
+                LibrarySortOption.MANUAL -> {
+                    val positions = manualOrder.withIndex().associate { it.value to it.index }
+                    items.sortedWith(
+                        compareBy<LibraryItem> { item ->
+                            // Unpositioned (newly added/liked) items come first (rank 0), before manually ordered items (rank 1)
+                            if (positions.containsKey(item.key)) 1 else 0
+                        }.thenByDescending { item ->
+                            // For unpositioned items at the top, sort by timestamp descending (newest first)
+                            if (!positions.containsKey(item.key)) item.timestamp else 0L
+                        }.thenBy { item ->
+                            // For manually ordered items, sort by their saved position
+                            positions[item.key] ?: 0
+                        }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.key }
+                    )
+                }
             }
 
             return if (currentFolderId == null) {
@@ -351,6 +373,20 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     var stationFilter by mutableStateOf(StationFilter.ALL)
     var isGridLayout by mutableStateOf(prefs.getBoolean("is_grid_layout", true))
     var isSortDescending by mutableStateOf(true)
+    /**
+     * The order chosen by dragging cards in the grid. Only used when [sortOption]
+     * is [LibrarySortOption.MANUAL]; it is a list of [LibraryItem.key]s so it
+     * survives the refresh of every other field.
+     */
+    var manualOrder by mutableStateOf(
+        prefs.getString("library_manual_order", null)
+            ?.split('\n')
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            .orEmpty()
+    )
+        private set
+    var isReorderMode by mutableStateOf(false)
     var sortOption by mutableStateOf(
         try {
             LibrarySortOption.valueOf(
@@ -390,8 +426,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         val cachedUploadsJson = prefs.getString("cached_user_uploads", null)
         if (!cachedUploadsJson.isNullOrEmpty()) {
             try {
-                val listType = object : com.google.gson.reflect.TypeToken<List<Track>>() {}.type
-                val cached: List<Track> = gson.fromJson(cachedUploadsJson, listType)
+                val cached = gson.fromJson<Array<Track>>(cachedUploadsJson, Array<Track>::class.java)?.filterNotNull()
                 if (!cached.isNullOrEmpty()) {
                     uploadedTracks.clear()
                     uploadedTracks.addAll(cached)
@@ -515,7 +550,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                 DownloadManager.deletedPlaylistIds
             ) { allLocalPlaylists, likedIds, deletedIds ->
                 allLocalPlaylists.filter { local ->
-                    !deletedIds.contains(local.id) && (local.id < 0 || local.isUserCreated || !local.localCoverPath.isNullOrEmpty() || local.isDownloaded || likedIds.contains(local.id) || local.permalinkUrl?.contains("spotify") == true)
+                    !deletedIds.contains(local.id) && (local.id < 0 || local.isUserCreated || !local.localCoverPath.isNullOrEmpty() || local.isDownloaded || likedIds.contains(local.id) || com.alananasss.kittytune.data.local.ExternalPlaylists.isExternalPermalink(local.permalinkUrl))
                 }
             }.collect { localPlaylists ->
                 val localIds = localPlaylists.map { it.id }.toSet()
@@ -728,6 +763,67 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    /**
+     * Switches to the manual order, seeded from what is on screen so turning
+     * reordering on never makes the library jump under the finger.
+     */
+    fun enableManualOrder() {
+        val visible = displayedItems.map { it.key }
+        if (visible.isNotEmpty()) {
+            val visibleSet = visible.toSet()
+            val missing = visible.filter { it !in manualOrder }
+            val base = if (missing.isNotEmpty()) {
+                missing + manualOrder
+            } else {
+                manualOrder.toMutableList()
+            }.toMutableList()
+
+            var nextVisible = 0
+            for (i in base.indices) {
+                if (base[i] in visibleSet && nextVisible < visible.size) {
+                    base[i] = visible[nextVisible++]
+                }
+            }
+            manualOrder = base.distinct()
+            prefs.edit().putString("library_manual_order", manualOrder.joinToString("\n")).apply()
+        }
+        sortOption = LibrarySortOption.MANUAL
+    }
+
+    /**
+     * Moves [fromKey] to the position currently held by [toKey], then persists
+     * the order. The order is global: keys hidden by the current filter keep
+     * their place, so reordering playlists does not erase the album order.
+     */
+    fun moveLibraryItem(fromKey: String, toKey: String) {
+        if (fromKey == toKey) return
+        val visible = displayedItems.map { it.key }.toMutableList()
+        val fromIndex = visible.indexOf(fromKey)
+        val toIndex = visible.indexOf(toKey)
+        if (fromIndex < 0 || toIndex < 0) return
+
+        visible.removeAt(fromIndex)
+        visible.add(toIndex.coerceIn(0, visible.size), fromKey)
+
+        val missingInManual = visible.filter { it !in manualOrder }
+        val baseOrder = if (missingInManual.isNotEmpty()) {
+            missingInManual + manualOrder
+        } else {
+            manualOrder
+        }
+
+        val visibleSet = visible.toSet()
+        val merged = (baseOrder + visible).distinct().toMutableList()
+        var nextVisible = 0
+        for (index in merged.indices) {
+            if (merged[index] in visibleSet) {
+                merged[index] = visible[nextVisible++]
+            }
+        }
+        manualOrder = merged
+        prefs.edit().putString("library_manual_order", merged.joinToString("\n")).apply()
+    }
+
     fun moveFolderToFolder(folderId: Long, targetFolderId: Long?) {
         if (folderId == targetFolderId) return
         viewModelScope.launch {
@@ -905,11 +1001,20 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                         tracks
                     }
                     val libraryAllDeferred = async {
+                        val allLibraryItems = mutableListOf<StationLibraryItem>()
                         try {
-                            api.getMyLibraryAll(limit = 200)
+                            var resp = api.getMyLibraryAll(limit = 200)
+                            allLibraryItems.addAll(resp.collection)
+                            var pageCount = 0
+                            while (!resp.next_href.isNullOrEmpty() && pageCount < 10) {
+                                resp = api.getStationLibraryNextPage(resp.next_href!!)
+                                allLibraryItems.addAll(resp.collection)
+                                pageCount++
+                            }
                         } catch (e: Exception) {
-                            null
+                            Log.e("LibraryVM", "Failed to fetch library/all", e)
                         }
+                        allLibraryItems
                     }
                     val followedArtistsDeferred = async {
                         val allArtists = mutableListOf<User>()
@@ -1086,30 +1191,82 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                         }
                     }
 
-                    libraryAllResponse?.collection?.forEach { item ->
-                        val sp = item.systemPlaylist ?: return@forEach
-                        val numId = sp.urn?.let { kotlin.math.abs(it.hashCode().toLong()) } ?: sp.numericId
-                        if (numId != 0L && addedPlaylistIds.add(numId)) {
-                            trulyLikedIds.add(numId)
-                            val stationPermalink = sp.permalinkUrl
-                                ?: if (sp.isArtistStation) "https://soundcloud.com/discover/sets/artist-stations:${sp.numericId}" else "https://soundcloud.com/discover/sets/track-stations:${sp.numericId}"
-                            val fakePlaylist = Playlist(
-                                id = numId,
-                                title = sp.title,
-                                artworkUrl = sp.artworkUrl,
-                                calculatedArtworkUrl = sp.calculatedArtworkUrl,
-                                trackCount = sp.tracks?.size,
-                                user = sp.user,
-                                tracks = null,
-                                permalinkUrl = stationPermalink,
-                                urn = sp.urn
-                            )
+                    val libraryPlaylistsToCache = mutableListOf<Playlist>()
+                    libraryAllResponse.forEach { item ->
+                        val pl = item.playlist
+                        val sp = item.systemPlaylist
+
+                        if (pl != null && addedPlaylistIds.add(pl.id)) {
+                            libraryPlaylistsToCache.add(pl)
                             val date = try {
-                                item.createdAt?.let { isoParser.parse(it)?.time } ?: 0L
+                                val dateStr = pl.lastModified ?: pl.createdAt ?: item.createdAt
+                                dateStr?.let { isoParser.parse(it)?.time } ?: 0L
                             } catch (e: Exception) {
                                 0L
                             }
-                            newOnlineItems.add(LibraryItem.PlaylistItem(fakePlaylist, date))
+                            val localCoverFile = java.io.File(app.filesDir, "playlist_cover_${pl.id}.jpg")
+                            val localInDb = try { db.getPlaylist(pl.id) } catch (_: Exception) { null }
+                            val effectiveCover = localInDb?.localCoverPath ?: if (localCoverFile.exists()) localCoverFile.absolutePath else null
+                            val adjustedPlaylist = if (!effectiveCover.isNullOrEmpty()) {
+                                pl.copy(artworkUrl = effectiveCover)
+                            } else {
+                                pl
+                            }
+                            newOnlineItems.add(LibraryItem.PlaylistItem(adjustedPlaylist, date))
+                        } else if (sp != null) {
+                            val numId = sp.urn?.let { kotlin.math.abs(it.hashCode().toLong()) } ?: sp.numericId
+                            if (numId != 0L && addedPlaylistIds.add(numId)) {
+                                trulyLikedIds.add(numId)
+                                val stationPermalink = sp.permalinkUrl
+                                    ?: if (sp.isArtistStation) "https://soundcloud.com/discover/sets/artist-stations:${sp.numericId}" else "https://soundcloud.com/discover/sets/track-stations:${sp.numericId}"
+                                val fakePlaylist = Playlist(
+                                    id = numId,
+                                    title = sp.title,
+                                    artworkUrl = sp.artworkUrl,
+                                    calculatedArtworkUrl = sp.calculatedArtworkUrl,
+                                    trackCount = sp.tracks?.size,
+                                    user = sp.user,
+                                    tracks = null,
+                                    permalinkUrl = stationPermalink,
+                                    urn = sp.urn
+                                )
+                                val date = try {
+                                    item.createdAt?.let { isoParser.parse(it)?.time } ?: 0L
+                                } catch (e: Exception) {
+                                    0L
+                                }
+                                newOnlineItems.add(LibraryItem.PlaylistItem(fakePlaylist, date))
+                            }
+                        }
+                    }
+
+                    if (libraryPlaylistsToCache.isNotEmpty()) {
+                        launch(Dispatchers.IO) {
+                            libraryPlaylistsToCache.forEach { playlist ->
+                                try {
+                                    val localInDb = db.getPlaylist(playlist.id)
+                                    if (localInDb == null) {
+                                        db.insertPlaylist(
+                                            LocalPlaylist(
+                                                id = playlist.id,
+                                                title = playlist.title ?: app.getString(R.string.untitled_track),
+                                                artist = playlist.user?.username ?: user.username ?: app.getString(R.string.unknown_artist),
+                                                artworkUrl = playlist.fullResArtwork,
+                                                localCoverPath = null,
+                                                trackCount = playlist.trackCount ?: playlist.tracks?.size ?: 0,
+                                                isUserCreated = playlist.user?.id == user.id,
+                                                permalinkUrl = playlist.permalinkUrl,
+                                                isAlbum = playlist.isRealAlbum,
+                                                isDownloaded = false
+                                            )
+                                        )
+                                    } else if (!localInDb.isUserCreated && playlist.user?.id == user.id) {
+                                        db.updatePlaylist(localInDb.copy(isUserCreated = true))
+                                    }
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+                            }
                         }
                     }
 
@@ -1238,7 +1395,8 @@ enum class LibrarySortOption {
     RECENTS,
     DATE_ADDED,
     ALPHABETICAL,
-    CREATOR
+    CREATOR,
+    MANUAL
 }
 
 enum class UploadsSortOption(val stringRes: Int) {

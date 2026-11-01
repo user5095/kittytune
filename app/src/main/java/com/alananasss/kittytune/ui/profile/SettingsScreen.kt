@@ -29,10 +29,12 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.alananasss.kittytune.R
 import com.alananasss.kittytune.data.local.PlayerPreferences
+import com.alananasss.kittytune.ui.common.HapticKind
 import com.alananasss.kittytune.ui.common.SettingsGroup
 import com.alananasss.kittytune.ui.common.SettingsHighlightManager
 import com.alananasss.kittytune.ui.common.SettingsItem
 import com.alananasss.kittytune.ui.common.SettingsScaffold
+import com.alananasss.kittytune.ui.common.hapticAction
 import com.alananasss.kittytune.ui.player.PlayerViewModel
 
 
@@ -71,18 +73,21 @@ fun SettingsScreen(
                     .fillMaxWidth(),
                 contentPadding = PaddingValues(bottom = 180.dp, top = 8.dp)
             ) {
-                SettingsCategory.entries.forEach { category ->
-                    item(key = "cat-${category.name}") {
+                // Old style (pre-desktop rework): each section lists its pages
+                // directly, several rows per card, instead of one button per
+                // category opening an extra folder screen.
+                rootGroups().forEach { group ->
+                    item(key = "root-${group.titleRes}") {
                         SettingsGroup(
-                            title = stringResource(category.titleRes),
-                            items = category.entriesFor().map { entry ->
+                            title = stringResource(group.titleRes),
+                            items = group.rows.map { row ->
                                 { shape ->
                                     SettingsItem(
                                         shape = shape,
-                                        title = stringResource(entry.titleRes),
-                                        subtitle = entry.subtitleRes?.let { stringResource(it) },
-                                        icon = entry.icon,
-                                        onClick = { navController.navigate(entry.route) }
+                                        title = stringResource(row.titleRes),
+                                        subtitle = row.subtitleRes?.let { stringResource(it) },
+                                        icon = row.icon,
+                                        onClick = { navController.navigate(row.route) }
                                     )
                                 }
                             }
@@ -104,7 +109,7 @@ fun SettingsHomeSearchBar(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        onClick = onClick,
+        onClick = hapticAction(HapticKind.LIGHT, onClick),
         shape = CircleShape,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         modifier = modifier
@@ -137,13 +142,18 @@ fun SettingsHomeSearchBar(
  * The Interface category's sub-pages, rendered identically to Desktop Screenshot 5:
  * Thèmes, Design du lecteur, Barre de navigation, Paroles.
  */
+/**
+ * A category's sub-page folder hub, styled identically to InterfaceSettingsScreen.
+ */
 @Composable
-fun InterfaceSettingsScreen(
+internal fun SettingsFolderScreen(
+    title: String,
+    pages: List<SettingsSubPage>,
     navController: NavController,
     onBackClick: () -> Unit
 ) {
     SettingsScaffold(
-        title = stringResource(R.string.settings_cat_interface),
+        title = title,
         onBackClick = onBackClick
     ) { innerPadding ->
         LazyColumn(
@@ -154,7 +164,7 @@ fun InterfaceSettingsScreen(
         ) {
             item {
                 SettingsGroup(
-                    items = SettingsSubPage.interfacePages.map { page ->
+                    items = pages.map { page ->
                         { shape ->
                             SettingsItem(
                                 shape = shape,
@@ -172,3 +182,55 @@ fun InterfaceSettingsScreen(
         }
     }
 }
+
+/**
+ * The Interface category's sub-pages:
+ * Thèmes, Design du lecteur, Barre de navigation, Paroles.
+ */
+@Composable
+fun InterfaceSettingsScreen(
+    navController: NavController,
+    onBackClick: () -> Unit
+) {
+    SettingsFolderScreen(
+        title = stringResource(R.string.settings_cat_interface),
+        pages = SettingsSubPage.interfacePages,
+        navController = navController,
+        onBackClick = onBackClick
+    )
+}
+
+/**
+ * The Sources category's sub-pages:
+ * Comptes connectés, Import de musique.
+ */
+@Composable
+fun SourcesSettingsScreen(
+    navController: NavController,
+    onBackClick: () -> Unit
+) {
+    SettingsFolderScreen(
+        title = stringResource(R.string.settings_cat_accounts),
+        pages = SettingsSubPage.sourcesPages,
+        navController = navController,
+        onBackClick = onBackClick
+    )
+}
+
+/**
+ * The Storage category's sub-pages:
+ * Cache et stockage, Médias locaux, Sauvegarde et restauration.
+ */
+@Composable
+fun StorageSettingsScreen(
+    navController: NavController,
+    onBackClick: () -> Unit
+) {
+    SettingsFolderScreen(
+        title = stringResource(R.string.pref_storage_title),
+        pages = SettingsSubPage.storagePages,
+        navController = navController,
+        onBackClick = onBackClick
+    )
+}
+

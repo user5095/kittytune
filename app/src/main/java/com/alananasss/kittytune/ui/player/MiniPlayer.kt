@@ -9,6 +9,7 @@
     import androidx.compose.foundation.layout.*
     import androidx.compose.foundation.shape.RoundedCornerShape
     import androidx.compose.material.icons.Icons
+    import androidx.compose.material.icons.rounded.Devices
     import androidx.compose.material.icons.rounded.Pause
     import androidx.compose.material.icons.rounded.PlayArrow
     import androidx.compose.material.icons.rounded.SkipNext
@@ -23,10 +24,14 @@ import com.alananasss.kittytune.ui.icons.Icon
     import androidx.compose.ui.layout.ContentScale
     import androidx.compose.ui.res.stringResource
     import androidx.compose.ui.text.font.FontWeight
+    import androidx.compose.ui.text.style.TextOverflow
     import androidx.compose.ui.unit.dp
     import coil.compose.AsyncImage
     import kotlinx.coroutines.flow.collectLatest
     import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.ui.common.hapticClickable
 
     @Composable
     fun MiniPlayer(
@@ -34,7 +39,7 @@ import com.alananasss.kittytune.ui.icons.Icon
         onClick: () -> Unit,
         modifier: Modifier = Modifier
     ) {
-        val track = viewModel.currentTrack ?: return
+        val track = viewModel.uiCurrentTrack ?: return
 
         val animatedProgress = remember { Animatable(0f) }
         var lastTrackKey by remember { mutableStateOf<Any?>(null) }
@@ -49,9 +54,7 @@ import com.alananasss.kittytune.ui.icons.Icon
             }
 
             androidx.compose.runtime.snapshotFlow { 
-                if (viewModel.duration > 0) {
-                    viewModel.currentPosition.toFloat() / viewModel.duration.toFloat()
-                } else 0f 
+                viewModel.progressOf(viewModel.uiCurrentPosition.toFloat())
             }.collectLatest { tp ->
                 val delta = tp - animatedProgress.value
                 when {
@@ -83,7 +86,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                 .height(64.dp)
                 .clipToBounds()
                 .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                .clickable(onClick = onClick)
+                .hapticClickable(onClick = onClick)
                 .background(MaterialTheme.colorScheme.surfaceContainer)
         ) {
             Row(
@@ -92,15 +95,24 @@ import com.alananasss.kittytune.ui.icons.Icon
                     .fillMaxSize()
                     .padding(horizontal = 12.dp)
             ) {
-                AsyncImage(
-                    model = track.thumbnailUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                )
+                Box(modifier = Modifier.size(48.dp)) {
+                    AsyncImage(
+                        model = track.thumbnailUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                    )
+                    com.alananasss.kittytune.ui.common.TrackSourceCoverBadge(
+                        track = track,
+                        resolvedSource = viewModel.currentStreamSource,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .offset(x = 2.dp, y = 2.dp)
+                    )
+                }
 
                 Spacer(modifier = Modifier.width(12.dp))
 
@@ -110,28 +122,72 @@ import com.alananasss.kittytune.ui.icons.Icon
                         .padding(vertical = 8.dp),
                     verticalArrangement = Arrangement.Center
                 ) {
-                    PremiumMarqueeText(
-                        text = track.title ?: stringResource(R.string.untitled_track),
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        edgeGradientWidth = 10.dp,
-                        delayMillis = 3000,
-                        velocity = 25.dp
-                    )
-                    PremiumMarqueeText(
-                        text = track.displayArtist.ifBlank { stringResource(R.string.unknown_artist) },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        edgeGradientWidth = 8.dp,
-                        delayMillis = 3000,
-                        velocity = 25.dp
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        PremiumMarqueeText(
+                            text = track.title ?: stringResource(R.string.untitled_track),
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            edgeGradientWidth = 10.dp,
+                            delayMillis = 3000,
+                            velocity = 25.dp,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                    }
+                    val deviceLabel = viewModel.playbackDeviceLabel
+                    if (deviceLabel != null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.hapticClickable { viewModel.showConnectSheet = true }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Devices,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(Modifier.width(3.dp))
+                                Text(
+                                    text = deviceLabel,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = "·",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = track.displayArtist.ifBlank { stringResource(R.string.unknown_artist) },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    } else {
+                        PremiumMarqueeText(
+                            text = track.displayArtist.ifBlank { stringResource(R.string.unknown_artist) },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            edgeGradientWidth = 8.dp,
+                            delayMillis = 3000,
+                            velocity = 25.dp
+                        )
+                    }
                 }
 
                 IconButton(onClick = { viewModel.togglePlayPause() }) {
                     Icon(
-                        imageVector = if (viewModel.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                        contentDescription = stringResource(if (viewModel.isPlaying) R.string.btn_pause else R.string.btn_play),
+                        imageVector = if (viewModel.uiIsPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                        contentDescription = stringResource(if (viewModel.uiIsPlaying) R.string.btn_pause else R.string.btn_play),
                         tint = MaterialTheme.colorScheme.onSurface
                     )
                 }

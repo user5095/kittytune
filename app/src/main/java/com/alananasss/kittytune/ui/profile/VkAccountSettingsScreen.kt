@@ -38,6 +38,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.ui.common.hapticClickable
 import com.alananasss.kittytune.data.vk.VkUser
 import com.alananasss.kittytune.ui.common.SettingsGroup
 import com.alananasss.kittytune.ui.common.SettingsItem
@@ -158,7 +161,7 @@ fun VkAccountSettingsScreen(
             },
             confirmButton = {
                 Button(
-                    onClick = {
+                    onClick = hapticAction(HapticKind.UI) {
                         val trimmed = inputCookieOrToken.trim()
                         val uId = inputUserId.toLongOrNull() ?: 0L
                         if (trimmed.isNotBlank() && uId != 0L) {
@@ -192,7 +195,7 @@ fun VkAccountSettingsScreen(
             },
             dismissButton = {
                 TextButton(
-                    onClick = { showManualLoginDialog = false },
+                    onClick = hapticAction(HapticKind.UI) { showManualLoginDialog = false },
                     shapes = ButtonDefaults.shapes()
                 ) {
                     Text(stringResource(R.string.btn_cancel))
@@ -213,14 +216,14 @@ fun VkAccountSettingsScreen(
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
+                TextButton(onClick = hapticAction(HapticKind.UI) {
                     clipboardManager.setText(AnnotatedString(report))
                     Toast.makeText(context, R.string.account_vk_diagnose_copied, Toast.LENGTH_SHORT)
                         .show()
                 }) { Text(stringResource(R.string.account_vk_diagnose_copy)) }
             },
             dismissButton = {
-                TextButton(onClick = { accountViewModel.dismissDiagnostics() }) {
+                TextButton(onClick = hapticAction(HapticKind.UI) { accountViewModel.dismissDiagnostics() }) {
                     Text(stringResource(R.string.btn_close))
                 }
             }
@@ -248,7 +251,7 @@ fun VkAccountSettingsScreen(
             },
             confirmButton = {
                 Button(
-                    onClick = {
+                    onClick = hapticAction(HapticKind.UI) {
                         accountViewModel.logout()
                         try {
                             android.webkit.CookieManager.getInstance().apply {
@@ -272,7 +275,7 @@ fun VkAccountSettingsScreen(
             },
             dismissButton = {
                 TextButton(
-                    onClick = { showLogoutDialog = false },
+                    onClick = hapticAction(HapticKind.UI) { showLogoutDialog = false },
                     shapes = ButtonDefaults.shapes()
                 ) {
                     Text(stringResource(R.string.btn_cancel))
@@ -334,7 +337,7 @@ fun VkAccountSettingsScreen(
                                     title = stringResource(R.string.account_label_display_name),
                                     subtitle = user?.fullName ?: "VKontakte User",
                                     icon = Icons.Rounded.Person,
-                                    onClick = { copyToClipboard(user?.fullName ?: "", "Name") }
+                                    onClick = hapticAction(HapticKind.UI) { copyToClipboard(user?.fullName ?: "", "Name") }
                                 )
                             },
                             { shape ->
@@ -343,7 +346,7 @@ fun VkAccountSettingsScreen(
                                     title = stringResource(R.string.account_label_user_id),
                                     subtitle = (user?.id ?: accountViewModel.tokenManager.userId).toString(),
                                     icon = Icons.Rounded.Badge,
-                                    onClick = {
+                                    onClick = hapticAction(HapticKind.UI) {
                                         copyToClipboard(
                                             (user?.id ?: accountViewModel.tokenManager.userId).toString(),
                                             "VK User ID"
@@ -357,7 +360,7 @@ fun VkAccountSettingsScreen(
                                     title = stringResource(R.string.account_label_profile_url),
                                     subtitle = "https://vk.com/id${user?.id ?: accountViewModel.tokenManager.userId}",
                                     icon = Icons.Rounded.Link,
-                                    onClick = {
+                                    onClick = hapticAction(HapticKind.UI) {
                                         copyToClipboard(
                                             "https://vk.com/id${user?.id ?: accountViewModel.tokenManager.userId}",
                                             "Profile URL"
@@ -413,7 +416,7 @@ fun VkAccountSettingsScreen(
                                     title = stringResource(R.string.account_action_refresh),
                                     subtitle = if (isRefreshing) "Refreshing..." else "Reload library and profile data",
                                     icon = Icons.Rounded.Refresh,
-                                    onClick = { accountViewModel.loadAccount(forceRefresh = true) }
+                                    onClick = hapticAction(HapticKind.UI) { accountViewModel.loadAccount(forceRefresh = true) }
                                 )
                             },
                             { shape ->
@@ -422,7 +425,7 @@ fun VkAccountSettingsScreen(
                                     title = stringResource(R.string.account_action_open_browser),
                                     subtitle = "vk.com/id${user?.id ?: accountViewModel.tokenManager.userId}",
                                     icon = Icons.AutoMirrored.Rounded.OpenInNew,
-                                    onClick = {
+                                    onClick = hapticAction(HapticKind.UI) {
                                         val url = "https://vk.com/id${user?.id ?: accountViewModel.tokenManager.userId}"
                                         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
                                         context.startActivity(intent)
@@ -439,7 +442,7 @@ fun VkAccountSettingsScreen(
                                         stringResource(R.string.account_vk_diagnose_subtitle)
                                     },
                                     icon = Icons.Rounded.NetworkCheck,
-                                    onClick = { accountViewModel.runDiagnostics() }
+                                    onClick = hapticAction(HapticKind.UI) { accountViewModel.runDiagnostics() }
                                 )
                             },
                             { shape ->
@@ -450,7 +453,7 @@ fun VkAccountSettingsScreen(
                                     icon = Icons.AutoMirrored.Rounded.Logout,
                                     iconTint = MaterialTheme.colorScheme.error,
                                     iconContainerColor = MaterialTheme.colorScheme.errorContainer,
-                                    onClick = { showLogoutDialog = true }
+                                    onClick = hapticAction(HapticKind.UI) { showLogoutDialog = true }
                                 )
                             }
                         )

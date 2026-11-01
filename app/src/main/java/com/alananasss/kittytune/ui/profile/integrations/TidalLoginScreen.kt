@@ -8,6 +8,8 @@ import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import com.alananasss.kittytune.ui.common.SafeWebView
+import com.alananasss.kittytune.ui.common.createSafeWebView
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -35,6 +37,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.ui.common.hapticClickable
 import com.alananasss.kittytune.audio.providers.tidal.extractTidalRefreshToken
 import com.alananasss.kittytune.audio.providers.tidal.mergeTidalCookieInputs
 import com.alananasss.kittytune.data.local.PlayerPreferences
@@ -361,7 +366,7 @@ fun TidalLoginScreen(
                 title = { Text(stringResource(R.string.tidal_web_login)) },
                 navigationIcon = {
                     FilledTonalIconButton(
-                        onClick = {
+                        onClick = hapticAction(HapticKind.UI) {
                             captureAuth(showConfirmation = false) {
                                 onBackClick()
                             }
@@ -377,7 +382,7 @@ fun TidalLoginScreen(
                 },
                 actions = {
                     FilledTonalIconButton(
-                        onClick = {
+                        onClick = hapticAction(HapticKind.UI) {
                             captureAuth(showConfirmation = true) {
                                 onBackClick()
                             }
@@ -402,15 +407,10 @@ fun TidalLoginScreen(
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = { ctx ->
-                    WebView(ctx).apply {
+                    SafeWebView(ctx).apply {
                         val cookieManager = CookieManager.getInstance()
                         cookieManager.setAcceptCookie(true)
                         cookieManager.setAcceptThirdPartyCookies(this, true)
-
-                        layoutParams = ViewGroup.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
-                        )
 
                         settings.apply {
                             javaScriptEnabled = true
@@ -468,11 +468,7 @@ fun TidalLoginScreen(
                                 resultMsg: Message?
                             ): Boolean {
                                 if (resultMsg == null) return false
-                                val popup = WebView(view?.context ?: ctx).apply {
-                                    layoutParams = ViewGroup.LayoutParams(
-                                        ViewGroup.LayoutParams.MATCH_PARENT,
-                                        ViewGroup.LayoutParams.MATCH_PARENT
-                                    )
+                                val popup = createSafeWebView(view?.context ?: ctx).apply {
                                     settings.apply {
                                         javaScriptEnabled = true
                                         domStorageEnabled = true
@@ -532,7 +528,7 @@ fun TidalLoginScreen(
                             factory = { popup }
                         )
                         FilledTonalIconButton(
-                            onClick = {
+                            onClick = hapticAction(HapticKind.UI) {
                                 popupWebView = null
                                 captureAuth(showConfirmation = true)
                             },

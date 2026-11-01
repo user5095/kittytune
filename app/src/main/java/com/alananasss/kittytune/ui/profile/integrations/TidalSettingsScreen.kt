@@ -18,6 +18,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.ui.common.hapticClickable
 import com.alananasss.kittytune.audio.providers.tidal.TidalAudioProvider
 import com.alananasss.kittytune.audio.providers.tidal.TidalAudioQuality
 import com.alananasss.kittytune.audio.providers.tidal.isTidalCookieConfigured
@@ -62,7 +65,7 @@ fun TidalSettingsScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable {
+                                .hapticClickable {
                                     audioQuality = quality
                                     prefs.setTidalAudioQuality(quality)
                                     showQualityDialog = false
@@ -71,7 +74,7 @@ fun TidalSettingsScreen(
                         ) {
                             RadioButton(
                                 selected = audioQuality == quality,
-                                onClick = {
+                                onClick = hapticAction(HapticKind.UI) {
                                     audioQuality = quality
                                     prefs.setTidalAudioQuality(quality)
                                     showQualityDialog = false
@@ -84,7 +87,7 @@ fun TidalSettingsScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showQualityDialog = false }) {
+                TextButton(onClick = hapticAction(HapticKind.UI) { showQualityDialog = false }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             }
@@ -116,7 +119,7 @@ fun TidalSettingsScreen(
             },
             confirmButton = {
                 TextButton(
-                    onClick = {
+                    onClick = hapticAction(HapticKind.UI) {
                         val cleaned = TidalAudioProvider.normalizeResolverEndpointsInput(tempEndpoints)
                         resolverEndpoints = cleaned
                         prefs.setTidalResolverEndpoints(cleaned)
@@ -127,7 +130,7 @@ fun TidalSettingsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showResolverEndpointsDialog = false }) {
+                TextButton(onClick = hapticAction(HapticKind.UI) { showResolverEndpointsDialog = false }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             }
@@ -159,7 +162,7 @@ fun TidalSettingsScreen(
             },
             confirmButton = {
                 TextButton(
-                    onClick = {
+                    onClick = hapticAction(HapticKind.UI) {
                         val cleaned = tempCookie.trim()
                         tidalCookie = cleaned
                         prefs.setTidalCookie(cleaned)
@@ -170,7 +173,7 @@ fun TidalSettingsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showCookieDialog = false }) {
+                TextButton(onClick = hapticAction(HapticKind.UI) { showCookieDialog = false }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             }
@@ -221,7 +224,7 @@ fun TidalSettingsScreen(
                                 title = stringResource(R.string.tidal_audio_quality),
                                 subtitle = qualityLabel,
                                 icon = Icons.Rounded.GraphicEq,
-                                onClick = { showQualityDialog = true }
+                                onClick = hapticAction(HapticKind.UI) { showQualityDialog = true }
                             )
                         }
                         add { shape ->
@@ -235,7 +238,7 @@ fun TidalSettingsScreen(
                                 title = stringResource(R.string.tidal_resolver_endpoints),
                                 subtitle = desc,
                                 icon = Icons.Rounded.Link,
-                                onClick = { showResolverEndpointsDialog = true }
+                                onClick = hapticAction(HapticKind.UI) { showResolverEndpointsDialog = true }
                             )
                         }
                         add { shape ->
@@ -249,7 +252,7 @@ fun TidalSettingsScreen(
                                 title = stringResource(R.string.tidal_cookie_title),
                                 subtitle = desc,
                                 icon = Icons.Rounded.Key,
-                                onClick = { showCookieDialog = true }
+                                onClick = hapticAction(HapticKind.UI) { showCookieDialog = true }
                             )
                         }
                         if (tidalCookie.isNotBlank()) {
@@ -259,7 +262,7 @@ fun TidalSettingsScreen(
                                     title = stringResource(R.string.tidal_clear_cookie),
                                     subtitle = stringResource(R.string.tidal_cookie_configured),
                                     icon = Icons.Rounded.Delete,
-                                    onClick = {
+                                    onClick = hapticAction(HapticKind.UI) {
                                         tidalCookie = ""
                                         prefs.setTidalCookie("")
                                     }

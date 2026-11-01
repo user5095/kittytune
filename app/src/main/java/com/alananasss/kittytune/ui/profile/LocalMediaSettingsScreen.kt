@@ -23,6 +23,9 @@ import com.alananasss.kittytune.ui.icons.Icon
     import androidx.compose.ui.text.style.TextAlign
     import androidx.compose.ui.unit.dp
     import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.ui.common.hapticClickable
     import com.alananasss.kittytune.data.LocalMediaRepository
     import com.alananasss.kittytune.data.local.PlayerPreferences
     import com.alananasss.kittytune.ui.common.SettingsGroup
@@ -195,7 +198,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                                                                     color = MaterialTheme.colorScheme.onSurface
                                                                 )
                                                                 IconButton(
-                                                                    onClick = { deleteFolderWithAnimation(uriString) }
+                                                                    onClick = hapticAction(HapticKind.UI) { deleteFolderWithAnimation(uriString) }
                                                                 ) {
                                                                     Icon(
                                                                         Icons.Rounded.Delete,
@@ -219,7 +222,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                                 SettingsItem(
                                     shape = shape,
                                     title = stringResource(R.string.pref_local_add),
-                                    onClick = { folderPicker.launch(null) },
+                                    onClick = hapticAction(HapticKind.UI) { folderPicker.launch(null) },
                                     titleColor = MaterialTheme.colorScheme.primary
                                 )
                             }
@@ -243,7 +246,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     Button(
-                                        onClick = {
+                                        onClick = hapticAction(HapticKind.UI) {
                                             scope.launch { LocalMediaRepository.scanLocalMedia(context) }
                                         },
                                         enabled = !isScanning,

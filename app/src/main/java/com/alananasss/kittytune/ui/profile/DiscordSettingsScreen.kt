@@ -20,6 +20,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.ui.common.hapticClickable
 import com.alananasss.kittytune.data.PlaybackService
 import com.alananasss.kittytune.data.local.DiscordStatusDisplay
 import com.alananasss.kittytune.data.local.PlayerPreferences
@@ -104,11 +107,11 @@ fun DiscordSettingsScreen(
             },
             confirmButton = {
                 Button(
-                    onClick = {
+                    onClick = hapticAction(HapticKind.UI) {
                         val clean = tokenInput.trim().replace("\"", "")
                         if (clean.isBlank()) {
                             tokenError = context.getString(R.string.discord_manual_token_invalid)
-                            return@Button
+                            return@hapticAction
                         }
                         tokenLoading = true
                         scope.launch {
@@ -151,7 +154,7 @@ fun DiscordSettingsScreen(
             },
             dismissButton = {
                 TextButton(
-                    onClick = { showTokenDialog = false },
+                    onClick = hapticAction(HapticKind.UI) { showTokenDialog = false },
                     shapes = ButtonDefaults.shapes(),
                     enabled = !tokenLoading
                 ) {
@@ -185,7 +188,7 @@ fun DiscordSettingsScreen(
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { showStatusDialog = false }, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.btn_cancel)) } }
+            confirmButton = { TextButton(onClick = hapticAction(HapticKind.UI) { showStatusDialog = false }, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.btn_cancel)) } }
         )
     }
 
@@ -213,7 +216,7 @@ fun DiscordSettingsScreen(
                                 shape = shape,
                                 title = if (isLoggedIn) stringResource(R.string.discord_connected) else stringResource(R.string.discord_not_connected),
                                 subtitle = connectionSubtitle,
-                                onClick = { if (!isLoggedIn) onNavigateToLogin() }
+                                onClick = hapticAction(HapticKind.UI) { if (!isLoggedIn) onNavigateToLogin() }
                             )
                         },
                         { shape ->
@@ -221,7 +224,7 @@ fun DiscordSettingsScreen(
                                 shape = shape,
                                 title = stringResource(R.string.discord_manual_token_title),
                                 subtitle = if (isLoggedIn) stringResource(R.string.discord_token_present) else stringResource(R.string.discord_manual_token_desc),
-                                onClick = {
+                                onClick = hapticAction(HapticKind.UI) {
                                     tokenInput = token ?: ""
                                     tokenError = null
                                     showTokenDialog = true
@@ -233,7 +236,7 @@ fun DiscordSettingsScreen(
                                 SettingsItem(
                                     shape = shape,
                                     title = stringResource(R.string.discord_logout),
-                                    onClick = {
+                                    onClick = hapticAction(HapticKind.UI) {
                                         prefs.setDiscordToken(null)
                                         prefs.setDiscordUsername(null)
                                         prefs.setDiscordRpcEnabled(false)
@@ -295,7 +298,7 @@ fun DiscordSettingsScreen(
                                         DiscordStatusDisplay.ARTIST -> stringResource(R.string.discord_status_artist)
                                         DiscordStatusDisplay.SONG -> stringResource(R.string.discord_status_song)
                                     },
-                                    onClick = { showStatusDialog = true }
+                                    onClick = hapticAction(HapticKind.UI) { showStatusDialog = true }
                                 )
                             }
                         }
@@ -308,7 +311,7 @@ fun DiscordSettingsScreen(
 
 @Composable
 fun StatusDisplayRadioButton(text: String, mode: DiscordStatusDisplay, selected: DiscordStatusDisplay, onSelect: (DiscordStatusDisplay) -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable { onSelect(mode) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().hapticClickable { onSelect(mode) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         RadioButton(selected = (mode == selected), onClick = null)
         Spacer(Modifier.width(8.dp))
         Text(text)

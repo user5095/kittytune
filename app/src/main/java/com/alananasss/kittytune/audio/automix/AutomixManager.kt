@@ -10,6 +10,7 @@ import com.alananasss.kittytune.data.local.gridTrust
 import com.alananasss.kittytune.data.local.trustedAnchorMs
 import com.alananasss.kittytune.data.local.PlayerPreferences
 import com.alananasss.kittytune.domain.Track
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -33,13 +34,40 @@ object AutomixManager {
 
     private const val TAG = "AutomixManager"
 
+    /** A blend this long is all a clashing pair can hold: longer and the seam is two songs at once (PR #77). */
+    private const val SHORT_BLEND_MS = 6_000L
+
+    /** An energy gap this wide shortens the blend: the pair is a mood change, not a weave. */
+    private const val BIG_ENERGY_GAP = 0.35f
+
+    /** A mix-out point further than this from the end is from another upload and not believed. */
+    private const val MAX_BELIEVABLE_OUTRO_MS = 60_000L
+
+    /** The key's name, as musicians say it: pitch class 7 minor is "A min". */
+    fun keyName(pitchClass: Int?, isMinor: Boolean?): String? {
+        if (pitchClass == null || isMinor == null) return null
+        val names = arrayOf("C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B")
+        val idx = (pitchClass % 12 + 12) % 12
+        val name = names.getOrNull(idx) ?: return null
+        return if (isMinor) "$name min" else "$name Maj"
+    }
+
+    /** The key's Camelot notation, as DJs mix by it: pitch class 7 minor is "8A". */
+    fun camelotCode(pitchClass: Int?, isMinor: Boolean?): String? {
+        if (pitchClass == null || isMinor == null) return null
+        val idx = (pitchClass % 12 + 12) % 12
+        val majorCamelot = arrayOf("8B", "3B", "10B", "5B", "12B", "7B", "2B", "9B", "4B", "11B", "6B", "1B")
+        val minorCamelot = arrayOf("5A", "12A", "7A", "2A", "9A", "4A", "11A", "6A", "1A", "8A", "3A", "10A")
+        return if (isMinor) minorCamelot.getOrNull(idx) else majorCamelot.getOrNull(idx)
+    }
+
     private data class BeatAnalysisHandle(val priority: BeatAnalysisPriority, val job: Job)
     private val beatAnalysisJobs = ConcurrentHashMap<String, BeatAnalysisHandle>()
     private val immediateAnalysisMutex = Mutex()
     private val lookaheadAnalysisMutex = Mutex()
     private val failedSongIds = ConcurrentHashMap<String, Long>()
 
-    private val scope = CoroutineScope(Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var appContext: Context? = null
 
     private val _automixDebugInfo = MutableStateFlow<AutomixDebugInfo?>(null)
@@ -50,6 +78,9 @@ object AutomixManager {
 
     private val _mixBeatsLeft = MutableStateFlow<Int?>(null)
     val mixBeatsLeft = _mixBeatsLeft.asStateFlow()
+
+    private val _mixProgress = MutableStateFlow(0f)
+    val mixProgress = _mixProgress.asStateFlow()
 
     private val _onBeatAnalysisCompleted = MutableSharedFlow<String>(extraBufferCapacity = 64)
     val onBeatAnalysisCompleted = _onBeatAnalysisCompleted.asSharedFlow()
@@ -76,9 +107,14 @@ object AutomixManager {
         _mixBeatsLeft.value = beats
     }
 
+    fun setMixProgress(progress: Float) {
+        _mixProgress.value = progress.coerceIn(0f, 1f)
+    }
+
     fun clearPlan() {
         currentAutomixPlan = null
         _mixBeatsLeft.value = null
+        _mixProgress.value = 0f
         if (!_isAutomixing.value) {
             _automixDebugInfo.value = null
         }
@@ -270,6 +306,7 @@ object AutomixManager {
             phraseOffsetMs = result.phraseOffsetMs,
             downbeatConfidence = result.downbeatConfidence,
             phraseConfidence = result.phraseConfidence,
+            energy = result.energy,
             analysisVersion = BeatInfoEntity.CURRENT_ANALYSIS_VERSION,
         )
 
@@ -348,18 +385,71 @@ object AutomixManager {
         // Overlap duration: default 16 beats (4 bars), bounded 6-16s
         val overlapMode = prefs.getAutomixOverlapMode() // 0=Auto (4 bars), 1=2 bars, 2=4 bars, 3=8 bars, 4=Custom
         val baseOverlapMs = when (overlapMode) {
-            1 -> (8 * periodMs).toLong().coerceIn(4_000L, 10_000L) // 2 bars
-            2 -> (16 * periodMs).toLong().coerceIn(6_000L, 16_000L) // 4 bars
-            3 -> (32 * periodMs).toLong().coerceIn(10_000L, 20_000L) // 8 bars
-            4 -> prefs.getCrossfadeDuration() * 1000L
+            PlayerPreferences.AUTOMIX_OVERLAP_2BARS -> (8 * periodMs).toLong().coerceIn(4_000L, 10_000L) // 2 bars
+            PlayerPreferences.AUTOMIX_OVERLAP_4BARS -> (16 * periodMs).toLong().coerceIn(6_000L, 16_000L) // 4 bars
+            PlayerPreferences.AUTOMIX_OVERLAP_8BARS -> (32 * periodMs).toLong().coerceIn(10_000L, 20_000L) // 8 bars
+            PlayerPreferences.AUTOMIX_OVERLAP_CUSTOM -> prefs.getAutomixOverlapCustomSec() * 1000L
             else -> (16 * periodMs).toLong().coerceIn(6_000L, 16_000L) // Auto
         }
-        val overlapMs = baseOverlapMs.coerceIn(4_000L, 20_000L)
+        var overlapMs = if (overlapMode == PlayerPreferences.AUTOMIX_OVERLAP_CUSTOM) {
+            baseOverlapMs.coerceIn(1_000L, 30_000L)
+        } else {
+            baseOverlapMs.coerceIn(4_000L, 20_000L)
+        }
+
+        // How the two keys fit, by the Camelot wheel (PR #77): harmonic mixing sizes the blend on it.
+        val keyFit = if (prefs.getAutomixHarmonicMixEnabled()) {
+            KeyHarmony.between(camelotCode(outBeat.keyPitchClass, outBeat.keyIsMinor), camelotCode(inBeat.keyPitchClass, inBeat.keyIsMinor))
+        } else KeyHarmony.Fit.UNKNOWN
+
+        // Fold octave errors, then cap pitch-preserving stretch at ±8%
+        var tempoRatio = 1f
+        if (prefs.getAutomixTempoMatchEnabled()) {
+            tempoRatio = outBeat.bpm / inBeat.bpm
+            while (tempoRatio > 1.5f) tempoRatio /= 2f
+            while (tempoRatio < 0.667f) tempoRatio *= 2f
+            if (tempoRatio !in 0.92f..1.08f) tempoRatio = 1f
+        }
+
+        // Harmonic correction: only when the keys clash (or either key is unknown) does the incoming track
+        // pitch-shift to align, up to ±3 semitones; a pair that already fits is left alone (PR #77).
+        var pitchRatio = 1f
+        if (prefs.getAutomixHarmonicMixEnabled() && (keyFit == KeyHarmony.Fit.CLASH || keyFit == KeyHarmony.Fit.UNKNOWN)) {
+            val outKeyClass = outBeat.keyPitchClass
+            val inKeyClass = inBeat.keyPitchClass
+            if (outKeyClass != null && inKeyClass != null) {
+                val outEffective = if (outBeat.keyIsMinor == true) (outKeyClass + 3) % 12 else outKeyClass
+                val inEffective = if (inBeat.keyIsMinor == true) (inKeyClass + 3) % 12 else inKeyClass
+                var semitoneShift = (outEffective - inEffective) % 12
+                if (semitoneShift > 6) semitoneShift -= 12
+                if (semitoneShift < -6) semitoneShift += 12
+                if (semitoneShift != 0 && abs(semitoneShift) <= 3) {
+                    pitchRatio = 2.0.pow(semitoneShift / 12.0).toFloat()
+                }
+            }
+        }
+
+        // In Auto mode the blend follows the music: keys that fit earn a longer blend, keys that clash and a
+        // big energy gap both cut it short, so the seam never asks more of the pair than it can hold.
+        // When harmonic correction aligned the keys, effectiveFit is treated as SAME (PR #77).
+        if (overlapMode == 0) {
+            val effectiveFit = if (pitchRatio != 1f) KeyHarmony.Fit.SAME else keyFit
+            val energyGap = if (outBeat.energy != null && inBeat.energy != null) {
+                abs(outBeat.energy - inBeat.energy)
+            } else 0f
+            overlapMs = when (effectiveFit) {
+                KeyHarmony.Fit.SAME, KeyHarmony.Fit.NEIGHBOUR -> (overlapMs * 1.2f).toLong()
+                KeyHarmony.Fit.CLASH -> minOf(overlapMs, SHORT_BLEND_MS)
+                else -> overlapMs
+            }
+            if (energyGap > BIG_ENERGY_GAP) overlapMs = (overlapMs * 0.7f).toLong()
+            overlapMs = overlapMs.coerceIn(4_000L, 20_000L)
+        }
 
         // Dynamic mix-out: start the transition where the song's body ends (outro begins)
         val latestTrigger = trackDuration - overlapMs
         val mixOut = if (prefs.getAutomixDynamicMixPointsEnabled()) {
-            outBeat.mixOutPointMs?.takeIf { it > 0 }
+            outBeat.mixOutPointMs?.takeIf { it > 0 && it >= trackDuration - MAX_BELIEVABLE_OUTRO_MS }
         } else null
         val effectiveTrigger = mixOut?.coerceAtMost(latestTrigger) ?: latestTrigger
 
@@ -374,38 +464,18 @@ object AutomixManager {
         val k = ((anchor - outAnchorMs) / phraseMs).toLong()
         var triggerTime = (outAnchorMs + k * phraseMs).toLong()
         if (triggerTime < anchor) triggerTime = (outAnchorMs + (k + 1) * phraseMs).toLong()
+        // Where the loud part ends (a mix-out point is known), the phrase boundary nearest to it is taken, not the next one
+        // after it: the blend then covers the last bars of the drop going out, and does not begin in the empty tail.
+        if (mixOut != null) {
+            val nearest = (outAnchorMs + Math.round((anchor - outAnchorMs) / phraseMs) * phraseMs).toLong()
+            if (nearest >= currentPosition + 1000) triggerTime = nearest
+        }
 
         val roomMs = trackDuration - 500 - triggerTime
         val effectiveOverlapMs = overlapMs.coerceAtMost(roomMs)
         if (effectiveOverlapMs < 3000L || triggerTime >= trackDuration - 3000) {
             _automixDebugInfo.value = partialDebug.copy(status = "fallback: trigger out of range")
             return AutomixPlanResult(plan = null, pairAnalyzed = true)
-        }
-
-        // Fold octave errors, then cap pitch-preserving stretch at ±8%
-        var tempoRatio = 1f
-        if (prefs.getAutomixTempoMatchEnabled()) {
-            tempoRatio = outBeat.bpm / inBeat.bpm
-            while (tempoRatio > 1.5f) tempoRatio /= 2f
-            while (tempoRatio < 0.667f) tempoRatio *= 2f
-            if (tempoRatio !in 0.92f..1.08f) tempoRatio = 1f
-        }
-
-        // Harmonic correction: pitch-shift incoming track to align musical keys (up to ±3 semitones)
-        var pitchRatio = 1f
-        if (prefs.getAutomixHarmonicMixEnabled()) {
-            val outKeyClass = outBeat.keyPitchClass
-            val inKeyClass = inBeat.keyPitchClass
-            if (outKeyClass != null && inKeyClass != null) {
-                val outEffective = if (outBeat.keyIsMinor == true) (outKeyClass + 3) % 12 else outKeyClass
-                val inEffective = if (inBeat.keyIsMinor == true) (inKeyClass + 3) % 12 else inKeyClass
-                var semitoneShift = (outEffective - inEffective) % 12
-                if (semitoneShift > 6) semitoneShift -= 12
-                if (semitoneShift < -6) semitoneShift += 12
-                if (semitoneShift != 0 && abs(semitoneShift) <= 3) {
-                    pitchRatio = 2.0.pow(semitoneShift / 12.0).toFloat()
-                }
-            }
         }
 
         // Start offset: Auto (dynamic intro skip), Beginning (0:00), or Custom offset (snapped to downbeats)

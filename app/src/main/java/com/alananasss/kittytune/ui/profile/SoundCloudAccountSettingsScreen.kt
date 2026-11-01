@@ -40,6 +40,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.ui.common.hapticClickable
 import com.alananasss.kittytune.domain.User
 import com.alananasss.kittytune.ui.common.SettingsGroup
 import com.alananasss.kittytune.ui.common.SettingsItem
@@ -98,7 +101,7 @@ fun SoundCloudAccountSettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     OutlinedButton(
-                        onClick = {
+                        onClick = hapticAction(HapticKind.UI) {
                             selectedEmailForActions = null
                             copyToClipboard(emailItem.address, context.getString(R.string.account_section_emails))
                         },
@@ -111,7 +114,7 @@ fun SoundCloudAccountSettingsScreen(
 
                     if (!emailItem.isConfirmed) {
                         Button(
-                            onClick = {
+                            onClick = hapticAction(HapticKind.UI) {
                                 selectedEmailForActions = null
                                 accountViewModel.resendConfirmationEmail { success, errorMsg ->
                                     if (success) {
@@ -132,7 +135,7 @@ fun SoundCloudAccountSettingsScreen(
             },
             confirmButton = {},
             dismissButton = {
-                TextButton(onClick = { selectedEmailForActions = null }) {
+                TextButton(onClick = hapticAction(HapticKind.UI) { selectedEmailForActions = null }) {
                     Text(stringResource(R.string.btn_cancel))
                 }
             }
@@ -163,7 +166,7 @@ fun SoundCloudAccountSettingsScreen(
             },
             confirmButton = {
                 Button(
-                    onClick = {
+                    onClick = hapticAction(HapticKind.UI) {
                         showLogoutDialog = false
                         accountViewModel.logout {
                             onBackClick()
@@ -178,7 +181,7 @@ fun SoundCloudAccountSettingsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showLogoutDialog = false }) {
+                TextButton(onClick = hapticAction(HapticKind.UI) { showLogoutDialog = false }) {
                     Text(stringResource(R.string.btn_cancel))
                 }
             }
@@ -191,7 +194,7 @@ fun SoundCloudAccountSettingsScreen(
         actions = {
             if (!isGuest) {
                 IconButton(
-                    onClick = { accountViewModel.loadAccount(forceRefresh = true) },
+                    onClick = hapticAction(HapticKind.UI) { accountViewModel.loadAccount(forceRefresh = true) },
                     enabled = !isLoading && !isRefreshing
                 ) {
                     if (isRefreshing) {
@@ -354,7 +357,7 @@ fun SoundCloudAccountSettingsScreen(
                             title = stringResource(R.string.account_btn_manage_subscription),
                             subtitle = stringResource(R.string.account_section_subscriptions),
                             icon = Icons.Rounded.CreditCard,
-                            onClick = {
+                            onClick = hapticAction(HapticKind.UI) {
                                 val manageUrl =
                                     if (config?.consumerPlan?.vendor == "google_play" || config?.creatorPlan?.vendor == "google_play") {
                                         "https://play.google.com/store/account/subscriptions"
@@ -420,7 +423,7 @@ fun SoundCloudAccountSettingsScreen(
                                         subtitle = subtitleText,
                                         icon = if (emailItem.isPrimary) Icons.Rounded.MarkEmailRead else Icons.Rounded.Email,
                                         trailingText = tag,
-                                        onClick = {
+                                        onClick = hapticAction(HapticKind.UI) {
                                             if (!emailItem.isConfirmed) {
                                                 selectedEmailForActions = emailItem
                                             } else {
@@ -450,7 +453,7 @@ fun SoundCloudAccountSettingsScreen(
                                     title = stringResource(R.string.account_label_username),
                                     subtitle = user.username.orEmpty(),
                                     icon = Icons.Rounded.Person,
-                                    onClick = {
+                                    onClick = hapticAction(HapticKind.UI) {
                                         user.username?.let {
                                             copyToClipboard(
                                                 it,
@@ -467,7 +470,7 @@ fun SoundCloudAccountSettingsScreen(
                                     title = stringResource(R.string.account_label_display_name),
                                     subtitle = displayName,
                                     icon = Icons.Rounded.Badge,
-                                    onClick = {
+                                    onClick = hapticAction(HapticKind.UI) {
                                         copyToClipboard(
                                             displayName,
                                             context.getString(R.string.account_label_display_name)
@@ -511,7 +514,7 @@ fun SoundCloudAccountSettingsScreen(
                                     title = stringResource(R.string.account_label_user_id),
                                     subtitle = user.id.toString(),
                                     icon = Icons.Rounded.Tag,
-                                    onClick = {
+                                    onClick = hapticAction(HapticKind.UI) {
                                         copyToClipboard(
                                             user.id.toString(),
                                             context.getString(R.string.account_label_user_id)
@@ -526,7 +529,7 @@ fun SoundCloudAccountSettingsScreen(
                                     title = stringResource(R.string.account_label_user_urn),
                                     subtitle = urn,
                                     icon = Icons.Rounded.Fingerprint,
-                                    onClick = {
+                                    onClick = hapticAction(HapticKind.UI) {
                                         copyToClipboard(
                                             urn,
                                             context.getString(R.string.account_label_user_urn)
@@ -541,7 +544,7 @@ fun SoundCloudAccountSettingsScreen(
                                     title = stringResource(R.string.account_label_permalink),
                                     subtitle = "@$permalink",
                                     icon = Icons.Rounded.AlternateEmail,
-                                    onClick = {
+                                    onClick = hapticAction(HapticKind.UI) {
                                         copyToClipboard(
                                             permalink,
                                             context.getString(R.string.account_label_permalink)
@@ -557,7 +560,7 @@ fun SoundCloudAccountSettingsScreen(
                                     title = stringResource(R.string.account_label_profile_url),
                                     subtitle = profileUrl,
                                     icon = Icons.Rounded.Link,
-                                    onClick = {
+                                    onClick = hapticAction(HapticKind.UI) {
                                         copyToClipboard(
                                             profileUrl,
                                             context.getString(R.string.account_label_profile_url)
@@ -647,7 +650,7 @@ fun SoundCloudAccountSettingsScreen(
                                     title = stringResource(R.string.account_label_station),
                                     subtitle = station,
                                     icon = Icons.Rounded.Radio,
-                                    onClick = {
+                                    onClick = hapticAction(HapticKind.UI) {
                                         copyToClipboard(
                                             station,
                                             context.getString(R.string.account_label_station)
@@ -670,7 +673,7 @@ fun SoundCloudAccountSettingsScreen(
                                     title = stringResource(R.string.account_action_view_profile),
                                     subtitle = stringResource(R.string.pref_about_subtitle),
                                     icon = Icons.Rounded.AccountCircle,
-                                    onClick = { onNavigateToProfile(user.id) }
+                                    onClick = hapticAction(HapticKind.UI) { onNavigateToProfile(user.id) }
                                 )
                             },
                             { shape ->
@@ -682,7 +685,7 @@ fun SoundCloudAccountSettingsScreen(
                                     iconContainerColor = MaterialTheme.colorScheme.errorContainer,
                                     iconTint = MaterialTheme.colorScheme.error,
                                     titleColor = MaterialTheme.colorScheme.error,
-                                    onClick = { showLogoutDialog = true }
+                                    onClick = hapticAction(HapticKind.UI) { showLogoutDialog = true }
                                 )
                             }
                         )
@@ -723,7 +726,7 @@ fun SoundCloudAccountSettingsScreen(
                             )
                             Spacer(Modifier.height(16.dp))
                             Button(
-                                onClick = { accountViewModel.loadAccount(forceRefresh = true) },
+                                onClick = hapticAction(HapticKind.UI) { accountViewModel.loadAccount(forceRefresh = true) },
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                             ) {
                                 Text(stringResource(R.string.account_action_refresh))

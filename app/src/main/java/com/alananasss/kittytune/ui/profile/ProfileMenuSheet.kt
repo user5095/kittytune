@@ -12,7 +12,6 @@
     import androidx.compose.material.icons.rounded.Celebration
     import androidx.compose.material.icons.rounded.BarChart
     import androidx.compose.material.icons.rounded.EmojiEvents
-    import androidx.compose.material.icons.rounded.Info
     import androidx.compose.material.icons.rounded.Settings
     import androidx.compose.material3.*
 import com.alananasss.kittytune.ui.icons.Icon
@@ -26,6 +25,9 @@ import com.alananasss.kittytune.ui.icons.Icon
     import androidx.compose.ui.text.style.TextOverflow
     import androidx.compose.ui.unit.dp
     import com.alananasss.kittytune.R
+    import com.alananasss.kittytune.ui.common.HapticKind
+    import com.alananasss.kittytune.ui.common.hapticAction
+    import com.alananasss.kittytune.ui.common.hapticClickable
     import com.alananasss.kittytune.domain.User
 
     @Composable
@@ -38,7 +40,6 @@ import com.alananasss.kittytune.ui.icons.Icon
         onListeningStatsClick: () -> Unit,
         onYearlyPlaybackClick: () -> Unit = {},
         onSettingsClick: () -> Unit,
-        onAboutClick: () -> Unit,
         onLogoutClick: () -> Unit
     ) {
         Column(
@@ -64,7 +65,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                 modifier = Modifier
                     .fillMaxWidth()
                     .then(
-                        if (!isGuest) Modifier.clickable { onDismiss(); onViewProfile() }
+                        if (!isGuest) Modifier.hapticClickable { onDismiss(); onViewProfile() }
                         else Modifier
                     )
             ) {
@@ -110,7 +111,7 @@ import com.alananasss.kittytune.ui.icons.Icon
 
                         // Logout button lives here — adaptive red that fits the current theme
                         if (!isGuest) {
-                            IconButton(onClick = { onDismiss(); onLogoutClick() }) {
+                            IconButton(onClick = hapticAction(HapticKind.UI) { onDismiss(); onLogoutClick() }) {
                                 Icon(
                                     Icons.AutoMirrored.Rounded.Logout,
                                     contentDescription = stringResource(R.string.profile_menu_logout),
@@ -119,7 +120,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                             }
                         } else {
                             // Guest: show login button instead
-                            TextButton(onClick = { onDismiss(); onLogoutClick() }) {
+                            TextButton(onClick = hapticAction(HapticKind.UI) { onDismiss(); onLogoutClick() }) {
                                 Text(stringResource(R.string.profile_menu_login))
                             }
                         }
@@ -138,7 +139,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                     MenuRowItem(
                         icon = Icons.Rounded.EmojiEvents,
                         label = stringResource(R.string.profile_menu_achievements),
-                        onClick = { onDismiss(); onAchievementsClick() }
+                        onClick = hapticAction(HapticKind.UI) { onDismiss(); onAchievementsClick() }
                     )
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.surface, thickness = 1.dp)
@@ -146,7 +147,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                     MenuRowItem(
                         icon = Icons.Rounded.BarChart,
                         label = stringResource(R.string.profile_menu_listening_stats),
-                        onClick = { onDismiss(); onListeningStatsClick() }
+                        onClick = hapticAction(HapticKind.UI) { onDismiss(); onListeningStatsClick() }
                     )
 
                     if (!isGuest) {
@@ -155,7 +156,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                         MenuRowItem(
                             icon = Icons.Rounded.Celebration,
                             label = stringResource(R.string.yearly_playback_menu_title),
-                            onClick = { onDismiss(); onYearlyPlaybackClick() }
+                            onClick = hapticAction(HapticKind.UI) { onDismiss(); onYearlyPlaybackClick() }
                         )
                     }
 
@@ -164,15 +165,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                     MenuRowItem(
                         icon = Icons.Rounded.Settings,
                         label = stringResource(R.string.profile_menu_settings),
-                        onClick = { onDismiss(); onSettingsClick() }
-                    )
-
-                    HorizontalDivider(color = MaterialTheme.colorScheme.surface, thickness = 1.dp)
-
-                    MenuRowItem(
-                        icon = Icons.Rounded.Info,
-                        label = stringResource(R.string.profile_about),
-                        onClick = { onDismiss(); onAboutClick() }
+                        onClick = hapticAction(HapticKind.UI) { onDismiss(); onSettingsClick() }
                     )
                 }
             }
@@ -189,7 +182,7 @@ import com.alananasss.kittytune.ui.icons.Icon
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onClick)
+                .hapticClickable(onClick = onClick)
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {

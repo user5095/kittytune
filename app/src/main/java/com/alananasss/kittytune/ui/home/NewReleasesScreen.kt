@@ -37,6 +37,10 @@ import com.alananasss.kittytune.ui.icons.Icon
     import androidx.lifecycle.viewmodel.compose.viewModel
     import coil.compose.AsyncImage
     import com.alananasss.kittytune.R
+    import com.alananasss.kittytune.audio.haptics.performAppHaptic
+    import com.alananasss.kittytune.ui.common.HapticKind
+    import com.alananasss.kittytune.ui.common.hapticAction
+    import com.alananasss.kittytune.ui.common.hapticClickable
     import com.alananasss.kittytune.domain.Playlist
     import com.alananasss.kittytune.domain.Track
     import com.alananasss.kittytune.ui.common.SquareCardShimmer
@@ -191,7 +195,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                                             PopularTrackRow(
                                                 track = track,
                                                 rank = absoluteIndex + 1,
-                                                currentlyPlayingTrack = playerViewModel.currentTrack,
+                                                currentlyPlayingTrack = playerViewModel.uiCurrentTrack,
                                                 onClick = { playerViewModel.playPlaylist(unblockedTracks, absoluteIndex) },
                                                 onOptionClick = { playerViewModel.showTrackOptions(track) }
                                             )
@@ -230,9 +234,9 @@ import com.alananasss.kittytune.ui.icons.Icon
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
                 .combinedClickable(
-                    onClick = onClick,
+                    onClick = hapticAction(HapticKind.UI, onClick),
                     onLongClick = {
-                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        view.performAppHaptic(HapticFeedbackConstants.LONG_PRESS)
                         onOptionClick()
                     }
                 )
@@ -313,7 +317,7 @@ import com.alananasss.kittytune.ui.icons.Icon
         onClick: () -> Unit
     ) {
         Card(
-            onClick = onClick,
+            onClick = hapticAction(HapticKind.MEDIUM, onClick),
             shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             modifier = Modifier.width(160.dp)
@@ -340,7 +344,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                         overflow = TextOverflow.Ellipsis
                     )
                     val subtitle = when {
-                        !playlist.user?.username.isNullOrBlank() -> playlist.user.username
+                        !playlist.user?.username.isNullOrBlank() -> playlist.user?.username.orEmpty()
                         playlist.trackCount != null && playlist.trackCount > 0 -> stringResource(R.string.playlist_num_tracks, playlist.trackCount)
                         else -> stringResource(R.string.lib_playlists)
                     }

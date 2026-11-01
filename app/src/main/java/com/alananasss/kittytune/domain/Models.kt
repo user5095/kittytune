@@ -16,7 +16,15 @@ data class StreamItem(
     val track: Track?,
     val playlist: Playlist?,
     val user: User?,
+    @SerializedName("caption") val caption: String? = null,
     @SerializedName("created_at") val createdAt: String?
+)
+
+data class CaptionedRepostItem(
+    val reposter: User,
+    val track: Track,
+    val caption: String? = null,
+    @SerializedName("created_at") val createdAt: String? = null
 )
 
 data class CommentCollection(val collection: List<Comment>, val next_href: String?)
@@ -34,7 +42,10 @@ data class Comment(
     @SerializedName("reaction_stats") val reactionStats: ReactionStats? = null,
     @SerializedName("user_favorite") val isLiked: Boolean = false,
 
-    @SerializedName("replies") val replies: List<Comment>? = null
+    @SerializedName("replies") val replies: List<Comment>? = null,
+    val isLikedByCreator: Boolean = false,
+    val creatorArtworkUrl: String? = null,
+    val creatorUsername: String? = null
 ) {
     val likesCount: Int
         get() {
@@ -45,7 +56,10 @@ data class Comment(
     fun copy(
         isLiked: Boolean = this.isLiked,
         likesCount: Int = this.likesCount,
-        replies: List<Comment>? = this.replies
+        replies: List<Comment>? = this.replies,
+        isLikedByCreator: Boolean = this.isLikedByCreator,
+        creatorArtworkUrl: String? = this.creatorArtworkUrl,
+        creatorUsername: String? = this.creatorUsername
     ): Comment {
         return Comment(
             id = this.id,
@@ -57,7 +71,10 @@ data class Comment(
             _likesCount = likesCount,
             reactionStats = null,
             isLiked = isLiked,
-            replies = replies
+            replies = replies,
+            isLikedByCreator = isLikedByCreator,
+            creatorArtworkUrl = creatorArtworkUrl,
+            creatorUsername = creatorUsername
         )
     }
 }
@@ -74,7 +91,8 @@ data class ActivityItem(
     val user: User?,
     val track: Track?,
     val playlist: Playlist?,
-    val comment: Comment?
+    val comment: Comment?,
+    @SerializedName("caption") val caption: String? = null
 )
 
 
@@ -285,6 +303,116 @@ data class InteractionCountNode(
     @SerializedName("interactionTypeValueUrn") val type: String
 )
 
+data class GraphQlCommentsVariables(
+    @SerializedName("trackUrn") val trackUrn: String,
+    @SerializedName("creatorUrn") val creatorUrn: String?,
+    @SerializedName("options") val options: GraphQlCommentsOptionsInput
+)
+
+data class GraphQlCommentsOptionsInput(
+    @SerializedName("sort") val sort: String,
+    @SerializedName("first") val first: Int = 25,
+    @SerializedName("repliesSort") val repliesSort: String = "DESCENDING",
+    @SerializedName("repliesFirst") val repliesFirst: Int = 3,
+    @SerializedName("after") val after: String? = null,
+    @SerializedName("token") val token: String? = null
+)
+
+data class GraphQlCommentsResponse(
+    @SerializedName("data") val data: GraphQlCommentsData? = null
+)
+
+data class GraphQlCommentsData(
+    @SerializedName("trackComments") val trackComments: GraphQlTrackComments? = null
+)
+
+data class GraphQlTrackComments(
+    @SerializedName("comments") val comments: List<GraphQlApiComment>? = null,
+    @SerializedName("pageInfo") val pageInfo: GraphQlPageInfo? = null
+)
+
+data class GraphQlApiComment(
+    @SerializedName("body") val body: String? = null,
+    @SerializedName("trackTime") val trackTime: Long? = null,
+    @SerializedName("createdAtTimestamp") val createdAtTimestamp: Long? = null,
+    @SerializedName("urn") val urn: String? = null,
+    @SerializedName("user") val user: GraphQlApiUser? = null,
+    @SerializedName("reactions") val reactions: GraphQlCommentReactions? = null,
+    @SerializedName("replies") val replies: GraphQlCommentReplies? = null
+)
+
+data class GraphQlApiUser(
+    @SerializedName("urn") val urn: String? = null,
+    @SerializedName("username") val username: String? = null,
+    @SerializedName("permalink") val permalink: String? = null,
+    @SerializedName("userAvatarUrlTemplate") val userAvatarUrlTemplate: String? = null,
+    @SerializedName("verified") val verified: Boolean? = null
+)
+
+data class GraphQlCommentReactions(
+    @SerializedName("creatorReaction") val creatorReaction: String? = null,
+    @SerializedName("reactionCounts") val reactionCounts: List<GraphQlReactionCount>? = null,
+    @SerializedName("userReaction") val userReaction: String? = null
+)
+
+data class GraphQlReactionCount(
+    @SerializedName("reactionTypeValueUrn") val reactionTypeValueUrn: String? = null,
+    @SerializedName("count") val count: Int? = null
+)
+
+data class GraphQlCommentReplies(
+    @SerializedName("comments") val comments: List<GraphQlApiComment>? = null,
+    @SerializedName("total") val total: Long? = null,
+    @SerializedName("pageInfo") val pageInfo: GraphQlPageInfo? = null
+)
+
+fun GraphQlApiComment.toComment(
+    creatorArtworkUrl: String?,
+    creatorUsername: String?
+): Comment {
+    val commentId = urn?.substringAfterLast(":")?.toLongOrNull() ?: 0L
+    val userId = user?.urn?.substringAfterLast(":")?.toLongOrNull() ?: 0L
+    val avatarUrl = user?.userAvatarUrlTemplate?.takeIf { it.isNotBlank() }?.replace("{size}", "large")
+    val createdAtStr = if (createdAtTimestamp != null && createdAtTimestamp > 0L) {
+        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).apply {
+            timeZone = java.util.TimeZone.getTimeZone("UTC")
+        }
+        sdf.format(java.util.Date(createdAtTimestamp))
+    } else {
+        ""
+    }
+    val isLikedByCreator = reactions?.creatorReaction == "sc:interactiontypevalue:like"
+    val isLikedByMe = reactions?.userReaction == "sc:interactiontypevalue:like"
+    val likesCount = reactions?.reactionCounts?.firstOrNull {
+        it.reactionTypeValueUrn == "sc:interactiontypevalue:like"
+    }?.count ?: 0
+
+    val mappedReplies = replies?.comments?.map { replyItem ->
+        replyItem.toComment(creatorArtworkUrl, creatorUsername)
+    }
+
+    return Comment(
+        id = commentId,
+        body = body ?: "",
+        createdAt = createdAtStr,
+        trackTimestamp = if (trackTime != null && trackTime > 0L) trackTime else null,
+        user = User(
+            id = userId,
+            username = user?.username ?: "",
+            avatarUrl = avatarUrl,
+            permalink = user?.permalink,
+            verified = user?.verified ?: false
+        ),
+        _likesCount = likesCount,
+        reactionStats = null,
+        isLiked = isLikedByMe,
+        replies = mappedReplies,
+        isLikedByCreator = isLikedByCreator,
+        creatorArtworkUrl = if (isLikedByCreator) creatorArtworkUrl else null,
+        creatorUsername = if (isLikedByCreator) creatorUsername else null
+    )
+}
+
 data class ReactionStats(val counts: List<ReactionCount>?)
 data class ReactionCount(val count: Int, @SerializedName("interaction_type_urn") val urn: String?)
 
@@ -410,7 +538,8 @@ data class GraphQlFollowsResult(
 )
 
 data class GraphQlPageInfo(
-    @SerializedName("endCursor") val endCursor: String?
+    @SerializedName("endCursor") val endCursor: String? = null,
+    @SerializedName("hasNextPage") val hasNextPage: Boolean = false
 )
 
 data class GraphQlFollowsItem(
@@ -423,6 +552,34 @@ data class GraphQlUserProfileResponse(
 
 data class GraphQlUserProfileData(
     @SerializedName("user") val user: User?
+)
+
+data class FeaturedPlaylistsGraphQlRequest(
+    @SerializedName("operationName") val operationName: String = "FeaturedPlaylists",
+    @SerializedName("query") val query: String = "query FeaturedPlaylists(\$input: FeaturedPlaylistsInput!) { featuredPlaylists(input: \$input) { urn } }",
+    @SerializedName("variables") val variables: FeaturedPlaylistsVariables
+)
+
+data class FeaturedPlaylistsVariables(
+    @SerializedName("input") val input: FeaturedPlaylistsInput
+)
+
+data class FeaturedPlaylistsInput(
+    @SerializedName("trackUrn") val trackUrn: String,
+    @SerializedName("filter") val filter: String = "PLAYLIST",
+    @SerializedName("limit") val limit: Int = 100
+)
+
+data class FeaturedPlaylistsGraphQlResponse(
+    @SerializedName("data") val data: FeaturedPlaylistsData?
+)
+
+data class FeaturedPlaylistsData(
+    @SerializedName("featuredPlaylists") val featuredPlaylists: List<FeaturedPlaylistUrn>?
+)
+
+data class FeaturedPlaylistUrn(
+    @SerializedName("urn") val urn: String?
 )
 
 data class TrackPublisherMetadata(
@@ -502,10 +659,17 @@ data class Track(
                 policy == "SNIP" ||
                 (fullDuration != null && durationMs != null && fullDuration > 0 && durationMs in 1..45000 && fullDuration > durationMs + 15000)
 
+    val isGoPlus: Boolean
+        get() = (source == null || source == "soundcloud") &&
+                (monetizationModel.equals("SUB_HIGH_TIER", ignoreCase = true) ||
+                 policy.equals("SNIP", ignoreCase = true) ||
+                 isSnipped ||
+                 media?.transcodings?.any { it.snipped } == true)
+
     val fullResArtwork: String
         get() {
-            if (artworkUrl != null) return artworkUrl.replace("large", "t500x500")
-            if (user != null && user.avatarUrl != null) return user.avatarUrl.replace("large", "t500x500")
+            if (!artworkUrl.isNullOrEmpty()) return artworkUrl.toHighResArtwork()
+            if (user != null && !user.avatarUrl.isNullOrEmpty()) return user.avatarUrl.toHighResArtwork()
             return "https://picsum.photos/200"
         }
 
@@ -692,7 +856,8 @@ data class StationLibraryResponse(val collection: List<StationLibraryItem>, val 
 data class StationLibraryItem(
     @SerializedName("created_at") val createdAt: String?,
     val type: String?,
-    @SerializedName("system_playlist") val systemPlaylist: SystemPlaylist?
+    @SerializedName("system_playlist") val systemPlaylist: SystemPlaylist?,
+    @SerializedName("playlist") val playlist: Playlist? = null
 )
 
 data class SystemPlaylist(
@@ -718,9 +883,9 @@ data class SystemPlaylist(
     val isTrackStation: Boolean get() = (urn ?: id ?: "").contains("track-stations")
     val fullResArtwork: String
         get() {
-            if (!artworkUrl.isNullOrEmpty()) return artworkUrl.replace("large", "t500x500")
-            if (!calculatedArtworkUrl.isNullOrEmpty()) return calculatedArtworkUrl.replace("large", "t500x500")
-            return user?.avatarUrl?.replace("large", "t500x500") ?: "https://picsum.photos/200"
+            if (!artworkUrl.isNullOrEmpty()) return artworkUrl.toHighResArtwork()
+            if (!calculatedArtworkUrl.isNullOrEmpty()) return calculatedArtworkUrl.toHighResArtwork()
+            return user?.avatarUrl?.toHighResArtwork() ?: "https://picsum.photos/200"
         }
 
     val thumbnailUrl: String
@@ -814,7 +979,8 @@ data class Playlist(
     @SerializedName("set_type") val setType: String? = null,
     @SerializedName("playlist_type") val playlistType: String? = null,
     @SerializedName("release_date") val releaseDate: String? = null,
-    @SerializedName("likes_count") val likesCount: Int? = 0
+    @SerializedName("likes_count") val likesCount: Int? = 0,
+    @SerializedName("duration") val durationMs: Long? = null
 ) {
     val isRealAlbum: Boolean
         get() = isAlbum || 
@@ -829,13 +995,13 @@ data class Playlist(
 
     val fullResArtwork: String
         get() {
-            if (!artworkUrl.isNullOrEmpty()) return artworkUrl.replace("large", "t500x500")
-            if (!calculatedArtworkUrl.isNullOrEmpty()) return calculatedArtworkUrl.replace("large", "t500x500")
+            if (!artworkUrl.isNullOrEmpty()) return artworkUrl.toHighResArtwork()
+            if (!calculatedArtworkUrl.isNullOrEmpty()) return calculatedArtworkUrl.toHighResArtwork()
             if (!tracks.isNullOrEmpty()) {
                 val firstTrackArt = tracks[0].fullResArtwork
                 if (!firstTrackArt.contains("picsum")) return firstTrackArt
             }
-            return user?.avatarUrl?.replace("large", "t500x500") ?: "https://picsum.photos/200"
+            return user?.avatarUrl?.toHighResArtwork() ?: "https://picsum.photos/200"
         }
 
     val thumbnailUrl: String
@@ -1040,6 +1206,117 @@ class PlaylistTracksAdapter : com.google.gson.JsonDeserializer<List<Track>> {
     }
 }
 
+class SafeTrackListAdapter : com.google.gson.JsonDeserializer<List<Track>>, com.google.gson.JsonSerializer<List<Track>> {
+    override fun deserialize(
+        json: com.google.gson.JsonElement?,
+        typeOfT: java.lang.reflect.Type?,
+        context: com.google.gson.JsonDeserializationContext
+    ): List<Track> {
+        if (json == null || !json.isJsonArray) return emptyList()
+        val list = mutableListOf<Track>()
+        json.asJsonArray.forEach { elem ->
+            runCatching {
+                context.deserialize<Track>(elem, Track::class.java)
+            }.getOrNull()?.let { track ->
+                if (track.id != 0L) {
+                    list.add(track)
+                }
+            }
+        }
+        return list
+    }
+
+    override fun serialize(
+        src: List<Track>?,
+        typeOfSrc: java.lang.reflect.Type?,
+        context: com.google.gson.JsonSerializationContext
+    ): com.google.gson.JsonElement {
+        val array = com.google.gson.JsonArray()
+        src?.forEach { track ->
+            if (track is Track) {
+                runCatching { context.serialize(track, Track::class.java) }.getOrNull()?.let {
+                    array.add(it)
+                }
+            }
+        }
+        return array
+    }
+}
+
+class SafePlaylistListAdapter : com.google.gson.JsonDeserializer<List<Playlist>>, com.google.gson.JsonSerializer<List<Playlist>> {
+    override fun deserialize(
+        json: com.google.gson.JsonElement?,
+        typeOfT: java.lang.reflect.Type?,
+        context: com.google.gson.JsonDeserializationContext
+    ): List<Playlist> {
+        if (json == null || !json.isJsonArray) return emptyList()
+        val list = mutableListOf<Playlist>()
+        json.asJsonArray.forEach { elem ->
+            runCatching {
+                context.deserialize<Playlist>(elem, Playlist::class.java)
+            }.getOrNull()?.let { playlist ->
+                if (playlist.id != 0L || !playlist.permalink.isNullOrBlank() || !playlist.urn.isNullOrBlank()) {
+                    list.add(playlist)
+                }
+            }
+        }
+        return list
+    }
+
+    override fun serialize(
+        src: List<Playlist>?,
+        typeOfSrc: java.lang.reflect.Type?,
+        context: com.google.gson.JsonSerializationContext
+    ): com.google.gson.JsonElement {
+        val array = com.google.gson.JsonArray()
+        src?.forEach { playlist ->
+            if (playlist is Playlist) {
+                runCatching { context.serialize(playlist, Playlist::class.java) }.getOrNull()?.let {
+                    array.add(it)
+                }
+            }
+        }
+        return array
+    }
+}
+
+class SafeUserListAdapter : com.google.gson.JsonDeserializer<List<User>>, com.google.gson.JsonSerializer<List<User>> {
+    override fun deserialize(
+        json: com.google.gson.JsonElement?,
+        typeOfT: java.lang.reflect.Type?,
+        context: com.google.gson.JsonDeserializationContext
+    ): List<User> {
+        if (json == null || !json.isJsonArray) return emptyList()
+        val list = mutableListOf<User>()
+        json.asJsonArray.forEach { elem ->
+            runCatching {
+                context.deserialize<User>(elem, User::class.java)
+            }.getOrNull()?.let { user ->
+                if (user.id != 0L || !user.username.isNullOrBlank()) {
+                    list.add(user)
+                }
+            }
+        }
+        return list
+    }
+
+    override fun serialize(
+        src: List<User>?,
+        typeOfSrc: java.lang.reflect.Type?,
+        context: com.google.gson.JsonSerializationContext
+    ): com.google.gson.JsonElement {
+        val array = com.google.gson.JsonArray()
+        src?.forEach { user ->
+            if (user is User) {
+                runCatching { context.serialize(user, User::class.java) }.getOrNull()?.let {
+                    array.add(it)
+                }
+            }
+        }
+        return array
+    }
+}
+
 fun String?.isDefaultAvatar(): Boolean {
     if (this.isNullOrBlank()) return true
     if (this.contains("default_avatar", ignoreCase = true)) return true
@@ -1047,9 +1324,21 @@ fun String?.isDefaultAvatar(): Boolean {
     return false
 }
 
+fun String.toHighResArtwork(): String {
+    if (this.isBlank()) return this
+    if (this.contains("default_avatar", ignoreCase = true)) return this
+    val withSizes = this.replace("{size}", "t500x500").replace("{format}", "t500x500")
+    return if (withSizes.contains("sndcdn.com")) {
+        withSizes.replace("-large.", "-t500x500.").replace("large", "t500x500")
+    } else {
+        withSizes
+    }
+}
+
 fun String?.getHighResAvatarUrl(): String? {
-    if (this == null || this.isDefaultAvatar()) return null
-    return this.replace("large", "t500x500")
+    if (this == null) return null
+    if (this.isDefaultAvatar()) return this
+    return this.toHighResArtwork()
 }
 
 data class SoundCloudConfigurationResponse(

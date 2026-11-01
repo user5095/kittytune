@@ -51,6 +51,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.ui.common.hapticClickable
 import com.alananasss.kittytune.data.local.LyricsAlignment
 import com.alananasss.kittytune.data.local.LyricsFont
 import com.alananasss.kittytune.data.local.LyricsUiStyle
@@ -70,8 +73,8 @@ fun PlayerInlineLyrics(
 ) {
     PlayerInlineLyrics(
         lyricsLines = viewModel.lyricsLines,
-        positionMs = viewModel.currentPosition + viewModel.lyricsOffset,
-        isPlaying = viewModel.isPlaying,
+        positionMs = viewModel.uiCurrentPosition + viewModel.lyricsOffset,
+        isPlaying = viewModel.uiIsPlaying,
         textColor = textColor,
         modifier = modifier,
         lyricsFont = viewModel.lyricsFont,
@@ -110,9 +113,17 @@ fun PlayerInlineLyrics(
     var timeAnchorMs by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
 
     LaunchedEffect(positionMs) {
-        positionAnchorMs = positionMs
-        timeAnchorMs = SystemClock.elapsedRealtime()
-        smoothPositionMs = positionMs
+        val jumpedBack = positionMs < positionAnchorMs - 1000L
+        val jumpedFar = kotlin.math.abs(positionMs - smoothPositionMs) > 1200L
+        if (jumpedBack || jumpedFar || !isPlaying) {
+            positionAnchorMs = positionMs
+            timeAnchorMs = SystemClock.elapsedRealtime()
+            smoothPositionMs = positionMs
+        } else {
+            val currentSmooth = smoothPositionMs
+            positionAnchorMs = maxOf(currentSmooth, positionMs)
+            timeAnchorMs = SystemClock.elapsedRealtime()
+        }
     }
 
     var throttledPositionMs by remember { mutableLongStateOf(positionMs) }
@@ -127,7 +138,10 @@ fun PlayerInlineLyrics(
         var lastThrottledUpdateMs = 0L
         while (isActive) {
             withFrameMillis { frameTimeMillis ->
-                smoothPositionMs = positionAnchorMs + (SystemClock.elapsedRealtime() - timeAnchorMs)
+                val projected = positionAnchorMs + (SystemClock.elapsedRealtime() - timeAnchorMs)
+                if (projected >= smoothPositionMs) {
+                    smoothPositionMs = projected
+                }
                 if (frameTimeMillis - lastThrottledUpdateMs >= THROTTLED_UPDATE_INTERVAL_MS) {
                     lastThrottledUpdateMs = frameTimeMillis
                     throttledPositionMs = smoothPositionMs
@@ -245,10 +259,18 @@ fun PlayerInlineLyrics(
             label = "PlayerInlineLyricsLine"
         ) { line ->
             if (line != null) {
-                val rawCleanText = remember(line.text) { LyricsUtils.decodeHtmlEntities(line.text) }
+                // Backing vocals — the bracketed second phrase — are the full screen's business; the one-line
+                // display shows only the words sung in front.
+                val mainText = remember(line) {
+                    if (line.words.isNotEmpty()) {
+                        val own = if (line.words.any { it.isBackground }) line.words.filterNot { it.isBackground } else line.words
+                        if (own.isNotEmpty() && own.size < line.words.size) own.joinToString("") { it.text }.trim() else line.text
+                    } else splitBackingVocals(line.text).first
+                }
+                val rawCleanText = remember(mainText) { LyricsUtils.decodeHtmlEntities(mainText) }
                 val displayWords = remember(line.words, isWordSyncEnabled) {
                     if (isWordSyncEnabled && line.words.isNotEmpty()) {
-                        line.words.map { it.copy(word = LyricsUtils.decodeHtmlEntities(it.word)) }
+                        line.words.map { it.copy(word = LyricsUtils.decodeHtmlEntities(it.word)) }.filter { !it.isBackground || line.words.all { w -> w.isBackground } }
                     } else emptyList()
                 }
                 val cleanTranslation = remember(line.translation) {
@@ -362,6 +384,9 @@ private fun SmoothAppleMusicInlineLyricLine(
     }
 
     var textLayoutResult by remember(reconstructedText) { mutableStateOf<TextLayoutResult?>(null) }
+    // Reused across draws: the karaoke clip path is rebuilt at display rate while playing, and a
+    // fresh native Path each frame was pure allocation churn under the GC.
+    val karaokePath = remember { Path() }
 
     Box(modifier = Modifier.fillMaxWidth()) {
         // Base dimmed text (unsung)
@@ -395,7 +420,7 @@ private fun SmoothAppleMusicInlineLyricLine(
                 .fillMaxWidth()
                 .drawWithContent {
                     val layout = textLayoutResult ?: return@drawWithContent
-                    val path = Path()
+                    val path = karaokePath.apply { reset() }
                     val textLen = reconstructedText.length
                     if (textLen == 0) return@drawWithContent
                     val safeTextLength = (textLen - 1).coerceAtLeast(0)

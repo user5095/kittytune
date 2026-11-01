@@ -44,7 +44,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
+import com.alananasss.kittytune.ui.common.SafeWebView
 import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.ui.common.hapticClickable
 import com.alananasss.kittytune.data.PlaybackService
 import com.alananasss.kittytune.data.discord.DiscordRemoteAuthManager
 import com.alananasss.kittytune.data.discord.RemoteAuthState
@@ -202,11 +206,7 @@ private fun HCaptchaWebView(
     AndroidView(
         modifier = Modifier.fillMaxSize(),
         factory = { ctx ->
-            WebView(ctx).apply {
-                layoutParams = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
+            SafeWebView(ctx).apply {
                 settings.apply {
                     javaScriptEnabled = true
                     domStorageEnabled = true
@@ -343,11 +343,11 @@ fun DiscordLoginScreen(
             },
             confirmButton = {
                 Button(
-                    onClick = {
+                    onClick = hapticAction(HapticKind.UI) {
                         val clean = manualTokenInput.trim().replace("\"", "")
                         if (clean.isBlank()) {
                             manualTokenError = context.getString(R.string.discord_manual_token_invalid)
-                            return@Button
+                            return@hapticAction
                         }
                         manualTokenLoading = true
                         scope.launch {
@@ -388,7 +388,7 @@ fun DiscordLoginScreen(
             },
             dismissButton = {
                 TextButton(
-                    onClick = { showManualTokenDialog = false },
+                    onClick = hapticAction(HapticKind.UI) { showManualTokenDialog = false },
                     shapes = ButtonDefaults.shapes(),
                     enabled = !manualTokenLoading
                 ) {
@@ -416,7 +416,7 @@ fun DiscordLoginScreen(
                 },
                 actions = {
                     IconButton(
-                        onClick = { showManualTokenDialog = true },
+                        onClick = hapticAction(HapticKind.UI) { showManualTokenDialog = true },
                         shapes = IconButtonDefaults.shapes()
                     ) {
                         Icon(
@@ -425,7 +425,7 @@ fun DiscordLoginScreen(
                         )
                     }
                     IconButton(
-                        onClick = { useWebView = !useWebView },
+                        onClick = hapticAction(HapticKind.UI) { useWebView = !useWebView },
                         shapes = IconButtonDefaults.shapes()
                     ) {
                         Icon(
@@ -474,12 +474,7 @@ fun DiscordLoginScreen(
                             .fillMaxWidth()
                             .weight(1f),
                         factory = { ctx ->
-                            WebView(ctx).apply {
-                                layoutParams = ViewGroup.LayoutParams(
-                                    ViewGroup.LayoutParams.MATCH_PARENT,
-                                    ViewGroup.LayoutParams.MATCH_PARENT
-                                )
-
+                            SafeWebView(ctx).apply {
                                 settings.apply {
                                     javaScriptEnabled = true
                                     domStorageEnabled = true
@@ -621,7 +616,7 @@ fun DiscordLoginScreen(
                                 Spacer(Modifier.height(24.dp))
 
                                 Button(
-                                    onClick = { launchDiscordDeepLink(context, state.deepLinkUrl) },
+                                    onClick = hapticAction(HapticKind.UI) { launchDiscordDeepLink(context, state.deepLinkUrl) },
                                     shapes = ButtonDefaults.shapes(),
                                     modifier = Modifier.fillMaxWidth(0.85f)
                                 ) {
@@ -635,7 +630,7 @@ fun DiscordLoginScreen(
                                 Spacer(Modifier.height(12.dp))
 
                                 OutlinedButton(
-                                    onClick = { useWebView = true },
+                                    onClick = hapticAction(HapticKind.UI) { useWebView = true },
                                     shapes = ButtonDefaults.shapes(),
                                     modifier = Modifier.fillMaxWidth(0.85f)
                                 ) {
@@ -683,7 +678,7 @@ fun DiscordLoginScreen(
                                     )
                                     Spacer(Modifier.height(8.dp))
                                     Button(
-                                        onClick = { authManager.start() },
+                                        onClick = hapticAction(HapticKind.UI) { authManager.start() },
                                         shapes = ButtonDefaults.shapes()
                                     ) {
                                         Icon(Icons.Rounded.Refresh, contentDescription = null)
@@ -755,7 +750,7 @@ fun DiscordLoginScreen(
                                 )
                                 Spacer(Modifier.height(16.dp))
                                 Button(
-                                    onClick = { authManager.start() },
+                                    onClick = hapticAction(HapticKind.UI) { authManager.start() },
                                     shapes = ButtonDefaults.shapes()
                                 ) {
                                     Icon(Icons.Rounded.Refresh, contentDescription = null)
@@ -764,7 +759,7 @@ fun DiscordLoginScreen(
                                 }
                                 Spacer(Modifier.height(12.dp))
                                 TextButton(
-                                    onClick = { useWebView = true },
+                                    onClick = hapticAction(HapticKind.UI) { useWebView = true },
                                     shapes = ButtonDefaults.shapes()
                                 ) {
                                     Text(stringResource(R.string.discord_login_use_webview))
@@ -779,7 +774,7 @@ fun DiscordLoginScreen(
                                 )
                                 Spacer(Modifier.height(16.dp))
                                 Button(
-                                    onClick = { authManager.start() },
+                                    onClick = hapticAction(HapticKind.UI) { authManager.start() },
                                     shapes = ButtonDefaults.shapes()
                                 ) {
                                     Text(stringResource(R.string.account_action_refresh))

@@ -1,15 +1,29 @@
 package com.alananasss.kittytune.ui.profile
 
+import com.alananasss.kittytune.audio.haptics.performAppHaptic
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Comment
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
@@ -21,8 +35,26 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import android.graphics.Color as AndroidColor
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -32,21 +64,23 @@ import com.alananasss.kittytune.ui.common.SettingsSwitch
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import android.content.Intent
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.data.MusicManager
 import com.alananasss.kittytune.data.PlaybackService
+import com.alananasss.kittytune.data.WaveformRepository
 import com.alananasss.kittytune.data.local.NotificationExtraButton
 import com.alananasss.kittytune.data.local.PlayerActionButtonSlot
+import com.alananasss.kittytune.data.local.PlayerBackgroundStyle
 import com.alananasss.kittytune.data.local.PlayerDesign
 import com.alananasss.kittytune.data.local.PlayerPreferences
 import com.alananasss.kittytune.data.local.PlayerProgressMode
 import com.alananasss.kittytune.data.local.PlayerSliderStyle
+import com.alananasss.kittytune.data.local.TrackSourceBadgeStyle
 import com.alananasss.kittytune.data.local.WaveformColorMode
 import com.alananasss.kittytune.ui.common.AutoScrollToHighlightedItem
 import com.alananasss.kittytune.ui.common.ExpressiveConnectedButtonGroup
@@ -58,6 +92,7 @@ import com.alananasss.kittytune.ui.common.Slider
 import com.alananasss.kittytune.ui.common.getSettingsShape
 import com.alananasss.kittytune.ui.player.MenuTiles
 import com.alananasss.kittytune.ui.player.slider.PlayerSlider
+import com.alananasss.kittytune.ui.theme.ThemeState
 import kotlin.math.roundToInt
 
 @Composable
@@ -79,13 +114,19 @@ fun PlayerCustomizationScreen(
         )
     }
     var sliderStyle by remember { mutableStateOf(prefs.getPlayerSliderStyle()) }
+    var backgroundStyle by remember { mutableStateOf(prefs.getPlayerStyle()) }
+    var sourceBadgeStyle by remember { mutableStateOf(prefs.getTrackSourceBadgeStyle()) }
+    var showBackgroundStyleDialog by remember { mutableStateOf(false) }
+    var showSourceBadgeStyleDialog by remember { mutableStateOf(false) }
     var showRemainingTime by remember { mutableStateOf(prefs.getShowRemainingTime()) }
 
     var animatedCovers by remember { mutableStateOf(prefs.getAnimatedCoversEnabled()) }
     var animatedCoversFadeUi by remember { mutableStateOf(prefs.getAnimatedCoversFadeUiEnabled()) }
     var animatedArtistProfiles by remember { mutableStateOf(prefs.getAnimatedArtistProfilesEnabled()) }
+    var fullPlayerSourceIndicator by remember { mutableStateOf(prefs.getFullPlayerSourceIndicatorEnabled()) }
 
     var waveformColorMode by remember { mutableStateOf(prefs.getWaveformColorMode()) }
+    var waveformCustomColor by remember { mutableIntStateOf(prefs.getWaveformCustomColor()) }
     var commentsPopup by remember { mutableStateOf(prefs.getWaveformCommentsPopupEnabled()) }
     var reactionsBar by remember { mutableStateOf(prefs.getSoundCloudReactionsBarEnabled()) }
     var parallax by remember { mutableStateOf(prefs.getSoundCloudParallaxEnabled()) }
@@ -100,8 +141,8 @@ fun PlayerCustomizationScreen(
 
     var notifExtraButton by remember { mutableStateOf(prefs.getNotificationExtraButton()) }
     var showNotifExtraButtonDialog by remember { mutableStateOf(false) }
-    var miniPlayerSwipeAction by remember { mutableStateOf(prefs.getMiniPlayerSwipeAction()) }
-    var showMiniPlayerSwipeActionDialog by remember { mutableStateOf(false) }
+    var shareCardCodeMode by remember { mutableIntStateOf(prefs.getShareCardCodeMode()) }
+    var showShareCardCodeDialog by remember { mutableStateOf(false) }
 
     var previewSliderProgress by remember { mutableFloatStateOf(0.42f) }
     var isPreviewPlaying by remember { mutableStateOf(true) }
@@ -138,7 +179,7 @@ fun PlayerCustomizationScreen(
                 val moved = tileOrder.removeAt(fromIndex)
                 tileOrder.add(toIndex, moved)
                 persistTileOrder()
-                view.performHapticFeedback(HapticFeedbackConstants.SEGMENT_FREQUENT_TICK)
+                view.performAppHaptic(HapticFeedbackConstants.SEGMENT_FREQUENT_TICK)
             }
         }
     )
@@ -149,11 +190,11 @@ fun PlayerCustomizationScreen(
             "player_design_page" to 0,
             "pref_slider_style" to 1,
             "pref_show_remaining_time" to 2,
-            "pref_animated_covers" to 3,
-            "pref_animated_covers_fade_ui" to 3,
-            "pref_animated_artist_profiles" to 3,
             "notif_player_extra_button" to 5,
-            "mini_player_swipe_action" to 6
+            "pref_player_style" to 4,
+            "pref_track_source_badge" to 4,
+            "pref_full_player_source" to 4,
+            "share_card_code" to 6,
         )
     )
 
@@ -202,7 +243,7 @@ fun PlayerCustomizationScreen(
                                         icon = Icons.Rounded.Smartphone,
                                         isSelected = currentDesign == PlayerDesign.PIXEL_PLAYER,
                                         modifier = Modifier.weight(1f),
-                                        onClick = {
+                                        onClick = hapticAction(HapticKind.UI) {
                                             currentDesign = PlayerDesign.PIXEL_PLAYER
                                             prefs.setPlayerDesign(PlayerDesign.PIXEL_PLAYER)
                                             slots = List(4) { i -> prefs.getSlotForDesign(PlayerDesign.PIXEL_PLAYER, i) }
@@ -216,7 +257,7 @@ fun PlayerCustomizationScreen(
                                         icon = Icons.Rounded.GraphicEq,
                                         isSelected = currentDesign == PlayerDesign.SOUNDCLOUD,
                                         modifier = Modifier.weight(1f),
-                                        onClick = {
+                                        onClick = hapticAction(HapticKind.UI) {
                                             currentDesign = PlayerDesign.SOUNDCLOUD
                                             prefs.setPlayerDesign(PlayerDesign.SOUNDCLOUD)
                                             slots = List(5) { i -> prefs.getSlotForDesign(PlayerDesign.SOUNDCLOUD, i) }
@@ -234,7 +275,7 @@ fun PlayerCustomizationScreen(
                                         icon = Icons.Rounded.AutoAwesome,
                                         isSelected = currentDesign == PlayerDesign.MODERN,
                                         modifier = Modifier.weight(1f),
-                                        onClick = {
+                                        onClick = hapticAction(HapticKind.UI) {
                                             currentDesign = PlayerDesign.MODERN
                                             prefs.setPlayerDesign(PlayerDesign.MODERN)
                                             slots = List(4) { i -> prefs.getSlotForDesign(PlayerDesign.MODERN, i) }
@@ -249,7 +290,7 @@ fun PlayerCustomizationScreen(
                                         icon = Icons.Rounded.LinearScale,
                                         isSelected = currentDesign == PlayerDesign.CLASSIC,
                                         modifier = Modifier.weight(1f),
-                                        onClick = {
+                                        onClick = hapticAction(HapticKind.UI) {
                                             currentDesign = PlayerDesign.CLASSIC
                                             prefs.setPlayerDesign(PlayerDesign.CLASSIC)
                                             slots = List(4) { i -> prefs.getSlotForDesign(PlayerDesign.CLASSIC, i) }
@@ -379,7 +420,7 @@ fun PlayerCustomizationScreen(
                                              shape = CircleShape,
                                              color = MaterialTheme.colorScheme.primary,
                                              modifier = Modifier.size(32.dp),
-                                             onClick = { isPreviewPlaying = !isPreviewPlaying }
+                                             onClick = hapticAction(HapticKind.UI) { isPreviewPlaying = !isPreviewPlaying }
                                          ) {
                                              Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                                  Icon(
@@ -439,7 +480,7 @@ fun PlayerCustomizationScreen(
                                         style = PlayerSliderStyle.BAR,
                                         isSelected = sliderStyle == PlayerSliderStyle.BAR,
                                         modifier = Modifier.weight(1f),
-                                        onClick = {
+                                        onClick = hapticAction(HapticKind.UI) {
                                             sliderStyle = PlayerSliderStyle.BAR
                                             prefs.setPlayerSliderStyle(PlayerSliderStyle.BAR)
                                             onUpdated()
@@ -451,7 +492,7 @@ fun PlayerCustomizationScreen(
                                         style = PlayerSliderStyle.WAVY,
                                         isSelected = sliderStyle == PlayerSliderStyle.WAVY,
                                         modifier = Modifier.weight(1f),
-                                        onClick = {
+                                        onClick = hapticAction(HapticKind.UI) {
                                             sliderStyle = PlayerSliderStyle.WAVY
                                             prefs.setPlayerSliderStyle(PlayerSliderStyle.WAVY)
                                             onUpdated()
@@ -468,7 +509,7 @@ fun PlayerCustomizationScreen(
                                         style = PlayerSliderStyle.SLIM,
                                         isSelected = sliderStyle == PlayerSliderStyle.SLIM,
                                         modifier = Modifier.weight(1f),
-                                        onClick = {
+                                        onClick = hapticAction(HapticKind.UI) {
                                             sliderStyle = PlayerSliderStyle.SLIM
                                             prefs.setPlayerSliderStyle(PlayerSliderStyle.SLIM)
                                             onUpdated()
@@ -480,7 +521,7 @@ fun PlayerCustomizationScreen(
                                         style = PlayerSliderStyle.SQUIGGLY,
                                         isSelected = sliderStyle == PlayerSliderStyle.SQUIGGLY,
                                         modifier = Modifier.weight(1f),
-                                        onClick = {
+                                        onClick = hapticAction(HapticKind.UI) {
                                             sliderStyle = PlayerSliderStyle.SQUIGGLY
                                             prefs.setPlayerSliderStyle(PlayerSliderStyle.SQUIGGLY)
                                             onUpdated()
@@ -522,53 +563,45 @@ fun PlayerCustomizationScreen(
                     add { shape ->
                         SettingsItem(
                             shape = shape,
-                            title = stringResource(R.string.pref_animated_covers),
-                            subtitle = stringResource(R.string.pref_animated_covers_desc),
-                            icon = Icons.Rounded.Movie,
-                            hasSwitch = true,
-                            switchState = animatedCovers,
-                            onSwitchChange = {
-                                animatedCovers = it
-                                prefs.setAnimatedCoversEnabled(it)
-                                onUpdated()
-                            },
-                            highlightKey = "pref_animated_covers"
+                            title = stringResource(R.string.pref_player_style),
+                            subtitle = stringResource(
+                                when (backgroundStyle) {
+                                    PlayerBackgroundStyle.THEME -> R.string.style_theme
+                                    PlayerBackgroundStyle.GRADIENT -> R.string.style_gradient
+                                    PlayerBackgroundStyle.BLUR -> R.string.style_blur
+                                    PlayerBackgroundStyle.APPLE_MUSIC -> R.string.style_apple_music
+                                }
+                            ),
+                            icon = Icons.Rounded.Style,
+                            onClick = hapticAction(HapticKind.UI) { showBackgroundStyleDialog = true },
+                            highlightKey = "pref_player_style"
                         )
                     }
-
-                    if (animatedCovers) {
-                        add { shape ->
-                            SettingsItem(
-                                shape = shape,
-                                title = stringResource(R.string.pref_animated_covers_fade_ui),
-                                subtitle = stringResource(R.string.pref_animated_covers_fade_ui_desc),
-                                icon = Icons.Rounded.BlurLinear,
-                                hasSwitch = true,
-                                switchState = animatedCoversFadeUi,
-                                onSwitchChange = {
-                                    animatedCoversFadeUi = it
-                                    prefs.setAnimatedCoversFadeUiEnabled(it)
-                                    onUpdated()
-                                },
-                                highlightKey = "pref_animated_covers_fade_ui"
-                            )
-                        }
+                    add { shape ->
+                        SettingsItem(
+                            shape = shape,
+                            title = stringResource(R.string.pref_track_source_badge_title),
+                            subtitle = stringResource(sourceBadgeStyle.titleRes),
+                            icon = Icons.Rounded.Badge,
+                            onClick = hapticAction(HapticKind.UI) { showSourceBadgeStyleDialog = true },
+                            highlightKey = "pref_track_source_badge"
+                        )
                     }
 
                     add { shape ->
                         SettingsItem(
                             shape = shape,
-                            title = stringResource(R.string.pref_animated_artist_profiles),
-                            subtitle = stringResource(R.string.pref_animated_artist_profiles_desc),
-                            icon = Icons.Rounded.AccountBox,
+                            title = stringResource(R.string.pref_full_player_source_title),
+                            subtitle = stringResource(R.string.pref_full_player_source_desc),
+                            icon = Icons.Rounded.GraphicEq,
                             hasSwitch = true,
-                            switchState = animatedArtistProfiles,
+                            switchState = fullPlayerSourceIndicator,
                             onSwitchChange = {
-                                animatedArtistProfiles = it
-                                prefs.setAnimatedArtistProfilesEnabled(it)
+                                fullPlayerSourceIndicator = it
+                                prefs.setFullPlayerSourceIndicatorEnabled(it)
                                 onUpdated()
                             },
-                            highlightKey = "pref_animated_artist_profiles"
+                            highlightKey = "pref_full_player_source"
                         )
                     }
 
@@ -584,7 +617,7 @@ fun PlayerCustomizationScreen(
                                     WaveformColorMode.CUSTOM -> stringResource(R.string.waveform_color_custom)
                                 },
                                 icon = Icons.Rounded.Palette,
-                                onClick = { showWaveformColorDialog = true }
+                                onClick = hapticAction(HapticKind.UI) { showWaveformColorDialog = true }
                             )
                         }
                         add { shape ->
@@ -663,7 +696,7 @@ fun PlayerCustomizationScreen(
                                 subtitle = stringResource(slot.titleRes),
                                 icon = getSlotIcon(slot),
                                 trailingText = stringResource(R.string.player_slot_change),
-                                onClick = { selectedSlotToEdit = index }
+                                onClick = hapticAction(HapticKind.UI) { selectedSlotToEdit = index }
                             )
                         }
                     }
@@ -673,7 +706,7 @@ fun PlayerCustomizationScreen(
                             title = stringResource(R.string.btn_reset),
                             subtitle = barDesc,
                             icon = Icons.Rounded.RestartAlt,
-                            onClick = {
+                            onClick = hapticAction(HapticKind.UI) {
                                 prefs.resetDesignCustomization(currentDesign)
                                 slots = List(slotCount) { i -> prefs.getSlotForDesign(currentDesign, i) }
                                 sliderStyle = prefs.getPlayerSliderStyle()
@@ -698,7 +731,7 @@ fun PlayerCustomizationScreen(
                         icon = getNotifButtonVector(notifExtraButton),
                         iconRes = getNotifButtonIconRes(notifExtraButton),
                         trailingText = stringResource(R.string.player_slot_change),
-                        onClick = { showNotifExtraButtonDialog = true },
+                        onClick = hapticAction(HapticKind.UI) { showNotifExtraButtonDialog = true },
                         highlightKey = "notif_player_extra_button"
                     )
                 }
@@ -709,26 +742,26 @@ fun PlayerCustomizationScreen(
                 )
             }
 
-            item(key = "mini_player_swipe_settings") {
-                val miniItems = listOf<@Composable (androidx.compose.ui.graphics.Shape) -> Unit> { shape ->
-                    SettingsItem(
-                        shape = shape,
-                        title = stringResource(R.string.pref_mini_player_swipe_action_title),
-                        subtitle = when (miniPlayerSwipeAction) {
-                            com.alananasss.kittytune.data.local.MiniPlayerSwipeAction.CHANGE_TRACK ->
-                                stringResource(R.string.pref_mini_player_swipe_action_change_track)
-                            com.alananasss.kittytune.data.local.MiniPlayerSwipeAction.DISMISS ->
-                                stringResource(R.string.pref_mini_player_swipe_action_dismiss)
-                        },
-                        trailingText = stringResource(R.string.player_slot_change),
-                        onClick = { showMiniPlayerSwipeActionDialog = true },
-                        highlightKey = "mini_player_swipe_action"
-                    )
+            item {
+                val shareCodeSubtitle = when (shareCardCodeMode) {
+                    1 -> stringResource(R.string.share_card_code_solid)
+                    2 -> stringResource(R.string.share_card_code_halftone)
+                    else -> stringResource(R.string.share_card_code_auto)
                 }
-
                 SettingsGroup(
-                    title = stringResource(R.string.pref_mini_player_title),
-                    items = miniItems
+                    title = stringResource(R.string.share_card_settings_group),
+                    items = listOf { shape ->
+                        SettingsItem(
+                            shape = shape,
+                            title = stringResource(R.string.share_card_code_title),
+                            subtitle = stringResource(
+                                R.string.share_card_code_subtitle
+                            ) + " • " + shareCodeSubtitle,
+                            icon = Icons.Rounded.QrCode2,
+                            onClick = hapticAction(HapticKind.UI) { showShareCardCodeDialog = true },
+                            highlightKey = "share_card_code"
+                        )
+                    }
                 )
             }
 
@@ -776,10 +809,10 @@ fun PlayerCustomizationScreen(
                                             .size(48.dp)
                                             .draggableHandle(
                                                 onDragStarted = {
-                                                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                                    view.performAppHaptic(HapticFeedbackConstants.LONG_PRESS)
                                                 },
                                                 onDragStopped = {
-                                                    view.performHapticFeedback(HapticFeedbackConstants.GESTURE_END)
+                                                    view.performAppHaptic(HapticFeedbackConstants.GESTURE_END)
                                                 }
                                             ),
                                         contentAlignment = Alignment.Center
@@ -820,7 +853,7 @@ fun PlayerCustomizationScreen(
                                             val nextHidden = if (on) hiddenTiles - tile.id else hiddenTiles + tile.id
                                             hiddenTiles = nextHidden
                                             prefs.setHiddenMenuTiles(PlayerPreferences.MENU_TRACK, nextHidden)
-                                            view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                                            view.performAppHaptic(HapticFeedbackConstants.CONTEXT_CLICK)
                                             onUpdated()
                                         }
                                     )
@@ -848,7 +881,7 @@ fun PlayerCustomizationScreen(
                             hiddenTiles = prefs.getHiddenMenuTiles(PlayerPreferences.MENU_TRACK)
                             tileOrder.clear()
                             tileOrder.addAll(catalogue.map { it.id })
-                            view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                            view.performAppHaptic(HapticFeedbackConstants.CONFIRM)
                             onUpdated()
                         }
                     )
@@ -858,7 +891,7 @@ fun PlayerCustomizationScreen(
     }
 
     if (selectedSlotToEdit >= 0) {
-        val allSlots = PlayerActionButtonSlot.entries
+        val allSlots = PlayerActionButtonSlot.entries.filter { it != PlayerActionButtonSlot.DEVICES }
         AlertDialog(
             onDismissRequest = { selectedSlotToEdit = -1 },
             title = {
@@ -881,7 +914,7 @@ fun PlayerCustomizationScreen(
                             title = stringResource(slotOption.titleRes),
                             icon = getSlotIcon(slotOption),
                             trailingText = if (isSelected) stringResource(R.string.player_slot_active) else null,
-                            onClick = {
+                            onClick = hapticAction(HapticKind.UI) {
                                 if (selectedSlotToEdit in slots.indices) {
                                     prefs.setSlotForDesign(currentDesign, selectedSlotToEdit, slotOption)
                                     slots = List(slotCount) { i -> prefs.getSlotForDesign(currentDesign, i) }
@@ -894,42 +927,43 @@ fun PlayerCustomizationScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { selectedSlotToEdit = -1 }) {
+                TextButton(onClick = hapticAction(HapticKind.UI) { selectedSlotToEdit = -1 }) {
                     Text(stringResource(R.string.btn_cancel))
                 }
             }
         )
     }
 
-    if (showWaveformColorDialog) {
-        val modes = WaveformColorMode.entries
+    if (showBackgroundStyleDialog) {
+        val styles = PlayerBackgroundStyle.entries
         AlertDialog(
-            onDismissRequest = { showWaveformColorDialog = false },
+            onDismissRequest = { showBackgroundStyleDialog = false },
             title = {
                 Text(
-                    text = stringResource(R.string.pref_waveform_color_title),
+                    text = stringResource(R.string.pref_player_style),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    modes.forEachIndexed { idx, mode ->
-                        val isSelected = waveformColorMode == mode
+                    styles.forEachIndexed { idx, style ->
+                        val isSelected = backgroundStyle == style
                         SettingsItem(
-                            shape = getSettingsShape(modes.size, idx),
-                            title = when (mode) {
-                                WaveformColorMode.SOUNDCLOUD -> stringResource(R.string.waveform_color_soundcloud)
-                                WaveformColorMode.COVER_ART -> stringResource(R.string.waveform_color_cover_art)
-                                WaveformColorMode.APP_THEME -> stringResource(R.string.waveform_color_app_theme)
-                                WaveformColorMode.CUSTOM -> stringResource(R.string.waveform_color_custom)
-                            },
-                            icon = Icons.Rounded.Palette,
+                            shape = getSettingsShape(styles.size, idx),
+                            title = stringResource(
+                                when (style) {
+                                    PlayerBackgroundStyle.THEME -> R.string.style_theme
+                                    PlayerBackgroundStyle.GRADIENT -> R.string.style_gradient
+                                    PlayerBackgroundStyle.BLUR -> R.string.style_blur
+                                    PlayerBackgroundStyle.APPLE_MUSIC -> R.string.style_apple_music
+                                }
+                            ),
                             trailingText = if (isSelected) stringResource(R.string.player_slot_active) else null,
-                            onClick = {
-                                waveformColorMode = mode
-                                prefs.setWaveformColorMode(mode)
-                                showWaveformColorDialog = false
+                            onClick = hapticAction(HapticKind.UI) {
+                                backgroundStyle = style
+                                prefs.setPlayerStyle(style)
+                                showBackgroundStyleDialog = false
                                 onUpdated()
                             }
                         )
@@ -937,10 +971,67 @@ fun PlayerCustomizationScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showWaveformColorDialog = false }) {
+                TextButton(onClick = hapticAction(HapticKind.UI) { showBackgroundStyleDialog = false }) {
                     Text(stringResource(R.string.btn_cancel))
                 }
             }
+        )
+    }
+
+    if (showSourceBadgeStyleDialog) {
+        val badgeStyles = TrackSourceBadgeStyle.entries
+        AlertDialog(
+            onDismissRequest = { showSourceBadgeStyleDialog = false },
+            title = {
+                Text(
+                    text = stringResource(R.string.pref_track_source_badge_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    badgeStyles.forEachIndexed { idx, style ->
+                        val isSelected = sourceBadgeStyle == style
+                        SettingsItem(
+                            shape = getSettingsShape(badgeStyles.size, idx),
+                            title = stringResource(style.titleRes),
+                            trailingText = if (isSelected) stringResource(R.string.player_slot_active) else null,
+                            onClick = hapticAction(HapticKind.UI) {
+                                sourceBadgeStyle = style
+                                prefs.setTrackSourceBadgeStyle(style)
+                                showSourceBadgeStyleDialog = false
+                                onUpdated()
+                            }
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = hapticAction(HapticKind.UI) { showSourceBadgeStyleDialog = false }) {
+                    Text(stringResource(R.string.btn_cancel))
+                }
+            }
+        )
+    }
+
+    if (showWaveformColorDialog) {
+        WaveformColorDialog(
+            currentMode = waveformColorMode,
+            currentColor = waveformCustomColor,
+            onModeSelected = { mode ->
+                waveformColorMode = mode
+                prefs.setWaveformColorMode(mode)
+                onUpdated()
+            },
+            onColorSelected = { color ->
+                waveformCustomColor = color
+                prefs.setWaveformCustomColor(color)
+                waveformColorMode = WaveformColorMode.CUSTOM
+                prefs.setWaveformColorMode(WaveformColorMode.CUSTOM)
+                onUpdated()
+            },
+            onDismiss = { showWaveformColorDialog = false }
         )
     }
 
@@ -970,7 +1061,7 @@ fun PlayerCustomizationScreen(
                             icon = getNotifButtonVector(option),
                             iconRes = getNotifButtonIconRes(option),
                             trailingText = if (isSelected) stringResource(R.string.player_slot_active) else null,
-                            onClick = {
+                            onClick = hapticAction(HapticKind.UI) {
                                 notifExtraButton = option
                                 prefs.setNotificationExtraButton(option)
                                 val intent = Intent(context, PlaybackService::class.java).apply {
@@ -985,96 +1076,66 @@ fun PlayerCustomizationScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showNotifExtraButtonDialog = false }) {
+                TextButton(onClick = hapticAction(HapticKind.UI) { showNotifExtraButtonDialog = false }) {
                     Text(stringResource(R.string.btn_cancel))
                 }
             }
         )
     }
 
-    if (showMiniPlayerSwipeActionDialog) {
+    if (showShareCardCodeDialog) {
+        val labels = listOf(
+            stringResource(R.string.share_card_code_auto) to stringResource(R.string.share_card_code_auto_desc),
+            stringResource(R.string.share_card_code_solid) to stringResource(R.string.share_card_code_solid_desc),
+            stringResource(R.string.share_card_code_halftone) to stringResource(R.string.share_card_code_halftone_desc),
+        )
         AlertDialog(
-            onDismissRequest = { showMiniPlayerSwipeActionDialog = false },
-            title = {
-                Text(
-                    text = stringResource(R.string.pref_mini_player_swipe_action_title),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-            },
+            onDismissRequest = { showShareCardCodeDialog = false },
+            title = { Text(stringResource(R.string.share_card_code_title)) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable {
-                                prefs.setMiniPlayerSwipeAction(com.alananasss.kittytune.data.local.MiniPlayerSwipeAction.CHANGE_TRACK)
-                                miniPlayerSwipeAction = com.alananasss.kittytune.data.local.MiniPlayerSwipeAction.CHANGE_TRACK
-                                showMiniPlayerSwipeActionDialog = false
-                                onUpdated()
+                Column {
+                    labels.forEachIndexed { index, (label, desc) ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    shareCardCodeMode = index
+                                    prefs.setShareCardCodeMode(index)
+                                    showShareCardCodeDialog = false
+                                    onUpdated()
+                                }
+                                .padding(vertical = 8.dp)
+                        ) {
+                            RadioButton(
+                                selected = shareCardCodeMode == index,
+                                onClick = hapticAction(HapticKind.UI) {
+                                    shareCardCodeMode = index
+                                    prefs.setShareCardCodeMode(index)
+                                    showShareCardCodeDialog = false
+                                    onUpdated()
+                                },
+                            )
+                            Column(modifier = Modifier.padding(start = 4.dp)) {
+                                Text(label, style = MaterialTheme.typography.bodyLarge)
+                                Text(
+                                    desc,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
-                            .padding(vertical = 10.dp, horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = miniPlayerSwipeAction == com.alananasss.kittytune.data.local.MiniPlayerSwipeAction.CHANGE_TRACK,
-                            onClick = null
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = stringResource(R.string.pref_mini_player_swipe_action_change_track),
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = stringResource(R.string.pref_mini_player_swipe_action_change_track_desc),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable {
-                                prefs.setMiniPlayerSwipeAction(com.alananasss.kittytune.data.local.MiniPlayerSwipeAction.DISMISS)
-                                miniPlayerSwipeAction = com.alananasss.kittytune.data.local.MiniPlayerSwipeAction.DISMISS
-                                showMiniPlayerSwipeActionDialog = false
-                                onUpdated()
-                            }
-                            .padding(vertical = 10.dp, horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = miniPlayerSwipeAction == com.alananasss.kittytune.data.local.MiniPlayerSwipeAction.DISMISS,
-                            onClick = null
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = stringResource(R.string.pref_mini_player_swipe_action_dismiss),
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = stringResource(R.string.pref_mini_player_swipe_action_dismiss_desc),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
                         }
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showMiniPlayerSwipeActionDialog = false }) {
+                TextButton(onClick = hapticAction(HapticKind.UI) { showShareCardCodeDialog = false }) {
                     Text(stringResource(R.string.btn_cancel))
                 }
-            }
+            },
         )
     }
+
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -1218,7 +1279,9 @@ private fun getSlotIcon(slot: PlayerActionButtonSlot): ImageVector = when (slot)
     PlayerActionButtonSlot.FULLSCREEN_LYRICS -> Icons.Rounded.OpenInFull
     PlayerActionButtonSlot.SLEEP_TIMER -> Icons.Rounded.Bedtime
     PlayerActionButtonSlot.HAPTICS -> Icons.Rounded.Vibration
+    PlayerActionButtonSlot.CONNECT -> Icons.Rounded.Devices
     PlayerActionButtonSlot.MORE -> Icons.Rounded.MoreVert
+    PlayerActionButtonSlot.DEVICES -> Icons.Rounded.Devices
     PlayerActionButtonSlot.NONE -> Icons.Rounded.Block
 }
 
@@ -1237,3 +1300,791 @@ private fun getNotifButtonVector(button: NotificationExtraButton): ImageVector? 
     NotificationExtraButton.OFF -> Icons.Rounded.Block
     else -> null
 }
+@Composable
+fun WaveformColorDialog(
+    currentMode: WaveformColorMode,
+    currentColor: Int,
+    onModeSelected: (WaveformColorMode) -> Unit,
+    onColorSelected: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+    var selectedMode by remember { mutableStateOf(currentMode) }
+    var selectedColor by remember { mutableIntStateOf(currentColor) }
+
+    val initialHsv = remember(currentColor) {
+        FloatArray(3).also { AndroidColor.colorToHSV(currentColor, it) }
+    }
+    var hue by remember { mutableFloatStateOf(initialHsv[0]) }
+    var saturation by remember { mutableFloatStateOf(initialHsv[1]) }
+    var brightness by remember { mutableFloatStateOf(initialHsv[2]) }
+
+    var hexInput by remember {
+        mutableStateOf(String.format("%06X", currentColor and 0xFFFFFF))
+    }
+    var hexError by remember { mutableStateOf(false) }
+
+    fun updateColorFromHsv(newH: Float, newS: Float, newV: Float) {
+        hue = newH
+        saturation = newS
+        brightness = newV
+        val argb = AndroidColor.HSVToColor(floatArrayOf(newH, newS, newV))
+        selectedColor = argb
+        hexInput = String.format("%06X", argb and 0xFFFFFF)
+        hexError = false
+        onColorSelected(argb)
+    }
+
+    fun selectPreset(presetInt: Int) {
+        selectedColor = presetInt
+        val hsv = FloatArray(3).also { AndroidColor.colorToHSV(presetInt, it) }
+        hue = hsv[0]
+        saturation = hsv[1]
+        brightness = hsv[2]
+        hexInput = String.format("%06X", presetInt and 0xFFFFFF)
+        hexError = false
+        onColorSelected(presetInt)
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+    }
+
+    val presetColors = remember {
+        listOf(
+            0xFFFF5500.toInt(), // SoundCloud Orange
+            0xFFFF3366.toInt(), // Neon Coral Pink
+            0xFFE53935.toInt(), // Crimson Red
+            0xFF8E24AA.toInt(), // Purple
+            0xFF3F51B5.toInt(), // Indigo
+            0xFF1E88E5.toInt(), // Sky Blue
+            0xFF00ACC1.toInt(), // Cyan
+            0xFF00E676.toInt(), // Mint Green
+            0xFF43A047.toInt(), // Emerald Green
+            0xFFFFB300.toInt(), // Amber Gold
+            0xFFFFFFFF.toInt()  // Pure White
+        )
+    }
+
+    val hueGradient = remember {
+        Brush.horizontalGradient(
+            colors = listOf(
+                Color(0xFFFF0000), // Red
+                Color(0xFFFFFF00), // Yellow
+                Color(0xFF00FF00), // Green
+                Color(0xFF00FFFF), // Cyan
+                Color(0xFF0000FF), // Blue
+                Color(0xFFFF00FF), // Magenta
+                Color(0xFFFF0000)  // Red
+            )
+        )
+    }
+
+    val satGradient = remember(hue, brightness) {
+        Brush.horizontalGradient(
+            colors = listOf(
+                Color(AndroidColor.HSVToColor(floatArrayOf(hue, 0.0f, brightness))),
+                Color(AndroidColor.HSVToColor(floatArrayOf(hue, 1.0f, brightness)))
+            )
+        )
+    }
+
+    val brightGradient = remember(hue, saturation) {
+        Brush.horizontalGradient(
+            colors = listOf(
+                Color.Black,
+                Color(AndroidColor.HSVToColor(floatArrayOf(hue, saturation, 1.0f)))
+            )
+        )
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(28.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Palette,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Column {
+                    Text(
+                        text = stringResource(R.string.pref_waveform_color_title),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = stringResource(R.string.pref_waveform_color_subtitle),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // 1. Live Waveform Preview Card
+                MiniWaveformPreview(
+                    mode = selectedMode,
+                    customColor = selectedColor
+                )
+
+                // 2. Mode Cards Grid (2 rows x 2 columns)
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        WaveformModeCard(
+                            title = stringResource(R.string.waveform_mode_soundcloud_title),
+                            subtitle = stringResource(R.string.waveform_mode_soundcloud_sub),
+                            isSelected = selectedMode == WaveformColorMode.SOUNDCLOUD,
+                            leadingContent = {
+                                Box(
+                                    modifier = Modifier
+                                        .size(22.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFFFF5500))
+                                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), CircleShape)
+                                )
+                            },
+                            onClick = {
+                                selectedMode = WaveformColorMode.SOUNDCLOUD
+                                onModeSelected(WaveformColorMode.SOUNDCLOUD)
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        WaveformModeCard(
+                            title = stringResource(R.string.waveform_mode_cover_title),
+                            subtitle = stringResource(R.string.waveform_mode_cover_sub),
+                            isSelected = selectedMode == WaveformColorMode.COVER_ART,
+                            leadingContent = {
+                                Box(
+                                    modifier = Modifier
+                                        .size(22.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            Brush.sweepGradient(
+                                                listOf(
+                                                    Color(0xFFE53935),
+                                                    Color(0xFFFFB300),
+                                                    Color(0xFF43A047),
+                                                    Color(0xFF1E88E5),
+                                                    Color(0xFF8E24AA),
+                                                    Color(0xFFE53935)
+                                                )
+                                            )
+                                        )
+                                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), CircleShape)
+                                )
+                            },
+                            onClick = {
+                                selectedMode = WaveformColorMode.COVER_ART
+                                onModeSelected(WaveformColorMode.COVER_ART)
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        WaveformModeCard(
+                            title = stringResource(R.string.waveform_mode_theme_title),
+                            subtitle = stringResource(R.string.waveform_mode_theme_sub),
+                            isSelected = selectedMode == WaveformColorMode.APP_THEME,
+                            leadingContent = {
+                                Box(
+                                    modifier = Modifier
+                                        .size(22.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.primary)
+                                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), CircleShape)
+                                )
+                            },
+                            onClick = {
+                                selectedMode = WaveformColorMode.APP_THEME
+                                onModeSelected(WaveformColorMode.APP_THEME)
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        WaveformModeCard(
+                            title = stringResource(R.string.waveform_mode_custom_title),
+                            subtitle = stringResource(R.string.waveform_mode_custom_sub),
+                            isSelected = selectedMode == WaveformColorMode.CUSTOM,
+                            leadingContent = {
+                                Box(
+                                    modifier = Modifier
+                                        .size(22.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(selectedColor))
+                                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), CircleShape)
+                                )
+                            },
+                            onClick = {
+                                selectedMode = WaveformColorMode.CUSTOM
+                                onModeSelected(WaveformColorMode.CUSTOM)
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                // 3. Custom Color Section (animated)
+                AnimatedVisibility(
+                    visible = selectedMode == WaveformColorMode.CUSTOM,
+                    enter = fadeIn(tween(200)) + expandVertically(tween(250)),
+                    exit = fadeOut(tween(150)) + shrinkVertically(tween(200))
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 2.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                        )
+
+                        // Expressive Color Sliders Card
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                            ),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                WaveformColorSlider(
+                                    label = stringResource(R.string.color_picker_hue),
+                                    value = hue,
+                                    valueText = "${hue.toInt()}°",
+                                    valueRange = 0f..360f,
+                                    gradientBrush = hueGradient,
+                                    onValueChange = { newHue ->
+                                        updateColorFromHsv(newHue, saturation, brightness)
+                                    }
+                                )
+
+                                WaveformColorSlider(
+                                    label = stringResource(R.string.color_picker_saturation),
+                                    value = saturation,
+                                    valueText = "${(saturation * 100).toInt()}%",
+                                    valueRange = 0f..1f,
+                                    gradientBrush = satGradient,
+                                    onValueChange = { newSat ->
+                                        updateColorFromHsv(hue, newSat, brightness)
+                                    }
+                                )
+
+                                WaveformColorSlider(
+                                    label = stringResource(R.string.color_picker_brightness),
+                                    value = brightness,
+                                    valueText = "${(brightness * 100).toInt()}%",
+                                    valueRange = 0f..1f,
+                                    gradientBrush = brightGradient,
+                                    onValueChange = { newBright ->
+                                        updateColorFromHsv(hue, saturation, newBright)
+                                    }
+                                )
+                            }
+                        }
+
+                        // Presets Swatches
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.color_picker_presets),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                items(presetColors.size) { idx ->
+                                    val colorInt = presetColors[idx]
+                                    val isColorActive = (selectedColor and 0xFFFFFF) == (colorInt and 0xFFFFFF)
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(colorInt))
+                                            .border(
+                                                width = if (isColorActive) 2.5.dp else 1.dp,
+                                                color = if (isColorActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                                                shape = CircleShape
+                                            )
+                                            .clickable { selectPreset(colorInt) },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (isColorActive) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Check,
+                                                contentDescription = null,
+                                                tint = if ((colorInt and 0xFFFFFF) == 0xFFFFFF || (colorInt and 0xFFFFFF) == 0xFFFFB300.toInt()) Color.Black else Color.White,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // HEX input row + preview swatch
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = hexInput,
+                                onValueChange = { input ->
+                                    val filtered = input.take(6).filter { c ->
+                                        c in '0'..'9' || c in 'a'..'f' || c in 'A'..'F'
+                                    }
+                                    hexInput = filtered.uppercase()
+                                    if (filtered.length == 6) {
+                                        try {
+                                            val parsed = (0xFF000000L or filtered.toLong(16)).toInt()
+                                            selectedColor = parsed
+                                            val hsv = FloatArray(3).also { AndroidColor.colorToHSV(parsed, it) }
+                                            hue = hsv[0]
+                                            saturation = hsv[1]
+                                            brightness = hsv[2]
+                                            hexError = false
+                                            onColorSelected(parsed)
+                                        } catch (e: Exception) {
+                                            hexError = true
+                                        }
+                                    } else {
+                                        hexError = false
+                                    }
+                                },
+                                label = { Text("HEX") },
+                                prefix = { Text("#") },
+                                singleLine = true,
+                                isError = hexError,
+                                keyboardOptions = KeyboardOptions(
+                                    capitalization = KeyboardCapitalization.Characters,
+                                    keyboardType = KeyboardType.Ascii
+                                ),
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(14.dp)
+                            )
+
+                            Surface(
+                                modifier = Modifier.size(52.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                color = Color(selectedColor),
+                                border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                            ) {}
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                shapes = ButtonDefaults.shapes(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                ),
+                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 10.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.btn_ok),
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+    )
+}
+
+@Composable
+private fun MiniWaveformPreview(
+    mode: WaveformColorMode,
+    customColor: Int,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val currentTrack = MusicManager.currentTrack
+    val trackId = currentTrack?.id
+
+    var waveformSamples by remember(trackId) {
+        mutableStateOf(trackId?.let { WaveformRepository.getCachedWaveform(it) })
+    }
+
+    LaunchedEffect(trackId) {
+        if (currentTrack != null && waveformSamples == null) {
+            val samples = withContext(Dispatchers.IO) {
+                WaveformRepository.getWaveform(context, currentTrack)
+            }
+            if (samples != null) {
+                waveformSamples = samples
+            }
+        }
+    }
+
+    val fallbackBars = remember {
+        val rng = java.util.Random(13L)
+        FloatArray(200) { i ->
+            val base = (Math.sin(i * 0.08) * 0.3 + 0.55).toFloat()
+            val noise = (rng.nextFloat() - 0.5f) * 0.25f
+            (base + noise).coerceIn(0.08f, 0.95f)
+        }
+    }
+
+    val themePrimary = MaterialTheme.colorScheme.primary
+    val targetAccentColor = remember(mode, customColor, themePrimary, ThemeState.coverSeedColor) {
+        when (mode) {
+            WaveformColorMode.SOUNDCLOUD -> Color(0xFFFF5500)
+            WaveformColorMode.COVER_ART -> ThemeState.coverSeedColor?.let { Color(it) } ?: Color(0xFFE53935)
+            WaveformColorMode.APP_THEME -> themePrimary
+            WaveformColorMode.CUSTOM -> Color(customColor)
+        }
+    }
+    val accentColor by animateColorAsState(
+        targetValue = targetAccentColor,
+        animationSpec = tween(durationMillis = 300),
+        label = "miniWaveformAccentColor"
+    )
+    val inactiveBarColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+
+    var progressFrac by remember { mutableFloatStateOf(0.55f) }
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp)),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.GraphicEq,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = accentColor
+                    )
+                    Column {
+                        Text(
+                            text = stringResource(R.string.waveform_preview_title),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        if (currentTrack != null && !currentTrack.title.isNullOrBlank()) {
+                            Text(
+                                text = currentTrack.title,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                ) {
+                    Text(
+                        text = when (mode) {
+                            WaveformColorMode.SOUNDCLOUD -> "SoundCloud"
+                            WaveformColorMode.COVER_ART -> "Auto Match"
+                            WaveformColorMode.APP_THEME -> "App Theme"
+                            WaveformColorMode.CUSTOM -> String.format("#%06X", customColor and 0xFFFFFF)
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
+            BoxWithConstraints(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(58.dp)
+            ) {
+                val density = LocalDensity.current
+                val canvasWidthPx = with(density) { maxWidth.toPx() }
+                val barWidthPx = with(density) { 2.2.dp.toPx() }
+                val gapPx = with(density) { 1.2.dp.toPx() }
+                val stepPx = barWidthPx + gapPx
+                val cornerRadius = CornerRadius(barWidthPx / 2f)
+
+                val targetBarCount = (canvasWidthPx / stepPx).toInt().coerceAtLeast(20)
+
+                val resampledBars = remember(waveformSamples, targetBarCount) {
+                    val raw = waveformSamples ?: fallbackBars
+                    val rawSize = raw.size
+                    val result = FloatArray(targetBarCount)
+                    for (j in 0 until targetBarCount) {
+                        val startIdx = (j.toLong() * rawSize / targetBarCount).toInt()
+                        val endIdx = (((j + 1).toLong() * rawSize / targetBarCount).toInt())
+                            .coerceAtMost(rawSize)
+                            .coerceAtLeast(startIdx + 1)
+                        var sum = 0f
+                        for (k in startIdx until endIdx) {
+                            sum += raw[k]
+                        }
+                        result[j] = (sum / (endIdx - startIdx)).coerceIn(0.04f, 1f)
+                    }
+                    result
+                }
+
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(canvasWidthPx) {
+                            detectTapGestures { offset ->
+                                progressFrac = (offset.x / size.width).coerceIn(0.05f, 0.95f)
+                            }
+                        }
+                        .pointerInput(canvasWidthPx) {
+                            detectHorizontalDragGestures { change, _ ->
+                                change.consume()
+                                progressFrac = (change.position.x / size.width).coerceIn(0.05f, 0.95f)
+                            }
+                        }
+                ) {
+                    val cH = size.height
+                    val baselineY = cH * 0.60f
+                    val reflectGap = 1.5.dp.toPx()
+
+                    val barsToDraw = resampledBars
+                    val barCount = barsToDraw.size
+                    val cutoffX = size.width * progressFrac
+
+                    for (i in 0 until barCount) {
+                        val x = i * stepPx
+                        if (x + barWidthPx < 0f || x > size.width) continue
+
+                        val h = barsToDraw[i]
+                        val isPlayed = (x + barWidthPx / 2f) <= cutoffX
+
+                        val topH = (baselineY * h * 0.92f).coerceAtLeast(3f)
+                        val botH = ((cH - baselineY - reflectGap) * h * 0.65f).coerceAtLeast(2f)
+
+                        val topColor = if (isPlayed) accentColor else inactiveBarColor
+                        val botColor = if (isPlayed) accentColor.copy(alpha = 0.50f) else inactiveBarColor.copy(alpha = 0.30f)
+
+                        drawRoundRect(
+                            color = topColor,
+                            topLeft = Offset(x, baselineY - topH),
+                            size = Size(barWidthPx, topH),
+                            cornerRadius = cornerRadius
+                        )
+                        drawRoundRect(
+                            color = botColor,
+                            topLeft = Offset(x, baselineY + reflectGap),
+                            size = Size(barWidthPx, botH),
+                            cornerRadius = cornerRadius
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WaveformModeCard(
+    title: String,
+    subtitle: String,
+    isSelected: Boolean,
+    leadingContent: @Composable () -> Unit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        color = if (isSelected) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+        },
+        border = BorderStroke(
+            width = if (isSelected) 2.dp else 1.dp,
+            color = if (isSelected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+            }
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            leadingContent()
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            if (isSelected) {
+                Box(
+                    modifier = Modifier
+                        .size(18.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Check,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WaveformColorSlider(
+    label: String,
+    value: Float,
+    valueText: String,
+    valueRange: ClosedFloatingPointRange<Float>,
+    gradientBrush: Brush,
+    onValueChange: (Float) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = valueText,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(34.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 6.dp)
+                    .height(12.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(gradientBrush)
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                        RoundedCornerShape(6.dp)
+                    )
+            )
+
+            Slider(
+                value = value,
+                onValueChange = onValueChange,
+                valueRange = valueRange,
+                colors = SliderDefaults.colors(
+                    activeTrackColor = Color.Transparent,
+                    inactiveTrackColor = Color.Transparent,
+                    activeTickColor = Color.Transparent,
+                    inactiveTickColor = Color.Transparent
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+

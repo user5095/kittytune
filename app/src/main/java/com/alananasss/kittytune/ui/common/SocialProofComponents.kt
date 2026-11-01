@@ -19,7 +19,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.ui.common.hapticClickable
 import com.alananasss.kittytune.domain.User
+import com.alananasss.kittytune.domain.getHighResAvatarUrl
 
 @Composable
 fun MiniSocialProofAvatars(
@@ -37,7 +41,7 @@ fun MiniSocialProofAvatars(
     ) {
         displayLikers.forEachIndexed { index, user ->
             val fallbackTeal = Color(0xFF00897B)
-            val avatarUrl = user.avatarUrl?.replace("large", "t500x500")
+            val avatarUrl = user.avatarUrl.getHighResAvatarUrl() ?: user.avatarUrl
 
             Box(
                 modifier = Modifier

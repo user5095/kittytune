@@ -20,12 +20,14 @@ import com.alananasss.kittytune.data.LyricsMatcher
 import com.alananasss.kittytune.data.lyrics.models.LyricsData
 import com.alananasss.kittytune.data.lyrics.models.SimpMusicApiResponse
 import kotlin.math.abs
+import com.alananasss.kittytune.data.zapret.withDpiBypass
 
 object SimpMusicClient {
     private const val BASE_URL = "https://api-lyrics.simpmusic.org/v1/"
 
     private val client by lazy {
         HttpClient(OkHttp) {
+            withDpiBypass()
             install(ContentNegotiation) {
                 json(
                     Json {
@@ -45,7 +47,9 @@ object SimpMusicClient {
             defaultRequest {
                 url(BASE_URL)
                 header(HttpHeaders.Accept, "application/json")
-                header(HttpHeaders.UserAgent, "KittyTune/1.0")
+                // The api-lyrics endpoint gates on the client UA (403 otherwise).
+                // Same UA as ArchiveTune's SimpMusicLyrics so the API accepts us.
+                header(HttpHeaders.UserAgent, "SimpMusicLyrics/1.0")
                 header(HttpHeaders.ContentType, "application/json")
             }
 
@@ -122,8 +126,7 @@ object SimpMusicClient {
         title: String? = null,
         artist: String? = null,
         duration: Int = 0,
-    ): Result<String> {
-        return try {
+    ): Result<String> {        return try {
             // 1. Direct videoId fetch if it is a valid 11-char YouTube video ID
             val cleanVideoId = videoId?.trim().orEmpty()
             val isValidYoutubeId = cleanVideoId.length == 11 && cleanVideoId.matches(Regex("^[a-zA-Z0-9_-]{11}$"))
@@ -213,6 +216,37 @@ object SimpMusicClient {
             throw e
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    suspend fun getAllLyrics(
+        videoId: String,
+        duration: Int = 0,
+        callback: (String) -> Unit,
+    ) {
+        val tracks = getLyricsByVideoId(videoId)
+        var count = 0
+        var plain = 0
+
+        val sortedTracks =
+            if (duration > 0) {
+                tracks.sortedBy { abs((it.duration ?: 0) - duration) }
+            } else {
+                tracks
+            }
+
+        sortedTracks.forEach { track ->
+            if (count <= 4) {
+                if (track.syncedLyrics != null && abs((track.duration ?: 0) - duration) <= 5) {
+                    count++
+                    callback(track.syncedLyrics)
+                }
+                if (track.plainLyrics != null && abs((track.duration ?: 0) - duration) <= 5 && plain == 0) {
+                    count++
+                    plain++
+                    callback(track.plainLyrics)
+                }
+            }
         }
     }
 }

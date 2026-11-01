@@ -1,11 +1,11 @@
 package com.alananasss.kittytune.data.network
 
 import android.content.Context
-import android.webkit.CookieManager
+import com.alananasss.kittytune.BuildConfig
 import com.alananasss.kittytune.data.SessionManager
 import com.alananasss.kittytune.data.TokenManager
 import com.alananasss.kittytune.utils.Config
-import okhttp3.HttpUrl
+import com.google.gson.GsonBuilder
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -17,34 +17,38 @@ import java.util.concurrent.TimeUnit
 object RetrofitClient {
     private var okHttpClient: OkHttpClient? = null
 
+    // Retrofit resolves every annotation by reflection when an interface implementation is created;
+    // doing that per call — including per track resolution — was pure startup cost.
+    @Volatile
+    private var soundCloudApi: SoundCloudApi? = null
+
     fun resetClient() {
         okHttpClient = null
+        soundCloudApi = null
     }
 
     fun create(context: Context = com.alananasss.kittytune.KittyTuneApp.instance): SoundCloudApi {
-        return Retrofit.Builder()
-            .baseUrl(Config.BASE_URL)
-            .client(getOkHttpClient(context))
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-            .create(SoundCloudApi::class.java)
+        soundCloudApi?.let { return it }
+        synchronized(this) {
+            soundCloudApi?.let { return it }
+            val gson = GsonBuilder()
+                .setStrictness(com.google.gson.Strictness.LENIENT)
+                .create()
+            val api = Retrofit.Builder()
+                .baseUrl(Config.BASE_URL)
+                .client(getOkHttpClient(context))
+                .addConverterFactory(GsonConverterFactory.create(gson))
+                .build()
+                .create(SoundCloudApi::class.java)
+            soundCloudApi = api
+            return api
+        }
     }
 
     fun getOkHttpClient(context: Context = com.alananasss.kittytune.KittyTuneApp.instance): OkHttpClient {
         if (okHttpClient == null) {
             val appContext = context.applicationContext
             val tokenManager = TokenManager(appContext)
-
-            val cookieInterceptor = Interceptor { chain ->
-                val originalRequest = chain.request()
-                val requestBuilder = originalRequest.newBuilder()
-
-                cookieHeaderFor(originalRequest.url, appContext)?.let { cookies ->
-                    requestBuilder.header("Cookie", cookies)
-                }
-
-                chain.proceed(requestBuilder.build())
-            }
 
             val authInterceptor = Interceptor { chain ->
                 val originalRequest = chain.request()
@@ -76,18 +80,17 @@ object RetrofitClient {
                 }
 
                 val deviceId = Config.getOrCreateSoundCloudDeviceId(appContext)
-                val buildVersion = "2025.12.10-release"
-                val androidRelease = android.os.Build.VERSION.RELEASE ?: "10"
-                val deviceModel = android.os.Build.MODEL ?: "Android"
-                val customUserAgent = "SoundCloud/$buildVersion (Android $androidRelease; $deviceModel)"
+                val buildVersion = "2026.10.08-release"
+                val androidRelease = android.os.Build.VERSION.RELEASE ?: "14"
+                val deviceModel = android.os.Build.MODEL ?: "Pixel 8"
                 val acceptLanguage = com.alananasss.kittytune.utils.LocaleUtils.getAcceptLanguage(appContext)
 
                 val requestBuilder = originalRequest.newBuilder()
                     .url(newUrl)
-                    .header("User-Agent", customUserAgent)
+                    .header("User-Agent", "SoundCloud/$buildVersion (Android $androidRelease; $deviceModel)")
                     .header("Accept", "application/json")
                     .header("Accept-Language", acceptLanguage)
-                    .header("App-Version", "330120")
+                    .header("App-Version", "376070")
                     .header("UDID", deviceId)
 
                 if (!token.isNullOrEmpty()) {
@@ -141,11 +144,19 @@ object RetrofitClient {
                 }
             }
 
+            val loggingLevel = if (BuildConfig.DEBUG) {
+                HttpLoggingInterceptor.Level.BASIC
+            } else {
+                HttpLoggingInterceptor.Level.NONE
+            }
+
             val builder = OkHttpClient.Builder()
-                .addInterceptor(cookieInterceptor)
                 .addInterceptor(authInterceptor)
                 .addInterceptor(sessionRecoveryInterceptor)
-                .addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BODY })
+                // BODY-level logging serializes every request/response body to logcat on every
+                // API call (stream resolution, lyrics, waveforms...) during playback. Keep the
+                // wire visible in debug builds only.
+                .addInterceptor(HttpLoggingInterceptor().apply { level = loggingLevel })
                 .connectTimeout(30, TimeUnit.SECONDS)
                 .readTimeout(30, TimeUnit.SECONDS)
                 .writeTimeout(30, TimeUnit.SECONDS)
@@ -168,31 +179,4 @@ object RetrofitClient {
             !path.contains("/track_reposts") &&
             !path.contains("/conversations")
     }
-
-    private fun cookieHeaderFor(url: HttpUrl, context: Context): String? {
-        val cookieManager = CookieManager.getInstance()
-        val candidates = listOf(
-            "${url.scheme}://${url.host}",
-            "https://soundcloud.com",
-            "https://m.soundcloud.com"
-        )
-
-        val cookieParts = linkedSetOf<String>()
-        candidates.forEach { candidate ->
-            cookieManager.getCookie(candidate)
-                ?.split(";")
-                ?.map { it.trim() }
-                ?.filter { it.isNotEmpty() }
-                ?.let(cookieParts::addAll)
-        }
-
-        val cookieDataDome = cookieParts.firstOrNull { it.startsWith("datadome=") }
-        val storedDataDome = SessionManager.getStoredDataDomeCookie(context)
-        val regularParts = cookieParts.filterNot { it.startsWith("datadome=") }.toMutableList()
-
-        (cookieDataDome ?: storedDataDome)?.let { regularParts.add(it.substringBefore(";")) }
-
-        return regularParts.joinToString("; ").takeIf { it.isNotBlank() }
-    }
 }
-

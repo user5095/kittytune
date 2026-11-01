@@ -1,5 +1,14 @@
 package com.alananasss.kittytune.ui.player
 
+import androidx.compose.foundation.clickable
+import com.alananasss.kittytune.ui.common.Slider as ExpressiveSlider
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.ui.common.rememberAppHaptics
+import com.alananasss.kittytune.audio.haptics.HapticUtil
+import com.alananasss.kittytune.audio.haptics.performAppHaptic
+import com.alananasss.kittytune.ui.common.hapticClickable
+import com.alananasss.kittytune.ui.player.lyrics.stopAtLastLine
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -17,6 +26,10 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.*
+import androidx.compose.ui.input.pointer.changedToUp
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
@@ -35,7 +48,9 @@ import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.*
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
@@ -52,6 +67,7 @@ import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.*
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
@@ -69,12 +85,14 @@ import com.alananasss.kittytune.ui.common.ExpressiveConnectedButtonGroup
 import com.alananasss.kittytune.R
 import com.alananasss.kittytune.data.DownloadManager
 import com.alananasss.kittytune.data.MusicManager
+import com.alananasss.kittytune.data.local.FullPlayerBgStyle
 import com.alananasss.kittytune.data.local.LyricsAlignment
 import com.alananasss.kittytune.data.local.PlayerActionButtonSlot
 import com.alananasss.kittytune.data.local.PlayerBackgroundStyle
 import com.alananasss.kittytune.data.local.PlayerPreferences
 import com.alananasss.kittytune.data.local.PlayerProgressMode
 import com.alananasss.kittytune.data.local.PlayerSliderStyle
+import com.alananasss.kittytune.data.local.RadioEligibility
 import com.alananasss.kittytune.data.local.WaveformColorMode
 import com.alananasss.kittytune.data.local.LyricsUnderCoverPlacement
 import com.alananasss.kittytune.ui.player.lyrics.PlayerInlineLyrics
@@ -82,9 +100,12 @@ import com.alananasss.kittytune.ui.player.lyrics.LyricsUtils
 import com.alananasss.kittytune.ui.player.slider.PlayerSliderTrack
 import com.alananasss.kittytune.ui.player.slider.WavySlider
 import com.alananasss.kittytune.ui.player.slider.SquigglySlider
+import com.alananasss.kittytune.ui.player.slider.rememberMixTransition
+import com.alananasss.kittytune.ui.player.slider.mixGlow
 import com.alananasss.kittytune.domain.Comment
 import com.alananasss.kittytune.domain.Track
 import com.alananasss.kittytune.domain.User
+import com.alananasss.kittytune.domain.getHighResAvatarUrl
 import com.alananasss.kittytune.ui.library.TrackSortBy
 import com.alananasss.kittytune.ui.player.lyrics.WrongLyricsButton
 import com.alananasss.kittytune.ui.player.lyrics.LyricLine
@@ -98,6 +119,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.regex.Pattern
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.collectLatest
 import kotlin.math.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -117,7 +139,7 @@ import com.alananasss.kittytune.ui.icons.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import com.alananasss.kittytune.ui.common.Slider
+import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -158,6 +180,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.text.font.FontWeight
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
+import androidx.compose.material3.FilterChip
+import kotlin.math.abs
+import kotlin.math.round
 
 @Composable
 fun PremiumMarqueeText(
@@ -303,14 +328,20 @@ fun PremiumMarqueeText(
 
 @Composable
 fun SyncedLyricsView(viewModel: PlayerViewModel, showControls: Boolean = true) {
-    val currentPosition = viewModel.currentPosition
-    val adjustedPosition = currentPosition + viewModel.lyricsOffset
+    // NOTE: playback position must NOT be read at this composable's top level. This whole
+    // panel (LazyColumn + every visible line) used to recompose on every position tick
+    // (2-25Hz); the 60fps interpolator below already drives the active-line highlighting,
+    // so the raw position is only needed once, for the initial scroll index.
     val lyrics = viewModel.lyricsLines
+    val lyricsOffset = viewModel.lyricsOffset
     // Opened on the line being sung, not on line one. Two minutes into a track the first frame
     // used to be the top of the song, which read as a jolt on every open before the follow logic
-    // caught up.
+    // caught up. One-shot read of the player position: untracked, so no recomposition hook.
+    val initialActiveIndex = remember(lyrics) {
+        LyricsUtils.activeLineIndex(lyrics, MusicManager.player.currentPosition + lyricsOffset).coerceAtLeast(0)
+    }
     val listState = rememberLazyListState(
-        initialFirstVisibleItemIndex = LyricsUtils.activeLineIndex(lyrics, adjustedPosition).coerceAtLeast(0)
+        initialFirstVisibleItemIndex = initialActiveIndex
     )
     val fontSize = viewModel.lyricsFontSize
     val lyricsFontFamily = com.alananasss.kittytune.ui.theme.rememberLyricsFontFamily(viewModel.lyricsFont)
@@ -323,16 +354,16 @@ fun SyncedLyricsView(viewModel: PlayerViewModel, showControls: Boolean = true) {
     val fadeBrush = remember {
         Brush.verticalGradient(
             0f to Color.Transparent,
-            0.15f to Color.Black,
+            0.04f to Color.Black,
             0.85f to Color.Black,
             1f to Color.Transparent
         )
     }
 
-    var smoothDrawPosition by remember { mutableFloatStateOf(currentPosition.toFloat()) }
+    var smoothDrawPosition by remember { mutableFloatStateOf(MusicManager.player.currentPosition.coerceAtLeast(0L).toFloat()) }
 
     // High-precision smooth frame interpolation loop with PLL drift tracking
-    LaunchedEffect(viewModel.currentTrack?.id) {
+    LaunchedEffect(viewModel.uiCurrentTrack?.id) {
         var smoothPosition = MusicManager.player.currentPosition.coerceAtLeast(0L).toDouble()
         var lastOutputPosition = smoothPosition.toFloat()
         var lastFrameNanos = 0L
@@ -340,7 +371,7 @@ fun SyncedLyricsView(viewModel: PlayerViewModel, showControls: Boolean = true) {
         while (isActive) {
             val isSliderActive = viewModel.isScrubbing
             val rawPosition = if (isSliderActive) {
-                viewModel.currentPosition.toDouble()
+                viewModel.uiCurrentPosition.toDouble()
             } else {
                 MusicManager.player.currentPosition.coerceAtLeast(0L).toDouble()
             }
@@ -481,10 +512,11 @@ fun SyncedLyricsView(viewModel: PlayerViewModel, showControls: Boolean = true) {
             contentPadding = PaddingValues(top = topPadding, bottom = halfHeight),
             modifier = Modifier
                 .fillMaxSize()
+                .stopAtLastLine(listState)
                 .fadingEdge(fadeBrush),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            itemsIndexed(lyrics) { index, line ->
+            itemsIndexed(lyrics, key = { idx, line -> "${line.startTime}_$idx" }) { index, line ->
                 val isActive = index == activeIndex
                 val targetScale = 1.0f
                 val targetAlpha = if (isActive) 1.0f else (if (index < activeIndex) 0.45f else 0.70f)
@@ -532,6 +564,9 @@ fun SyncedLyricsView(viewModel: PlayerViewModel, showControls: Boolean = true) {
                         if (isAppleEffect) {
                             var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
                             val reconstructedText = remember(formattedWords) { formattedWords.joinToString("") }
+                            // Reused across draws: the karaoke sweep runs at display rate, and a
+                            // fresh native Path per frame was pure allocation churn under the GC.
+                            val karaokePath = remember { Path() }
                             val wordRanges = remember(formattedWords) {
                                 val ranges = mutableListOf<Pair<Int, Int>>()
                                 var currentLen = 0
@@ -569,7 +604,7 @@ fun SyncedLyricsView(viewModel: PlayerViewModel, showControls: Boolean = true) {
                                     modifier = Modifier.fillMaxWidth().drawWithContent {
                                         val currentPos = smoothDrawPosition + viewModel.lyricsOffset
                                         val layout = textLayoutResult ?: return@drawWithContent
-                                        val path = Path()
+                                        val path = karaokePath.apply { reset() }
                                         val safeTextLength = (reconstructedText.length - 1).coerceAtLeast(0)
                                         for (i in displayWords.indices) {
                                             val w = displayWords[i]
@@ -603,9 +638,18 @@ fun SyncedLyricsView(viewModel: PlayerViewModel, showControls: Boolean = true) {
                                 )
                             }
                         } else {
+                            // Word-sync highlight without the Apple effect: derive the number of
+                            // sung words from the smooth position so this line only recomposes
+                            // when a word boundary is crossed, not on every interpolated frame.
+                            val sungWordCount by remember(displayWords) {
+                                derivedStateOf {
+                                    val pos = smoothDrawPosition + viewModel.lyricsOffset
+                                    displayWords.count { it.startTime <= pos }
+                                }
+                            }
                             val reconstructedText = buildAnnotatedString {
-                                displayWords.forEach { word ->
-                                    val isWordActive = (adjustedPosition) >= word.startTime
+                                displayWords.forEachIndexed { wordIdx, word ->
+                                    val isWordActive = wordIdx < sungWordCount
                                     val wordColor = if (isWordActive) Color.White else Color.White.copy(alpha = 0.5f)
                                     withStyle(SpanStyle(color = wordColor)) { append(LyricsUtils.decodeHtmlEntities(word.word)) }
                                 }
@@ -646,7 +690,7 @@ fun SyncedLyricsView(viewModel: PlayerViewModel, showControls: Boolean = true) {
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 32.dp),
-                onClick = { viewModel.isSearchingLyrics = true }
+                onClick = hapticAction(HapticKind.UI) { viewModel.isSearchingLyrics = true }
             )
         }
     }
@@ -682,7 +726,7 @@ fun PlainLyricsView(viewModel: PlayerViewModel, showControls: Boolean = true) {
     val fadeBrush = remember {
         Brush.verticalGradient(
             0f to Color.Transparent,
-            0.15f to Color.Black,
+            0.04f to Color.Black,
             0.85f to Color.Black,
             1f to Color.Transparent
         )
@@ -719,7 +763,7 @@ fun PlainLyricsView(viewModel: PlayerViewModel, showControls: Boolean = true) {
 
         if (showControls) {
             FloatingActionButton(
-                onClick = {
+                onClick = hapticAction(HapticKind.UI) {
                     clipboardManager.setText(AnnotatedString(text))
                 },
                 containerColor = Color.White.copy(alpha = 0.2f),
@@ -812,6 +856,7 @@ fun PlayerScreen(
         ) {
             com.alananasss.kittytune.ui.player.dj.DjFlowPanel(
                 state = djState,
+                beatTick = viewModel.djFlowController.beatTick,
                 onToggleDj = viewModel.djFlowController::enableDjMode,
                 onEnergyMode = viewModel.djFlowController::setEnergyMode,
                 onMixNow = { viewModel.djFlowController.triggerTransition() },
@@ -837,8 +882,20 @@ fun PlayerScreen(
                 onClose = { viewModel.hideAiSkipUndoBar() }
             )
         }
-    }
 
+        androidx.compose.animation.AnimatedVisibility(
+            visible = viewModel.isSleepScreenOpen,
+            modifier = Modifier.fillMaxSize().zIndex(50f),
+            enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(600)),
+            exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(300))
+        ) {
+            SleepScreen(
+                viewModel = viewModel,
+                accent = MaterialTheme.colorScheme.primary,
+                onWake = { viewModel.isSleepScreenOpen = false }
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -848,7 +905,7 @@ fun NewPlayerScreen(
     onClose: () -> Unit,
     forceSoundCloud: Boolean? = null
 ) {
-    val track = viewModel.currentTrack ?: return
+    val track = viewModel.uiCurrentTrack ?: return
 
     val scope = rememberCoroutineScope()
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
@@ -911,7 +968,7 @@ fun NewPlayerScreen(
             activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
-    var backgroundStyle by remember { mutableStateOf(prefs.getPlayerStyle()) }
+    val backgroundStyle = viewModel.fullPlayerBgStyle
     val fadeUiEnabled by prefs.getAnimatedCoversFadeUiFlow().collectAsState(initial = prefs.getAnimatedCoversFadeUiEnabled())
     val backdropAnimatedUrl = if (fadeUiEnabled) {
         viewModel.currentAnimatedCoverTallUrl ?: viewModel.currentAnimatedCoverUrl
@@ -927,8 +984,6 @@ fun NewPlayerScreen(
             } else if (key == "waveform_comments_enabled" || key == PlayerPreferences.KEY_PLAYER_PROGRESS_MODE || key == PlayerPreferences.KEY_PLAYER_DESIGN) {
                 waveformCommentsEnabled = prefs.getWaveformCommentsEnabled()
                 playerProgressMode = prefs.getPlayerProgressMode()
-            } else if (key == PlayerPreferences.KEY_PLAYER_STYLE) {
-                backgroundStyle = prefs.getPlayerStyle()
             }
         }
         sharedPrefs.registerOnSharedPreferenceChangeListener(listener)
@@ -937,7 +992,7 @@ fun NewPlayerScreen(
         }
     }
 
-    val isBlurMode = backgroundStyle == PlayerBackgroundStyle.BLUR || backgroundStyle == PlayerBackgroundStyle.APPLE_MUSIC
+    val isBlurMode = backgroundStyle == FullPlayerBgStyle.BLUR || backgroundStyle == FullPlayerBgStyle.APPLE_MUSIC || backgroundStyle == FullPlayerBgStyle.PURE_BLACK
 
     val mainContentColor by animateColorAsState(
         targetValue = if (isBlurMode) Color.White else MaterialTheme.colorScheme.onBackground,
@@ -970,51 +1025,17 @@ fun NewPlayerScreen(
     val predictiveTranslationY = if (pProgress.isFinite()) (pProgress.coerceAtLeast(0f) * dismissTargetY) else 0f
     val predictiveCorner = (clampedProgress * 32.dp.value).coerceAtLeast(0f).dp
 
-    val verticalDragModifier = Modifier.pointerInput(dismissTargetY) {
-        detectVerticalDragGestures(
-            onDragEnd = {
-                if (dismissProgress.value > 0.18f) {
-                    handleClose()
-                } else {
-                    scope.launch {
-                        dismissProgress.animateTo(
-                            0f,
-                            spring(
-                                dampingRatio = Spring.DampingRatioLowBouncy,
-                                stiffness = Spring.StiffnessMediumLow
-                            )
-                        )
-                    }
-                }
-            },
-            onDragCancel = {
-                scope.launch {
-                    dismissProgress.animateTo(
-                        0f,
-                        spring(
-                            dampingRatio = Spring.DampingRatioLowBouncy,
-                            stiffness = Spring.StiffnessMediumLow
-                        )
-                    )
-                }
-            },
-            onVerticalDrag = { change, dragAmount ->
-                if (dragAmount > 0 || dismissProgress.value > 0f) {
-                    change.consume()
-                    val delta = dragAmount / dismissTargetY
-                    scope.launch {
-                        dismissProgress.snapTo(
-                            (dismissProgress.value + delta).coerceIn(0f, 1f)
-                        )
-                    }
-                }
-            }
-        )
-    }
+    val verticalDragModifier = Modifier
 
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .playerDismissGesture(
+                dismissTargetY = dismissTargetY,
+                dismissProgress = dismissProgress,
+                scope = scope,
+                onDismiss = handleClose
+            )
             .graphicsLayer {
                 scaleX = predictiveScaleX
                 scaleY = predictiveScaleY
@@ -1027,7 +1048,7 @@ fun NewPlayerScreen(
             .background(if (isBlurMode) Color.Black else MaterialTheme.colorScheme.background)
     ) {
         when (backgroundStyle) {
-            PlayerBackgroundStyle.BLUR -> {
+            FullPlayerBgStyle.BLUR -> {
                 Crossfade(
                     targetState = track.fullResArtwork,
                     animationSpec = tween(durationMillis = 1000, easing = LinearEasing),
@@ -1037,22 +1058,40 @@ fun NewPlayerScreen(
                         model = artworkUrl,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize().blur(80.dp).alpha(0.6f)
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                scaleX = 1.25f
+                                scaleY = 1.25f
+                            }
+                            .blur(90.dp)
+                            .alpha(0.75f)
                     )
                 }
                 if (!backdropAnimatedUrl.isNullOrBlank()) {
                     CanvasVideo(
                         canvasUrl = backdropAnimatedUrl,
-                        isPlaying = viewModel.isPlaying,
+                        isPlaying = viewModel.uiIsPlaying,
                         modifier = Modifier
                             .fillMaxSize()
                             .blur(40.dp)
                             .alpha(0.85f)
                     )
                 }
+                // Gradient scrim to ensure high contrast for controls and metadata
+                Box(
+                    Modifier.fillMaxSize().background(
+                        Brush.verticalGradient(
+                            0.0f to Color.Black.copy(alpha = 0.45f),
+                            0.35f to Color.Black.copy(alpha = 0.20f),
+                            0.65f to Color.Black.copy(alpha = 0.35f),
+                            1.0f to Color.Black.copy(alpha = 0.65f)
+                        )
+                    )
+                )
             }
 
-            PlayerBackgroundStyle.GRADIENT -> {
+            FullPlayerBgStyle.GRADIENT -> {
                 Box(
                     Modifier.fillMaxSize().background(
                         Brush.verticalGradient(
@@ -1066,14 +1105,18 @@ fun NewPlayerScreen(
                 )
             }
 
-            PlayerBackgroundStyle.THEME -> {
-                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface))
+            FullPlayerBgStyle.PURE_BLACK -> {
+                Box(Modifier.fillMaxSize().background(Color.Black))
             }
 
-            PlayerBackgroundStyle.APPLE_MUSIC -> {
+            FullPlayerBgStyle.APPLE_MUSIC -> {
+                // The night screen covers this fully: freeze the drift while it is up, and save the
+                // 30 fps of AGSL blur nobody can see.
                 FluidArtworkBackground(
                     artworkUrl = track.fullResArtwork,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    motionSuppressed = viewModel.showNightScreen,
+                    animate = viewModel.uiIsPlaying
                 ) {
                     AsyncImage(
                         model = track.fullResArtwork,
@@ -1085,7 +1128,7 @@ fun NewPlayerScreen(
                 if (!backdropAnimatedUrl.isNullOrBlank()) {
                     CanvasVideo(
                         canvasUrl = backdropAnimatedUrl,
-                        isPlaying = viewModel.isPlaying,
+                        isPlaying = viewModel.uiIsPlaying,
                         modifier = Modifier
                             .fillMaxSize()
                             .blur(40.dp)
@@ -1152,6 +1195,8 @@ fun NewPlayerScreen(
                     modifier = Modifier.fillMaxSize().systemBarsPadding(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    val lyricsUnderCoverPlacement = remember { prefs.getLyricsUnderCoverPlacement() }
+
                     Box(
                         modifier = Modifier
                             .padding(horizontal = 24.dp)
@@ -1179,23 +1224,23 @@ fun NewPlayerScreen(
                     )
 
                     val pagerState = androidx.compose.foundation.pager.rememberPagerState(
-                        initialPage = viewModel.currentQueueIndex.coerceAtLeast(0),
-                        pageCount = { viewModel.queueState.size.takeIf { it > 0 } ?: 1 }
+                        initialPage = viewModel.uiCurrentQueueIndex.coerceAtLeast(0),
+                        pageCount = { viewModel.uiQueueState.size.takeIf { it > 0 } ?: 1 }
                     )
 
-                    LaunchedEffect(viewModel.currentQueueIndex) {
-                        if (viewModel.currentQueueIndex >= 0 && viewModel.currentQueueIndex != pagerState.currentPage && viewModel.currentQueueIndex < pagerState.pageCount) {
+                    LaunchedEffect(viewModel.uiCurrentQueueIndex) {
+                        if (viewModel.uiCurrentQueueIndex >= 0 && viewModel.uiCurrentQueueIndex != pagerState.currentPage && viewModel.uiCurrentQueueIndex < pagerState.pageCount) {
                             try {
-                                pagerState.animateScrollToPage(viewModel.currentQueueIndex)
+                                pagerState.animateScrollToPage(viewModel.uiCurrentQueueIndex)
                             } catch (e: Exception) {
-                                pagerState.scrollToPage(viewModel.currentQueueIndex)
+                                pagerState.scrollToPage(viewModel.uiCurrentQueueIndex)
                             }
                         }
                     }
 
                     LaunchedEffect(pagerState) {
                         snapshotFlow { pagerState.settledPage }.collect { settledPage ->
-                            if (settledPage != viewModel.currentQueueIndex && settledPage in viewModel.queueState.indices) {
+                            if (settledPage != viewModel.uiCurrentQueueIndex && settledPage in viewModel.uiQueueState.indices) {
                                 viewModel.skipToQueueItem(settledPage)
                             }
                         }
@@ -1220,14 +1265,14 @@ fun NewPlayerScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Box(modifier = Modifier.fillMaxWidth().alpha(coverAlpha).zIndex(if (showLyrics) 0f else 1f)) {
-                            if (viewModel.queueState.isNotEmpty()) {
+                            if (viewModel.uiQueueState.isNotEmpty()) {
                                 androidx.compose.foundation.pager.HorizontalPager(
                                     state = pagerState,
                                     modifier = Modifier.fillMaxWidth(),
                                     pageSpacing = 16.dp,
                                     contentPadding = PaddingValues(24.dp)
                                 ) { page ->
-                                    val pageTrack = viewModel.queueState.getOrNull(page) ?: track
+                                    val pageTrack = viewModel.uiQueueState.getOrNull(page) ?: track
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -1239,11 +1284,11 @@ fun NewPlayerScreen(
                                             )
                                             .clip(RoundedCornerShape(20.dp))
                                             .background(MaterialTheme.colorScheme.surfaceVariant)
-                                     ) {
+                                    ) {
                                         AnimatedArtwork(
                                             artworkUrl = pageTrack.fullResArtwork,
                                             animatedCoverUrl = if (pageTrack.id == track.id) viewModel.currentAnimatedCoverUrl else null,
-                                            isPlaying = viewModel.isPlaying,
+                                            isPlaying = viewModel.uiIsPlaying,
                                             contentDescription = null,
                                             contentScale = ContentScale.Crop,
                                             modifier = Modifier.fillMaxSize()
@@ -1267,7 +1312,7 @@ fun NewPlayerScreen(
                                     AnimatedArtwork(
                                         artworkUrl = track.fullResArtwork,
                                         animatedCoverUrl = viewModel.currentAnimatedCoverUrl,
-                                        isPlaying = viewModel.isPlaying,
+                                        isPlaying = viewModel.uiIsPlaying,
                                         contentDescription = null,
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier.fillMaxSize()
@@ -1291,12 +1336,11 @@ fun NewPlayerScreen(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    val lyricsUnderCoverPlacement = remember { prefs.getLyricsUnderCoverPlacement() }
                     if (viewModel.isLyricsUnderCoverActive && lyricsUnderCoverPlacement == LyricsUnderCoverPlacement.ABOVE_TITLE_ARTIST) {
                         PlayerInlineLyrics(
                             viewModel = viewModel,
                             textColor = mainContentColor,
-                            onClick = { viewModel.openLyrics() },
+                            onClick = hapticAction(HapticKind.UI) { viewModel.openLyrics() },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 24.dp, vertical = 4.dp)
@@ -1339,7 +1383,7 @@ fun NewPlayerScreen(
                                                 edgeGradientWidth = 24.dp,
                                                 modifier = Modifier
                                                     .fillMaxWidth()
-                                                    .clickable { viewModel.navigateToTrackDetails(track.id, 0) }
+                                                    .hapticClickable { viewModel.navigateToTrackDetails(track.id, 0) }
                                             )
 
                                             Row(
@@ -1350,7 +1394,7 @@ fun NewPlayerScreen(
                                                     verticalAlignment = Alignment.CenterVertically,
                                                     modifier = Modifier
                                                         .weight(1f, fill = false)
-                                                        .clickable {
+                                                        .hapticClickable {
                                                             viewModel.navigateToTrackArtist(track)
                                                         }
                                                 ) {
@@ -1383,6 +1427,12 @@ fun NewPlayerScreen(
                                                     onClick = { viewModel.showAiDetectionSheet = true },
                                                     modifier = Modifier.padding(start = 8.dp)
                                                 )
+
+                                                com.alananasss.kittytune.ui.common.TrackSourceBadge(
+                                                    track = track,
+                                                    resolvedSource = viewModel.currentStreamSource,
+                                                    modifier = Modifier.padding(start = 6.dp)
+                                                )
                                             }
                                         }
                                     }
@@ -1405,7 +1455,7 @@ fun NewPlayerScreen(
                                             .combinedClickable(
                                                 onClick = { viewModel.openLyrics() },
                                                 onLongClick = {
-                                                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                                    view.performAppHaptic(HapticFeedbackConstants.LONG_PRESS)
                                                     viewModel.openLyrics(forceSheet = true)
                                                 }
                                             ),
@@ -1425,13 +1475,13 @@ fun NewPlayerScreen(
                                 val view = LocalView.current
                                 IconButton(
                                     onClick = {
-                                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                        view.performAppHaptic(HapticFeedbackConstants.CLOCK_TICK)
                                         viewModel.toggleLike()
                                     },
                                     modifier = Modifier.size(44.dp)
                                 ) {
                                     val targetColor =
-                                        if (viewModel.isLiked) animatedColor else iconTint
+                                        if (viewModel.uiIsLiked) animatedColor else iconTint
                                     val heartColor by animateColorAsState(
                                         targetValue = targetColor,
                                         animationSpec = tween(300),
@@ -1439,7 +1489,7 @@ fun NewPlayerScreen(
                                     )
 
                                     AnimatedContent(
-                                        targetState = viewModel.isLiked,
+                                        targetState = viewModel.uiIsLiked,
                                         transitionSpec = {
                                             if (targetState) {
                                                 (fadeIn(tween(300)) + scaleIn(
@@ -1478,7 +1528,7 @@ fun NewPlayerScreen(
                                     Spacer(Modifier.width(4.dp))
                                     IconButton(
                                         onClick = {
-                                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                            view.performAppHaptic(HapticFeedbackConstants.CLOCK_TICK)
                                             viewModel.dislikeCurrentTrackInMix()
                                         },
                                         modifier = Modifier.size(44.dp)
@@ -1496,10 +1546,22 @@ fun NewPlayerScreen(
                     }
                     Spacer(modifier = Modifier.weight(1f))
 
-                    val automixDebugOverlayEnabled = prefs.getAutomixDebugOverlayEnabled()
+                    // Memoised + observed: a synchronous SharedPreferences read on every
+                    // recomposition of this scope is pure overhead for a debug toggle.
+                    var automixDebugOverlayEnabled by remember { mutableStateOf(prefs.getAutomixDebugOverlayEnabled()) }
+                    DisposableEffect(Unit) {
+                        val sp = context.getSharedPreferences("player_state", Context.MODE_PRIVATE)
+                        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                            if (key == PlayerPreferences.KEY_AUTOMIX_DEBUG_OVERLAY || key == PlayerPreferences.KEY_AUTOMIX_ENABLED) {
+                                automixDebugOverlayEnabled = prefs.getAutomixDebugOverlayEnabled()
+                            }
+                        }
+                        sp.registerOnSharedPreferenceChangeListener(listener)
+                        onDispose { sp.unregisterOnSharedPreferenceChangeListener(listener) }
+                    }
                     if (automixDebugOverlayEnabled) {
                         com.alananasss.kittytune.ui.player.automix.AutomixDebugOverlay(
-                            currentPositionMs = viewModel.currentPosition
+                            currentPositionMs = viewModel.uiCurrentPosition
                         )
                     }
 
@@ -1511,7 +1573,7 @@ fun NewPlayerScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
                         PlayerControls(
@@ -1560,6 +1622,25 @@ fun NewPlayerScreen(
         SleepTimerDialog(viewModel)
         TrackTrimDialog(viewModel)
         DjDevDebugSheet(viewModel)
+
+        // The night screen over the whole player: fades in over it, and everything under stays untouched.
+        if (viewModel.showNightScreen) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = true,
+                enter = androidx.compose.animation.fadeIn(
+                    androidx.compose.animation.core.tween(320, easing = androidx.compose.animation.core.LinearOutSlowInEasing)
+                ),
+                exit = androidx.compose.animation.fadeOut(
+                    androidx.compose.animation.core.tween(220, easing = androidx.compose.animation.core.FastOutLinearInEasing)
+                ),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                com.alananasss.kittytune.ui.player.NightScreen(
+                    viewModel = viewModel,
+                    onWake = { viewModel.showNightScreen = false },
+                )
+            }
+        }
     }
 }
 
@@ -1592,7 +1673,7 @@ fun PlayerHeader(
                 IconButton(onClick = onCollapseToSide) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.ViewSidebar,
-                        contentDescription = "Side Player",
+                        contentDescription = stringResource(R.string.player_side_player),
                         tint = contentColor
                     )
                 }
@@ -1607,7 +1688,7 @@ fun PlayerHeader(
             modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
         ) {
             Text(
-                stringResource(R.string.player_playing_now),
+                viewModel.playbackDeviceLabel ?: stringResource(R.string.player_playing_now),
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.sp,
@@ -1626,12 +1707,12 @@ fun PlayerHeader(
                     color = accentColor,
                     textAlign = TextAlign.Center,
                     edgeGradientWidth = 12.dp,
-                    modifier = Modifier.clickable { viewModel.navigateToContext() }
+                    modifier = Modifier.hapticClickable { viewModel.navigateToContext() }
                 )
             }
         }
 
-        IconButton(onClick = { viewModel.currentTrack?.let { viewModel.showTrackOptions(it, fromPlayer = true) } }) {
+        IconButton(onClick = hapticAction(HapticKind.UI) { viewModel.uiCurrentTrack?.let { viewModel.showTrackOptions(it, fromPlayer = true) } }) {
             Icon(Icons.Default.MoreVert, stringResource(R.string.btn_options), tint = contentColor)
         }
     }
@@ -1698,7 +1779,7 @@ private fun ArtistPickerRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .clickable {
+            .hapticClickable {
                 viewModel.onArtistSelected(artist)
             }
             .padding(8.dp)
@@ -1760,7 +1841,7 @@ fun SelectArtistDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
-                            .clickable {
+                            .hapticClickable {
                                 onDismiss()
                                 val cleanId = com.alananasss.kittytune.data.spotify.SpotifyRepository.extractId(
                                     artist.id.ifBlank { artist.uri ?: "" }
@@ -1994,7 +2075,7 @@ fun SocialProofBanner(
         ) {
             displayLikers.forEachIndexed { index, user ->
                 val fallbackTeal = Color(0xFF00897B)
-                val avatarUrl = user.avatarUrl?.replace("large", "t500x500")
+                val avatarUrl = user.avatarUrl.getHighResAvatarUrl() ?: user.avatarUrl
 
                 Box(
                     modifier = Modifier
@@ -2003,7 +2084,7 @@ fun SocialProofBanner(
                         .clip(CircleShape)
                         .background(fallbackTeal)
                         .border(1.5.dp, borderColor, CircleShape)
-                        .clickable { onUserClick(user) },
+                        .hapticClickable { onUserClick(user) },
                     contentAlignment = Alignment.Center
                 ) {
                     if (!avatarUrl.isNullOrBlank()) {
@@ -2039,7 +2120,7 @@ fun SocialProofBanner(
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MenuSheetContent(viewModel: PlayerViewModel) {
-    val track = viewModel.trackForMenu ?: viewModel.currentTrack ?: return
+    val track = viewModel.trackForMenu ?: viewModel.uiCurrentTrack ?: return
     val context = LocalContext.current
 
     LaunchedEffect(track.id) {
@@ -2071,12 +2152,12 @@ fun MenuSheetContent(viewModel: PlayerViewModel) {
             title = { Text(if (isLocalFile) stringResource(R.string.menu_remove_local_q) else stringResource(R.string.menu_remove_download_q)) },
             text = { Text(if (isLocalFile) stringResource(R.string.menu_remove_local_body) else stringResource(R.string.menu_remove_download_body)) },
             confirmButton = {
-                TextButton(onClick = {
+                TextButton(onClick = hapticAction(HapticKind.UI) {
                     DownloadManager.deleteTrack(track.id); showDeleteDialog = false; viewModel.showMenuSheet = false
                 }) { Text(stringResource(R.string.btn_delete), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = {
+                TextButton(onClick = hapticAction(HapticKind.UI) {
                     showDeleteDialog = false
                 }) { Text(stringResource(R.string.btn_cancel)) }
             }
@@ -2097,8 +2178,7 @@ fun MenuSheetContent(viewModel: PlayerViewModel) {
             title = { Text(stringResource(R.string.dialog_repost_delete_title)) },
             text = { Text(stringResource(R.string.dialog_repost_delete_msg)) },
             confirmButton = {
-                TextButton(onClick = {
-                    viewModel.deleteRepost(track.id); showDeleteRepostConfirm = false; viewModel.showMenuSheet = false
+                TextButton(onClick = { viewModel.deleteRepost(track.id); showDeleteRepostConfirm = false; viewModel.showMenuSheet = false
                 }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
                     Text(
                         stringResource(R.string.btn_delete)
@@ -2106,7 +2186,7 @@ fun MenuSheetContent(viewModel: PlayerViewModel) {
                 }
             },
             dismissButton = {
-                TextButton(onClick = {
+                TextButton(onClick = hapticAction(HapticKind.UI) {
                     showDeleteRepostConfirm = false
                 }) { Text(stringResource(R.string.btn_cancel)) }
             }
@@ -2116,7 +2196,7 @@ fun MenuSheetContent(viewModel: PlayerViewModel) {
     val isDownloadedContext = viewModel.currentContext?.navigationId == "downloads"
             || viewModel.currentContext?.navigationId?.startsWith("downloaded_section:") == true
             || viewModel.currentContext?.navigationId == "local_files"
-            || (viewModel.menuContextPlaylistId != null && (viewModel.menuContextPlaylistId == -2L || viewModel.menuContextPlaylistId!! < 0))
+            || viewModel.menuContextPlaylistId == -2L
 
     val isOffline = !com.alananasss.kittytune.utils.NetworkUtils.isInternetAvailable(context)
     val isOfflineMode = isLocalFile || isDownloadedContext || isOffline
@@ -2252,9 +2332,9 @@ fun MenuSheetContent(viewModel: PlayerViewModel) {
                 }
             )
         }
-        if (!isOfflineMode) {
+        if (!isOfflineMode && RadioEligibility.canStartRadio(track)) {
             add(DockOptionItem(Icons.Rounded.Radio, stringResource(R.string.menu_track_radio), id = "track_radio") {
-                if (track.source == "youtube") {
+                if (RadioEligibility.radioKind(track) == RadioEligibility.Kind.YOUTUBE) {
                     viewModel.startYoutubeRadio(track)
                 } else {
                     viewModel.startRadioFromTrack(track)
@@ -2275,13 +2355,27 @@ fun MenuSheetContent(viewModel: PlayerViewModel) {
                     id = "share_card"
                 ) { viewModel.openShareCard(track) })
         }
-        if (viewModel.menuContextPlaylistId != null && viewModel.menuContextPlaylistId != -2L) {
+        if (viewModel.menuContextPlaylistId != null) {
             add(
                 DockOptionItem(
                     Icons.Outlined.Delete,
                     stringResource(R.string.menu_remove),
                     id = "remove_from_playlist"
                 ) { viewModel.removeFromContextPlaylist(viewModel.menuContextPlaylistId!!, track) })
+        }
+        if (viewModel.menuContextQueueIndex != null) {
+            add(
+                DockOptionItem(
+                    Icons.Outlined.Delete,
+                    stringResource(R.string.queue_remove),
+                    id = "remove_from_queue"
+                ) {
+                    val idx = viewModel.menuContextQueueIndex
+                    if (idx != null) {
+                        viewModel.removeTrackFromQueue(idx)
+                    }
+                    viewModel.showMenuSheet = false
+                })
         }
         if (viewModel.isMenuContextFromPlayer) {
             add(
@@ -2290,6 +2384,16 @@ fun MenuSheetContent(viewModel: PlayerViewModel) {
                     stringResource(R.string.sleep_timer_title),
                     id = "sleep_timer"
                 ) { viewModel.showSleepTimerDialog = true })
+            // The night screen: a true-black clock that keeps the screen awake and drifts, for leaving on.
+            add(
+                DockOptionItem(
+                    Icons.Rounded.DarkMode,
+                    stringResource(R.string.night_screen_title),
+                    id = "night_screen"
+                ) {
+                    viewModel.showMenuSheet = false
+                    viewModel.showNightScreen = true
+                })
             // Only for the track that is playing: the editor's whole method is "listen, mark here", so it
             // needs a playhead to mark from (issue #33).
             add(
@@ -2333,7 +2437,7 @@ fun MenuSheetContent(viewModel: PlayerViewModel) {
                     } else {
                         com.alananasss.kittytune.data.BlockManager.blockTrack(
                             track,
-                            currentlyPlayingId = viewModel.currentTrack?.id
+                            currentlyPlayingId = viewModel.uiCurrentTrack?.id
                         )
                         Toast.makeText(context, context.getString(R.string.track_hidden_toast), Toast.LENGTH_SHORT).show()
                     }
@@ -2356,7 +2460,7 @@ fun MenuSheetContent(viewModel: PlayerViewModel) {
                                 artistName = track.user!!.username ?: "",
                                 avatarUrl = track.user.avatarUrl,
                                 source = track.source ?: "soundcloud",
-                                currentlyPlayingTrack = viewModel.currentTrack
+                                currentlyPlayingTrack = viewModel.uiCurrentTrack
                             )
                             Toast.makeText(context, context.getString(R.string.artist_blocked_toast), Toast.LENGTH_SHORT).show()
                         }
@@ -2381,6 +2485,17 @@ fun MenuSheetContent(viewModel: PlayerViewModel) {
                 }
             )
         }
+        val isConnectActive = com.alananasss.kittytune.data.sync.ConnectManager.selectedDevice.value != null
+        add(
+            DockOptionItem(
+                if (isConnectActive) Icons.Rounded.CastConnected else Icons.Rounded.Devices,
+                stringResource(R.string.slot_connect),
+                id = "connect"
+            ) {
+                viewModel.showMenuSheet = false
+                viewModel.showConnectSheet = true
+            }
+        )
     }
 
     val menuPrefs = remember { com.alananasss.kittytune.data.local.PlayerPreferences(context) }
@@ -2457,12 +2572,12 @@ fun MenuSheetContent(viewModel: PlayerViewModel) {
             var text = item.text
 
             if (item.text == stringResource(R.string.action_unlike)) tint = activeColor
-            if (item.text == stringResource(R.string.menu_shuffle) && viewModel.shuffleEnabled) tint = activeColor
+            if (item.text == stringResource(R.string.menu_shuffle) && viewModel.uiShuffleEnabled) tint = activeColor
             if (item.text == stringResource(R.string.menu_reposted)) tint = activeColor
             if (item.text == stringResource(R.string.menu_enable_duet_lyrics)) tint = activeColor
             if (item.text == stringResource(R.string.menu_repeat)) {
-                if (viewModel.repeatMode != com.alananasss.kittytune.ui.player.RepeatMode.NONE) tint = activeColor
-                text = when (viewModel.repeatMode) {
+                if (viewModel.uiRepeatMode != com.alananasss.kittytune.ui.player.RepeatMode.NONE) tint = activeColor
+                text = when (viewModel.uiRepeatMode) {
                     com.alananasss.kittytune.ui.player.RepeatMode.ALL -> stringResource(R.string.menu_repeat_all)
                     com.alananasss.kittytune.ui.player.RepeatMode.ONE -> stringResource(R.string.menu_repeat_one)
                     else -> stringResource(R.string.menu_repeat)
@@ -2472,6 +2587,9 @@ fun MenuSheetContent(viewModel: PlayerViewModel) {
                 tint = activeColor
                 text = viewModel.formatSleepTimerRemaining()
             }
+            if (item.id == "connect" && com.alananasss.kittytune.data.sync.ConnectManager.selectedDevice.value != null) {
+                tint = activeColor
+            }
             if (item.id == "download" && isDownloaded) {
                 tint = MaterialTheme.colorScheme.error
             }
@@ -2479,7 +2597,7 @@ fun MenuSheetContent(viewModel: PlayerViewModel) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .clip(RoundedCornerShape(12.dp))
-                    .clickable { item.onClick() }
+                    .hapticClickable { item.onClick() }
                     .padding(vertical = 4.dp, horizontal = 2.dp)
             ) {
                 if (item.id == "download") {
@@ -2519,7 +2637,7 @@ fun MenuSheetContent(viewModel: PlayerViewModel) {
 
 @Composable
 fun AddToPlaylistContent(viewModel: PlayerViewModel) {
-    val singleTrack = viewModel.trackForMenu ?: viewModel.currentTrack
+    val singleTrack = viewModel.trackForMenu ?: viewModel.uiCurrentTrack
     val bulkTracks = viewModel.tracksToAddInBulk
     if (singleTrack == null && bulkTracks == null) return
 
@@ -2575,7 +2693,7 @@ fun ChoosePlaylistContent(
                 )
                 Spacer(Modifier.width(8.dp))
                 Button(
-                    onClick = {
+                    onClick = hapticAction(HapticKind.UI) {
                         if (newName.isNotBlank()) {
                             if (isBulkTransfer && bulkTracks != null) {
                                 viewModel.createTargetPlaylistForBulk(newName) {
@@ -2631,7 +2749,7 @@ fun ChoosePlaylistContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
-                        .clickable {
+                        .hapticClickable {
                             if (isBulkTransfer && bulkTracks != null) {
                                 viewModel.selectTargetPlaylistForBulk(playlist)
                             } else if (bulkTracks != null) {
@@ -2641,7 +2759,7 @@ fun ChoosePlaylistContent(
                                     playlist.title
                                 )
                             } else if (singleTrack != null) {
-                                viewModel.addToPlaylist(playlist.id, singleTrack)
+                                viewModel.addToPlaylist(playlist.id, singleTrack, playlist.title)
                             }
                         }
                         .padding(vertical = 10.dp, horizontal = 4.dp),
@@ -2750,7 +2868,7 @@ fun TrackSelectionContent(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                view.performAppHaptic(HapticFeedbackConstants.KEYBOARD_TAP)
                                 sortBy = sortType
                                 showSortSheet = false
                             }
@@ -2792,7 +2910,7 @@ fun TrackSelectionContent(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 IconButton(
-                                    onClick = { isFullscreen = false },
+                                    onClick = hapticAction(HapticKind.UI) { isFullscreen = false },
                                     shapes = IconButtonDefaults.shapes()
                                 ) {
                                     Icon(
@@ -2817,13 +2935,13 @@ fun TrackSelectionContent(
                                     )
                                 }
                                 IconButton(
-                                    onClick = { isSearchExpanded = !isSearchExpanded },
+                                    onClick = hapticAction(HapticKind.UI) { isSearchExpanded = !isSearchExpanded },
                                     shapes = IconButtonDefaults.shapes()
                                 ) {
                                     Icon(Icons.Default.Search, "Search")
                                 }
                                 IconButton(
-                                    onClick = { showSortSheet = true },
+                                    onClick = hapticAction(HapticKind.UI) { showSortSheet = true },
                                     shapes = IconButtonDefaults.shapes()
                                 ) {
                                     Icon(Icons.AutoMirrored.Rounded.Sort, "Sort")
@@ -2866,7 +2984,7 @@ fun TrackSelectionContent(
 
                                 FilledTonalButton(
                                     onClick = {
-                                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                        view.performAppHaptic(HapticFeedbackConstants.CLOCK_TICK)
                                         val target = !isAllSelected
                                         tracks.forEach { selectedMap[it.id] = target }
                                     },
@@ -2910,7 +3028,7 @@ fun TrackSelectionContent(
                                 .padding(horizontal = 16.dp, vertical = 12.dp)
                         ) {
                             Button(
-                                onClick = {
+                                onClick = hapticAction(HapticKind.UI) {
                                     val selected = tracks.filter { selectedMap[it.id] == true }
                                     if (selected.isNotEmpty()) {
                                         isFullscreen = false
@@ -2949,7 +3067,7 @@ fun TrackSelectionContent(
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(12.dp))
                                     .clickable {
-                                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                        view.performAppHaptic(HapticFeedbackConstants.CLOCK_TICK)
                                         selectedMap[track.id] = !isSelected
                                     }
                                     .padding(vertical = 8.dp, horizontal = 4.dp),
@@ -3043,19 +3161,19 @@ fun TrackSelectionContent(
                 )
             }
             IconButton(
-                onClick = { isSearchExpanded = !isSearchExpanded },
+                onClick = hapticAction(HapticKind.UI) { isSearchExpanded = !isSearchExpanded },
                 shapes = IconButtonDefaults.shapes()
             ) {
                 Icon(Icons.Default.Search, "Search")
             }
             IconButton(
-                onClick = { showSortSheet = true },
+                onClick = hapticAction(HapticKind.UI) { showSortSheet = true },
                 shapes = IconButtonDefaults.shapes()
             ) {
                 Icon(Icons.AutoMirrored.Rounded.Sort, "Sort")
             }
             IconButton(
-                onClick = { isFullscreen = true },
+                onClick = hapticAction(HapticKind.UI) { isFullscreen = true },
                 shapes = IconButtonDefaults.shapes()
             ) {
                 Icon(Icons.Rounded.Fullscreen, "Fullscreen")
@@ -3098,7 +3216,7 @@ fun TrackSelectionContent(
 
             FilledTonalButton(
                 onClick = {
-                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                    view.performAppHaptic(HapticFeedbackConstants.CLOCK_TICK)
                     val target = !isAllSelected
                     tracks.forEach { selectedMap[it.id] = target }
                 },
@@ -3145,7 +3263,7 @@ fun TrackSelectionContent(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
                         .clickable {
-                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                            view.performAppHaptic(HapticFeedbackConstants.CLOCK_TICK)
                             selectedMap[track.id] = !isSelected
                         }
                         .padding(vertical = 8.dp, horizontal = 4.dp),
@@ -3201,7 +3319,7 @@ fun TrackSelectionContent(
         Spacer(Modifier.height(12.dp))
 
         Button(
-            onClick = {
+            onClick = hapticAction(HapticKind.UI) {
                 val selected = tracks.filter { selectedMap[it.id] == true }
                 if (selected.isNotEmpty()) {
                     onConfirm(selected)
@@ -3331,7 +3449,7 @@ fun SleepTimerDialog(viewModel: PlayerViewModel) {
                             }
                             Spacer(Modifier.height(12.dp))
                             FilledTonalButton(
-                                onClick = {
+                                onClick = hapticAction(HapticKind.UI) {
                                     viewModel.cancelSleepTimer()
                                     viewModel.showSleepTimerDialog = false
                                 },
@@ -3375,7 +3493,7 @@ fun SleepTimerDialog(viewModel: PlayerViewModel) {
                         val newStep = it.toInt()
                         if (newStep != lastStepValue) {
                             lastStepValue = newStep
-                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                            view.performAppHaptic(HapticFeedbackConstants.CLOCK_TICK)
                         }
                         sliderValue = it
                     },
@@ -3415,14 +3533,14 @@ fun SleepTimerDialog(viewModel: PlayerViewModel) {
                         }
                         FilterChip(
                             selected = selectedMinutes == mins,
-                            onClick = { sliderValue = mins.toFloat() },
+                            onClick = hapticAction(HapticKind.UI) { sliderValue = mins.toFloat() },
                             label = { Text(label, style = MaterialTheme.typography.labelMedium) },
                             shape = RoundedCornerShape(12.dp)
                         )
                     }
                     FilterChip(
                         selected = viewModel.sleepTimerEndOfTrack,
-                        onClick = { viewModel.startSleepTimerEndOfTrack() },
+                        onClick = hapticAction(HapticKind.UI) { viewModel.startSleepTimerEndOfTrack() },
                         label = {
                             Text(
                                 stringResource(R.string.sleep_timer_end_of_track),
@@ -3435,7 +3553,7 @@ fun SleepTimerDialog(viewModel: PlayerViewModel) {
 
                     FilterChip(
                         selected = showCustomInput,
-                        onClick = { showCustomInput = !showCustomInput },
+                        onClick = hapticAction(HapticKind.UI) { showCustomInput = !showCustomInput },
                         label = {
                             Text(
                                 stringResource(R.string.sleep_timer_custom),
@@ -3467,7 +3585,7 @@ fun SleepTimerDialog(viewModel: PlayerViewModel) {
                         )
                         Spacer(Modifier.width(8.dp))
                         FilledTonalButton(
-                            onClick = {
+                            onClick = hapticAction(HapticKind.UI) {
                                 val minutes = customMinutes.toLongOrNull()
                                 if (minutes != null && minutes > 0) {
                                     viewModel.startSleepTimer(minutes * 60 * 1000L)
@@ -3483,13 +3601,13 @@ fun SleepTimerDialog(viewModel: PlayerViewModel) {
             }
         },
         dismissButton = {
-            TextButton(onClick = { viewModel.showSleepTimerDialog = false }) {
+            TextButton(onClick = hapticAction(HapticKind.UI) { viewModel.showSleepTimerDialog = false }) {
                 Text(stringResource(R.string.btn_cancel))
             }
         },
         confirmButton = {
             Button(
-                onClick = {
+                onClick = hapticAction(HapticKind.UI) {
                     viewModel.startSleepTimer(selectedMinutes.toLong() * 60 * 1000L)
                 },
                 shape = RoundedCornerShape(12.dp)
@@ -3498,166 +3616,6 @@ fun SleepTimerDialog(viewModel: PlayerViewModel) {
             }
         }
     )
-}
-
-@Composable
-fun QueueContent(
-    viewModel: PlayerViewModel,
-    isQueueOpen: Boolean,
-    onCloseQueue: () -> Unit,
-    onOpenExpandedQueue: () -> Unit
-) {
-    val view = LocalView.current
-    val listState = rememberLazyListState()
-
-    val reorderableState = rememberReorderableLazyListState(
-        lazyListState = listState,
-        onMove = { from, to ->
-            viewModel.moveQueueItem(from.index, to.index)
-            view.performHapticFeedback(HapticFeedbackConstants.SEGMENT_FREQUENT_TICK)
-        }
-    )
-
-    LaunchedEffect(isQueueOpen, viewModel.currentTrack) {
-        if (isQueueOpen) {
-            val track = viewModel.currentTrack
-            if (track != null && viewModel.queueState.isNotEmpty()) {
-                val index = viewModel.queueState.indexOfFirst { it.id == track.id }
-                if (index >= 0) listState.scrollToItem(kotlin.math.max(0, index - 2))
-            }
-        }
-    }
-
-    val windowSizeInfo = rememberWindowSizeInfo()
-    val isPhoneLandscape = windowSizeInfo.isLandscape && !windowSizeInfo.isTablet
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (isPhoneLandscape) Modifier.fillMaxHeight() else Modifier.fillMaxHeight(0.7f))
-            .background(MaterialTheme.colorScheme.surfaceContainer)
-            .pointerInput(Unit) { detectTapGestures { } }
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceContainer)
-                .padding(top = 24.dp, bottom = 16.dp, start = 24.dp, end = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(R.string.player_queue),
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                modifier = Modifier.weight(1f)
-            )
-
-            IconButton(
-                onClick = {
-                    onCloseQueue()
-                    onOpenExpandedQueue()
-                },
-                shapes = IconButtonDefaults.shapes()
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.OpenInFull,
-                    contentDescription = "Expand Queue",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-
-        LazyColumn(
-            state = listState,
-            contentPadding = PaddingValues(bottom = 24.dp)
-        ) {
-            itemsIndexed(items = viewModel.queueState, key = { _, track -> track.id }) { index, track ->
-                ReorderableItem(
-                    state = reorderableState,
-                    key = track.id
-                ) { isDragging ->
-
-                    val isCurrent = track.id == viewModel.currentTrack?.id
-                    val elevation by animateDpAsState(if (isDragging) 8.dp else 0.dp, label = "elevation")
-                    val backgroundColor =
-                        if (isDragging) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceContainer
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(72.dp)
-                            .shadow(elevation)
-                            .background(backgroundColor)
-                            .combinedClickable(
-                                onClick = { viewModel.skipToQueueItem(index) },
-                                onLongClick = {
-                                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                                    viewModel.showTrackOptions(track, fromPlayer = true)
-                                }
-                            )
-                            .padding(horizontal = 24.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        AsyncImage(
-                            model = track.fullResArtwork,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                        )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = track.title ?: stringResource(R.string.generic_title),
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = track.displayArtist.ifBlank { track.user?.username ?: stringResource(R.string.generic_artist) },
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                if (track.user?.verified == true) {
-                                    Spacer(Modifier.width(4.dp))
-                                    Icon(
-                                        Icons.Rounded.Verified,
-                                        null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                }
-                            }
-                        }
-
-                        Icon(
-                            imageVector = Icons.Rounded.DragHandle,
-                            contentDescription = stringResource(R.string.desc_move),
-                            tint = if (isDragging) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                                alpha = 0.5f
-                            ),
-                            modifier = Modifier
-                                .size(32.dp)
-                                .draggableHandle(
-                                    onDragStarted = {
-                                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                                    },
-                                    onDragStopped = {
-                                        view.performHapticFeedback(HapticFeedbackConstants.GESTURE_END)
-                                    }
-                                )
-                        )
-                    }
-                }
-            }
-        }
-    }
 }
 
 @Composable
@@ -3713,19 +3671,23 @@ private fun ClassicPlayerProgress(viewModel: PlayerViewModel, textColor: Color) 
     val progressState = remember { Animatable(0f) }
     val sliderPosition = if (isDragging) dragPosition else progressState.value
 
-    var lastValidDuration by remember { mutableFloatStateOf(180000f) }
-    if (viewModel.duration > 1000) {
-        lastValidDuration = viewModel.duration.toFloat()
-    }
-    val totalDuration = if (viewModel.duration > 1000) viewModel.duration.toFloat() else lastValidDuration
-    val rawPosition = viewModel.currentPosition.toFloat()
+    val clip = viewModel.uiClipWindow
+    val shownOf = { songMs: Long -> clip?.toShown(songMs) ?: songMs }
+    val songOf = { shownMs: Long -> clip?.toSong(shownMs) ?: shownMs }
+    val clipDuration = clip?.lengthMs
 
-    var currentTrackId by remember { mutableStateOf(viewModel.currentTrack?.id) }
+    var lastValidDuration by remember { mutableFloatStateOf(180000f) }
+    if (viewModel.uiDuration > 1000) {
+        lastValidDuration = viewModel.uiDuration.toFloat()
+    }
+    val totalDuration = (clipDuration?.toFloat()) ?: (if (viewModel.uiDuration > 1000) viewModel.uiDuration.toFloat() else lastValidDuration)
+
+    var currentTrackId by remember { mutableStateOf(viewModel.uiCurrentTrack?.id) }
     var isTransitioning by remember { mutableStateOf(false) }
 
-    LaunchedEffect(viewModel.currentTrack?.id) {
-        if (viewModel.currentTrack?.id != currentTrackId) {
-            currentTrackId = viewModel.currentTrack?.id
+    LaunchedEffect(viewModel.uiCurrentTrack?.id) {
+        if (viewModel.uiCurrentTrack?.id != currentTrackId) {
+            currentTrackId = viewModel.uiCurrentTrack?.id
             progressState.snapTo(0f)
             dragPosition = 0f
             isDragging = false
@@ -3734,31 +3696,34 @@ private fun ClassicPlayerProgress(viewModel: PlayerViewModel, textColor: Color) 
             isTransitioning = false
         }
     }
-    LaunchedEffect(rawPosition) {
-        if (isTransitioning && rawPosition < 2000f) isTransitioning = false
-    }
 
-    val targetPos = when {
-        isTransitioning -> 0f
-        rawPosition > totalDuration -> 0f
-        else -> rawPosition
-    }
+    // The position is observed through snapshotFlow instead of being read in the body:
+    // reading it recomposed this whole component on every playback tick, and keying the
+    // animation effect on the raw position restarted the tween twice per second forever.
+    // The collector below runs the exact same transition logic, without the recomposition.
+    LaunchedEffect(isTransitioning, isDragging, totalDuration, clip) {
+        snapshotFlow {
+            val raw = shownOf(viewModel.uiCurrentPosition).toFloat()
+            if (isTransitioning) 0f else if (raw > totalDuration) 0f else raw
+        }.collectLatest { rawPosition ->
+            if (isTransitioning && rawPosition < 2000f) isTransitioning = false
 
-    LaunchedEffect(targetPos, isDragging) {
-        if (isDragging) {
-            progressState.snapTo(dragPosition)
-        } else {
-            val diff = targetPos - progressState.value
-            val absDiff = kotlin.math.abs(diff)
-            when {
-                targetPos == 0f || (targetPos < 1000f && progressState.value > 2000f) ->
-                    progressState.snapTo(0f)
+            if (isDragging) {
+                progressState.snapTo(dragPosition)
+            } else {
+                val targetPos = rawPosition
+                val diff = targetPos - progressState.value
+                val absDiff = kotlin.math.abs(diff)
+                when {
+                    targetPos == 0f || (targetPos < 1000f && progressState.value > 2000f) ->
+                        progressState.snapTo(0f)
 
-                absDiff > 2000f ->
-                    progressState.animateTo(targetPos, tween(300, easing = FastOutSlowInEasing))
+                    absDiff > 2000f ->
+                        progressState.animateTo(targetPos, tween(300, easing = FastOutSlowInEasing))
 
-                diff > 0 ->
-                    progressState.animateTo(targetPos, tween(1000, easing = LinearEasing))
+                    diff > 0 ->
+                        progressState.animateTo(targetPos, tween(1000, easing = LinearEasing))
+                }
             }
         }
     }
@@ -3768,6 +3733,11 @@ private fun ClassicPlayerProgress(viewModel: PlayerViewModel, textColor: Color) 
         activeTrackColor = textColor,
         inactiveTrackColor = textColor.copy(alpha = 0.2f)
     )
+
+    val mix = rememberMixTransition()
+    val behindGlow = Modifier.fillMaxWidth().mixGlow(mix, textColor) {
+        if (totalDuration > 0f) (sliderPosition.coerceIn(0f, totalDuration) / totalDuration) else 0f
+    }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         when (sliderStyle) {
@@ -3779,14 +3749,14 @@ private fun ClassicPlayerProgress(viewModel: PlayerViewModel, textColor: Color) 
                         isDragging = true
                         dragPosition = it
                         viewModel.updateScrubPosition(it.toLong())
-                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        view.performAppHaptic(HapticFeedbackConstants.CLOCK_TICK)
                     },
                     onValueChangeFinished = {
-                        viewModel.seekTo(dragPosition.toLong())
+                        viewModel.seekTo(songOf(dragPosition.toLong()))
                         isDragging = false
                     },
                     colors = sliderColors,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = behindGlow
                 )
             }
             PlayerSliderStyle.WAVY -> {
@@ -3797,18 +3767,20 @@ private fun ClassicPlayerProgress(viewModel: PlayerViewModel, textColor: Color) 
                         isDragging = true
                         dragPosition = it
                         viewModel.updateScrubPosition(it.toLong())
-                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        view.performAppHaptic(HapticFeedbackConstants.CLOCK_TICK)
                     },
                     onValueCommit = { finalPos ->
-                        viewModel.seekTo(finalPos.toLong())
+                        viewModel.seekTo(songOf(finalPos.toLong()))
                         isDragging = false
                     },
                     onValueChangeFinished = {
-                        viewModel.seekTo(dragPosition.toLong())
+                        viewModel.seekTo(songOf(dragPosition.toLong()))
                         isDragging = false
                     },
                     colors = sliderColors,
-                    isPlaying = viewModel.isPlaying,
+                    isPlaying = viewModel.uiIsPlaying,
+                    mix = mix,
+                    mixColor = textColor,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -3842,10 +3814,10 @@ private fun ClassicPlayerProgress(viewModel: PlayerViewModel, textColor: Color) 
                         isDragging = true
                         dragPosition = it
                         viewModel.updateScrubPosition(it.toLong())
-                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        view.performAppHaptic(HapticFeedbackConstants.CLOCK_TICK)
                     },
                     onValueChangeFinished = {
-                        viewModel.seekTo(dragPosition.toLong())
+                        viewModel.seekTo(songOf(dragPosition.toLong()))
                         isDragging = false
                     },
                     interactionSource = trackInteractionSource,
@@ -3858,7 +3830,7 @@ private fun ClassicPlayerProgress(viewModel: PlayerViewModel, textColor: Color) 
                         )
                     },
                     colors = sliderColors,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = behindGlow
                 )
             }
             PlayerSliderStyle.SQUIGGLY -> {
@@ -3869,15 +3841,15 @@ private fun ClassicPlayerProgress(viewModel: PlayerViewModel, textColor: Color) 
                         isDragging = true
                         dragPosition = it
                         viewModel.updateScrubPosition(it.toLong())
-                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        view.performAppHaptic(HapticFeedbackConstants.CLOCK_TICK)
                     },
                     onValueChangeFinished = {
-                        viewModel.seekTo(dragPosition.toLong())
+                        viewModel.seekTo(songOf(dragPosition.toLong()))
                         isDragging = false
                     },
                     colors = sliderColors,
-                    isPlaying = viewModel.isPlaying,
-                    modifier = Modifier.fillMaxWidth()
+                    isPlaying = viewModel.uiIsPlaying,
+                    modifier = behindGlow
                 )
             }
         }
@@ -3899,7 +3871,7 @@ private fun ClassicPlayerProgress(viewModel: PlayerViewModel, textColor: Color) 
                 color = textColor.copy(alpha = 0.7f),
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
-                    .clickable {
+                    .hapticClickable {
                         prefs.setShowRemainingTime(!showRemaining)
                     }
                     .padding(horizontal = 8.dp, vertical = 8.dp)
@@ -3921,14 +3893,22 @@ fun WaveformPlayerProgress(
     val showCommentsPopup = prefs.getWaveformCommentsPopupEnabled()
     val view = LocalView.current
 
+    val clip = viewModel.uiClipWindow
+    val shownOf = { songMs: Long -> clip?.toShown(songMs) ?: songMs }
+    val songOf = { shownMs: Long -> clip?.toSong(shownMs) ?: shownMs }
+    val clipDuration = clip?.lengthMs
+
     var lastValidDuration by remember { mutableFloatStateOf(180000f) }
-    if (viewModel.duration > 1000) lastValidDuration = viewModel.duration.toFloat()
-    val totalDuration = if (viewModel.duration > 1000) viewModel.duration.toFloat() else lastValidDuration
+    if (viewModel.uiDuration > 1000) lastValidDuration = viewModel.uiDuration.toFloat()
+    val totalDuration = (clipDuration?.toFloat()) ?: (if (viewModel.uiDuration > 1000) viewModel.uiDuration.toFloat() else lastValidDuration)
 
-    val rawPosition = viewModel.currentPosition.toFloat()
-    val isPlaying = viewModel.isPlaying
+    // Playback position is deliberately NOT read in this composable's body: the smooth
+    // interpolation below repaints the waveform at frame rate, and any body-level read of the
+    // position state dragged the whole component (comments sorting, badge, canvas setup)
+    // through a recomposition on every playback tick as well.
+    val isPlaying = viewModel.uiIsPlaying
 
-    val currentTrack = viewModel.currentTrack
+    val currentTrack = viewModel.uiCurrentTrack
     val waveformTrackId = currentTrack?.id
 
     var waveformSamples by remember(waveformTrackId) {
@@ -3963,12 +3943,12 @@ fun WaveformPlayerProgress(
 
     val speed = viewModel.effectsState.speed
 
-    var smoothDrawPosition by remember(waveformTrackId) { mutableFloatStateOf(rawPosition) }
+    var smoothDrawPosition by remember(waveformTrackId) { mutableFloatStateOf(MusicManager.player.currentPosition.coerceAtLeast(0L).toFloat()) }
     var isDragging by remember(waveformTrackId) { mutableStateOf(false) }
     var dragPosition by remember(waveformTrackId) { mutableFloatStateOf(0f) }
 
     LaunchedEffect(waveformTrackId) {
-        smoothDrawPosition = rawPosition
+        smoothDrawPosition = MusicManager.player.currentPosition.coerceAtLeast(0L).toFloat()
         dragPosition = 0f
         isDragging = false
     }
@@ -3985,16 +3965,31 @@ fun WaveformPlayerProgress(
         }
     }
 
-    LaunchedEffect(rawPosition, isPlaying) {
-        if (!isDragging) {
-            val drift = kotlin.math.abs(smoothDrawPosition - rawPosition)
-            if (!isPlaying || drift > 400f || rawPosition == 0f) {
-                smoothDrawPosition = rawPosition
+    // Drift correction: observe the published position through snapshotFlow so the correction
+    // runs only when the position actually changes, instead of restarting a LaunchedEffect on
+    // every recomposition and re-reading the state in the body.
+    LaunchedEffect(isPlaying, waveformTrackId, clip) {
+        snapshotFlow { shownOf(viewModel.uiCurrentPosition).toFloat() }
+            .collect { rawPos ->
+                if (!isDragging) {
+                    val drift = kotlin.math.abs(smoothDrawPosition - rawPos)
+                    if (!isPlaying || drift > 400f || rawPos == 0f) {
+                        smoothDrawPosition = rawPos
+                    }
+                }
             }
-        }
     }
 
-    val currentPositionMs = if (isDragging) dragPosition else smoothDrawPosition
+    // The smoothing state below is written every frame while playing; it used to be read in this
+    // composable's body, which recomposed the whole waveform — AnimatedContent, gestures, badges —
+    // at display rate. Everything that needs it continuously now reads it in the draw phase or
+    // through a quantized derived value, so a frame of playback costs a redraw, not a recomposition.
+    val displayedPositionBucket by remember {
+        derivedStateOf { ((if (isDragging) dragPosition else smoothDrawPosition).toLong()) / 200L }
+    }
+    val displayedPositionSecond by remember {
+        derivedStateOf { ((if (isDragging) dragPosition else smoothDrawPosition).toLong()) / 1000L }
+    }
 
     LaunchedEffect(isDragging, if (isDragging) dragPosition else 0f) {
         if (isDragging) {
@@ -4050,19 +4045,19 @@ fun WaveformPlayerProgress(
         commentableComments.sortedWith(compareBy({ it.trackTimestamp ?: 0L }, { it.id }))
     }
 
-    var displayedComment by remember(viewModel.currentTrack?.id) {
+    var displayedComment by remember(viewModel.uiCurrentTrack?.id) {
         mutableStateOf<com.alananasss.kittytune.domain.Comment?>(
             null
         )
     }
 
-    LaunchedEffect(currentPositionMs.toLong() / 200L, sortedComments, showCommentsPopup, isDragging) {
+    LaunchedEffect(displayedPositionBucket, sortedComments, showCommentsPopup, isDragging) {
         if (isDragging || !showCommentsPopup || sortedComments.isEmpty()) {
             displayedComment = null
             return@LaunchedEffect
         }
 
-        val currentMs = currentPositionMs.toLong()
+        val currentMs = displayedPositionBucket * 200L
         val current = displayedComment
 
         if (current != null) {
@@ -4097,13 +4092,13 @@ fun WaveformPlayerProgress(
 
     val activeComment = displayedComment
 
-    LaunchedEffect(viewModel.currentTrack?.id) {
-        viewModel.currentTrack?.let { viewModel.loadTrackReactions(it.id) }
+    LaunchedEffect(viewModel.uiCurrentTrack?.id) {
+        viewModel.uiCurrentTrack?.let { viewModel.loadTrackReactions(it.id) }
     }
 
     var activeReaction by remember { mutableStateOf<PlayerViewModel.WaveformReactionParticle?>(null) }
 
-    val currentSecond = (currentPositionMs / 1000L).toLong()
+    val currentSecond = displayedPositionSecond
     var lastTriggeredReactionSecond by remember { mutableLongStateOf(-1L) }
 
     LaunchedEffect(currentSecond, viewModel.trackReactionUsers, isDragging) {
@@ -4248,12 +4243,6 @@ fun WaveformPlayerProgress(
 
             val centerX = canvasWidthPx / 2f
 
-            val progressFrac = if (totalDuration > 0f)
-                (currentPositionMs / totalDuration).coerceIn(0f, 1f)
-            else 0f
-
-            val waveformLeft = centerX - (progressFrac * totalWaveformPx)
-
             var lastHapticTime by remember { mutableLongStateOf(0L) }
 
             Canvas(
@@ -4265,14 +4254,14 @@ fun WaveformPlayerProgress(
                                 isDragging = true
                                 dragPosition = smoothDrawPosition
                                 val feedback = if (android.os.Build.VERSION.SDK_INT >= 34) 25 else 4
-                                view.performHapticFeedback(feedback)
+                                view.performAppHaptic(feedback)
                             },
                             onDragEnd = {
-                                viewModel.seekTo(dragPosition.toLong())
+                                viewModel.seekTo(songOf(dragPosition.toLong()))
                                 smoothDrawPosition = dragPosition
                                 isDragging = false
                                 val feedback = if (android.os.Build.VERSION.SDK_INT >= 34) 25 else 4
-                                view.performHapticFeedback(feedback)
+                                view.performAppHaptic(feedback)
                             },
                             onDragCancel = {
                                 isDragging = false
@@ -4286,7 +4275,7 @@ fun WaveformPlayerProgress(
                                 val now = System.currentTimeMillis()
                                 if (now - lastHapticTime > 45L) {
                                     val feedback = if (android.os.Build.VERSION.SDK_INT >= 34) 25 else 4
-                                    view.performHapticFeedback(feedback)
+                                    view.performAppHaptic(feedback)
                                     lastHapticTime = now
                                 }
                             }
@@ -4297,10 +4286,10 @@ fun WaveformPlayerProgress(
                             val deltaPx = offset.x - centerX
                             val deltaFrac = deltaPx / totalWaveformPx
                             val newPos = (smoothDrawPosition + deltaFrac * totalDuration).coerceIn(0f, totalDuration)
-                            viewModel.seekTo(newPos.toLong())
+                            viewModel.seekTo(songOf(newPos.toLong()))
                             smoothDrawPosition = newPos
                             val feedback = if (android.os.Build.VERSION.SDK_INT >= 34) 25 else 4
-                            view.performHapticFeedback(feedback)
+                            view.performAppHaptic(feedback)
                         }
                     }
             ) {
@@ -4308,6 +4297,15 @@ fun WaveformPlayerProgress(
                 val cH = size.height
                 val baselineY = cH * 0.60f
                 val reflectGap = 1.5.dp.toPx()
+
+                // Computed in the draw phase: reading the smooth position here invalidates
+                // only the canvas redraw (no recomposition) while still scrolling the
+                // waveform at the full interpolation frame rate.
+                val drawnPositionMs = if (isDragging) dragPosition else smoothDrawPosition
+                val progressFrac = if (totalDuration > 0f)
+                    (drawnPositionMs / totalDuration).coerceIn(0f, 1f)
+                else 0f
+                val waveformLeft = centerX - (progressFrac * totalWaveformPx)
 
                 val barsToDraw = resampledBars
                 val barCount = barsToDraw.size
@@ -4346,8 +4344,9 @@ fun WaveformPlayerProgress(
             if (!isDragging) {
                 val badgeOffsetY = with(density) { (134.dp.toPx() * 0.60f - 11.dp.toPx()).toDp() }
                 val showRemaining by prefs.getShowRemainingTimeFlow().collectAsState(initial = prefs.getShowRemainingTime())
+                val badgePositionMs = displayedPositionSecond * 1000L
                 val durStr = if (showRemaining) {
-                    com.alananasss.kittytune.utils.makeRemainingTimeString(currentPositionMs.toLong(), totalDuration.toLong())
+                    com.alananasss.kittytune.utils.makeRemainingTimeString(badgePositionMs, totalDuration.toLong())
                 } else {
                     makeTimeString(totalDuration.toLong())
                 }
@@ -4360,13 +4359,13 @@ fun WaveformPlayerProgress(
                             shape = RoundedCornerShape(3.dp)
                         )
                         .clip(RoundedCornerShape(3.dp))
-                        .clickable {
+                        .hapticClickable {
                             prefs.setShowRemainingTime(!showRemaining)
                         }
                         .padding(horizontal = 7.dp, vertical = 2.dp)
                 ) {
                     Text(
-                        text = "${makeTimeString(currentPositionMs.toLong())}  |  $durStr",
+                        text = "${makeTimeString(badgePositionMs)}  |  $durStr",
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold
@@ -4565,7 +4564,7 @@ fun PlayerControls(
                 contentAlignment = Alignment.Center
             ) {
                 AnimatedContent(
-                    targetState = Pair(viewModel.isLoading, viewModel.isPlaying),
+                    targetState = Pair(viewModel.isLoading, viewModel.uiIsPlaying),
                     transitionSpec = {
                         val springSpec = spring<Float>(dampingRatio = 0.6f, stiffness = 1000f)
                         (scaleIn(initialScale = 0.8f, animationSpec = springSpec) + fadeIn(tween(100)))
@@ -4583,8 +4582,20 @@ fun PlayerControls(
                     },
                     label = "playPauseLoading"
                 ) { (isLoading, isPlaying) ->
-                    if (isLoading) {
-                        LoadingIndicator(color = playIconColor, modifier = Modifier.size(32.dp))
+                    if (isLoading && isPlaying) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            LoadingIndicator(color = playIconColor, modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = stringResource(R.string.action_pause),
+                                color = playIconColor,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     } else {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -4733,7 +4744,7 @@ private fun PlayerSlotButton(
     modifier: Modifier = Modifier
 ) {
     val view = LocalView.current
-    val currentTrack = viewModel.currentTrack
+    val currentTrack = viewModel.uiCurrentTrack
     val isSpotifyCurrent = currentTrack?.let {
         it.source == "spotify" || it.user?.urn?.startsWith("spotify") == true || it.artists?.isNotEmpty() == true
     } ?: false
@@ -4746,24 +4757,26 @@ private fun PlayerSlotButton(
     }
 
     val isSlotActive = when (effectiveSlot) {
-        PlayerActionButtonSlot.LIKE -> viewModel.isLiked
-        PlayerActionButtonSlot.SHUFFLE -> viewModel.shuffleEnabled
-        PlayerActionButtonSlot.REPEAT -> viewModel.repeatMode != RepeatMode.NONE
+        PlayerActionButtonSlot.LIKE -> viewModel.uiIsLiked
+        PlayerActionButtonSlot.SHUFFLE -> viewModel.uiShuffleEnabled
+        PlayerActionButtonSlot.REPEAT -> viewModel.uiRepeatMode != RepeatMode.NONE
         PlayerActionButtonSlot.LYRICS -> viewModel.showInlineLyrics || viewModel.isLyricsUnderCoverActive
         PlayerActionButtonSlot.FULLSCREEN_LYRICS -> viewModel.showLyricsSheet
         PlayerActionButtonSlot.SLEEP_TIMER -> viewModel.isSleepTimerActive
         PlayerActionButtonSlot.HAPTICS -> viewModel.isHapticsEnabled
+        PlayerActionButtonSlot.DEVICES -> com.alananasss.kittytune.data.sync.ConnectManager.selectedDevice.value != null
+        PlayerActionButtonSlot.CONNECT -> com.alananasss.kittytune.data.sync.ConnectManager.selectedDevice.value != null
         else -> false
     }
 
     val iconVector = when (effectiveSlot) {
-        PlayerActionButtonSlot.LIKE -> if (viewModel.isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder
+        PlayerActionButtonSlot.LIKE -> if (viewModel.uiIsLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder
         PlayerActionButtonSlot.COMMENTS -> Icons.AutoMirrored.Rounded.Comment
         PlayerActionButtonSlot.SHARE -> Icons.Rounded.Share
         PlayerActionButtonSlot.QUEUE -> Icons.AutoMirrored.Rounded.QueueMusic
         PlayerActionButtonSlot.AUDIO_FX -> Icons.Default.Equalizer
         PlayerActionButtonSlot.SHUFFLE -> Icons.Rounded.Shuffle
-        PlayerActionButtonSlot.REPEAT -> when (viewModel.repeatMode) {
+        PlayerActionButtonSlot.REPEAT -> when (viewModel.uiRepeatMode) {
             RepeatMode.ONE -> Icons.Rounded.RepeatOne
             else -> Icons.Rounded.Repeat
         }
@@ -4771,7 +4784,9 @@ private fun PlayerSlotButton(
         PlayerActionButtonSlot.FULLSCREEN_LYRICS -> Icons.Rounded.OpenInFull
         PlayerActionButtonSlot.SLEEP_TIMER -> Icons.Rounded.Bedtime
         PlayerActionButtonSlot.HAPTICS -> Icons.Rounded.Vibration
+        PlayerActionButtonSlot.CONNECT -> Icons.Rounded.Devices
         PlayerActionButtonSlot.MORE -> Icons.Rounded.MoreVert
+        PlayerActionButtonSlot.DEVICES -> Icons.Rounded.Devices
         PlayerActionButtonSlot.NONE -> null
     }
 
@@ -4788,23 +4803,28 @@ private fun PlayerSlotButton(
             Modifier.combinedClickable(
                 onClick = { viewModel.openLyrics() },
                 onLongClick = {
-                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                    view.performAppHaptic(HapticFeedbackConstants.LONG_PRESS)
                     viewModel.openLyrics(forceSheet = true)
                 }
             )
         } else {
             Modifier.clickable {
+                if (effectiveSlot != PlayerActionButtonSlot.LIKE &&
+                    effectiveSlot != PlayerActionButtonSlot.SHUFFLE &&
+                    effectiveSlot != PlayerActionButtonSlot.REPEAT
+                ) {
+                    view.performAppHaptic(HapticFeedbackConstants.KEYBOARD_TAP)
+                }
                 when (effectiveSlot) {
                     PlayerActionButtonSlot.LIKE -> viewModel.toggleLike()
                     PlayerActionButtonSlot.COMMENTS -> {
-                        viewModel.selectedTrackForSheet = viewModel.currentTrack
-                        viewModel.showCommentsSheet = true
+                        viewModel.openComments(viewModel.uiCurrentTrack)
                     }
                     PlayerActionButtonSlot.SHARE -> {
                         // The card sheet still carries the link, so nothing is lost for someone
                         // who only wanted to send one - and it is reachable from the player now
                         // rather than two taps deep in the overflow menu.
-                        viewModel.currentTrack?.let { viewModel.openShareCard(it) }
+                        viewModel.uiCurrentTrack?.let { viewModel.openShareCard(it) }
                     }
                     PlayerActionButtonSlot.QUEUE -> onQueueClick()
                     PlayerActionButtonSlot.AUDIO_FX -> onEffectsClick()
@@ -4813,8 +4833,9 @@ private fun PlayerSlotButton(
                     PlayerActionButtonSlot.FULLSCREEN_LYRICS -> viewModel.openLyrics(forceSheet = true)
                     PlayerActionButtonSlot.SLEEP_TIMER -> viewModel.showSleepTimerDialog = true
                     PlayerActionButtonSlot.HAPTICS -> viewModel.toggleHaptics()
+                    PlayerActionButtonSlot.CONNECT, PlayerActionButtonSlot.DEVICES -> viewModel.showConnectSheet = true
                     PlayerActionButtonSlot.MORE -> {
-                        viewModel.currentTrack?.let { viewModel.showTrackOptions(it, fromPlayer = true) }
+                        viewModel.uiCurrentTrack?.let { viewModel.showTrackOptions(it, fromPlayer = true) }
                     }
                     PlayerActionButtonSlot.NONE, PlayerActionButtonSlot.LYRICS -> {}
                 }
@@ -4881,10 +4902,12 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
     var showAsmrVocalDialog by remember { mutableStateOf(false) }
     var showNightDriveDialog by remember { mutableStateOf(false) }
     var showStudioEditSheet by remember { mutableStateOf(false) }
-    var showEqualizerSheet by remember { mutableStateOf(false) }
 
     val allEffects = getAudioFxDefinitions(
-        onOpenEqualizerSheet = { showEqualizerSheet = true },
+        onOpenEqualizerSheet = {
+            showStudioEditSheet = false
+            viewModel.showEqualizerScreen = true
+        },
         onOpenBassBoostDialog = { showBassBoostDialog = true },
         onOpenEarrapeDialog = { showEarrapeDialog = true },
         onOpenEightDDialog = { showEightDDialog = true },
@@ -4928,19 +4951,28 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
         if (pinnedTiles.isEmpty()) emptyList() else pinnedTiles.chunked(6)
     }
     val pagerState = rememberPagerState(pageCount = { max(1, pages.size) })
+    val activeCount = remember(viewModel.effectsState, allEffects) {
+        allEffects.count { it.isActive(viewModel.effectsState) }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp)
             .padding(bottom = 24.dp)
     ) {
         Text(
             stringResource(R.string.player_audio_settings),
             style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-            modifier = Modifier.padding(bottom = 24.dp)
+            modifier = Modifier
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 24.dp)
         )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp)
+        ) {
         Column(
             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp))
                 .background(MaterialTheme.colorScheme.surfaceContainer).padding(20.dp)
@@ -4955,11 +4987,28 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                         Icons.Rounded.Speed,
                         null,
                         tint = MaterialTheme.colorScheme.primary
-                    ); Spacer(Modifier.width(12.dp)); Text(
-                    text = "${viewModel.effectsState.speed}x",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        text = "${viewModel.effectsState.speed}x",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (viewModel.effectsState.speed != 1f) {
+                        Spacer(Modifier.width(4.dp))
+                        IconButton(
+                            onClick = hapticAction(HapticKind.UI) { viewModel.setCustomSpeed(1f) },
+                            shapes = IconButtonDefaults.shapes(),
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                Icons.Rounded.RestartAlt,
+                                contentDescription = stringResource(R.string.fx_reset_speed),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
                 }
                 val isPitchActive = viewModel.effectsState.isPitchEnabled;
                 val pitchContainerColor by animateColorAsState(
@@ -5000,36 +5049,72 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 }
             }
-            Spacer(Modifier.height(24.dp)); Slider(
-            value = viewModel.effectsState.speed,
-            onValueChange = {
-                if (it != viewModel.effectsState.speed) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK); viewModel.setCustomSpeed(
-                it
+            Spacer(Modifier.height(24.dp))
+            val speedRange = 0.5f..2.0f
+            val speedSteps = if (isPrecise) 29 else 14
+            // Same component as the settings sliders: KittyLiquidSlider in liquid mode, with
+            // the glass capsule thumb, press/lens animation and inertia.
+            ExpressiveSlider(
+                value = viewModel.effectsState.speed,
+                onValueChange = { viewModel.setCustomSpeed(it) },
+                valueRange = speedRange,
+                steps = speedSteps,
+                modifier = Modifier.fillMaxWidth()
             )
-            },
-            valueRange = 0.5f..2.0f,
-            steps = if (isPrecise) 29 else 14,
-            modifier = Modifier.fillMaxWidth()
-        )
         }
         Spacer(Modifier.height(16.dp))
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 14.dp, start = 4.dp, end = 4.dp)
+                .padding(bottom = 14.dp, start = 4.dp, end = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                stringResource(R.string.player_special_effects),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                stringResource(R.string.audio_fx_long_press_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        stringResource(R.string.player_special_effects),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (activeCount > 0) {
+                        Spacer(Modifier.width(8.dp))
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer
+                        ) {
+                            Text(
+                                stringResource(R.string.fx_active_count, activeCount),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    stringResource(R.string.audio_fx_long_press_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
+                )
+            }
+            if (activeCount > 0) {
+                IconButton(
+                    onClick = hapticAction(HapticKind.UI) { viewModel.resetAllEffects() },
+                    shapes = IconButtonDefaults.shapes(),
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.RestartAlt,
+                        contentDescription = stringResource(R.string.btn_reset),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
         }
         if (pages.isEmpty()) {
             Box(
@@ -5103,7 +5188,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                                     label = stringResource(fx.titleRes),
                                     icon = fx.icon,
                                     isActive = fx.isActive(viewModel.effectsState),
-                                    onClick = { fx.onToggle(viewModel) { showEarrapeWarning = true } },
+                                    onClick = hapticAction(HapticKind.UI) { fx.onToggle(viewModel) { showEarrapeWarning = true } },
                                     onLongClick = fx.onOpenDialog,
                                     modifier = if (rowItems.size == 1) Modifier.fillMaxWidth() else Modifier.weight(1f),
                                     activeColor = fx.activeColor(),
@@ -5149,7 +5234,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
 
         Spacer(Modifier.height(14.dp))
         OutlinedButton(
-            onClick = { showStudioEditSheet = true },
+            onClick = hapticAction(HapticKind.UI) { showStudioEditSheet = true },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp),
@@ -5197,6 +5282,8 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
         }
 
         Spacer(Modifier.height(32.dp))
+        }
+
         if (showRainVolumeDialog) {
             AlertDialog(
                 onDismissRequest = { showRainVolumeDialog = false },
@@ -5270,7 +5357,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showRainVolumeDialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showRainVolumeDialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
@@ -5335,7 +5422,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = {
+                    TextButton(onClick = hapticAction(HapticKind.UI) {
                         showBassBoostDialog = false
                     }) { Text(stringResource(R.string.btn_ok)) }
                 }
@@ -5412,7 +5499,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = {
+                    TextButton(onClick = hapticAction(HapticKind.UI) {
                         showEarrapeDialog = false
                     }) { Text(stringResource(R.string.btn_ok)) }
                 }
@@ -5432,7 +5519,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                 text = { Text(stringResource(R.string.earrape_warning)) },
                 confirmButton = {
                     TextButton(
-                        onClick = {
+                        onClick = hapticAction(HapticKind.UI) {
                             viewModel.setHasSeenEarrapeWarning(true)
                             viewModel.toggleEarrape()
                             showEarrapeWarning = false
@@ -5447,7 +5534,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = {
+                    TextButton(onClick = hapticAction(HapticKind.UI) {
                         showEarrapeWarning = false
                     }) { Text(stringResource(R.string.btn_cancel)) }
                 }
@@ -5475,7 +5562,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = {
+                    TextButton(onClick = hapticAction(HapticKind.UI) {
                         showEightDDialog = false
                     }) { Text(stringResource(R.string.btn_ok)) }
                 })
@@ -5502,7 +5589,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = {
+                    TextButton(onClick = hapticAction(HapticKind.UI) {
                         showMuffledDialog = false
                     }) { Text(stringResource(R.string.btn_ok)) }
                 })
@@ -5529,7 +5616,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = {
+                    TextButton(onClick = hapticAction(HapticKind.UI) {
                         showReverbDialog = false
                     }) { Text(stringResource(R.string.btn_ok)) }
                 })
@@ -5579,7 +5666,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showNormalizationDialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showNormalizationDialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
@@ -5662,7 +5749,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showVintageMp3Dialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showVintageMp3Dialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
@@ -5737,7 +5824,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showVocalRemoverDialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showVocalRemoverDialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
@@ -5812,7 +5899,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showVocalBoostDialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showVocalBoostDialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
@@ -5910,7 +5997,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showFlangerDialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showFlangerDialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
@@ -6034,7 +6121,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showPartyNextDoorDialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showPartyNextDoorDialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
@@ -6133,7 +6220,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showSuperWideDialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showSuperWideDialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
@@ -6232,7 +6319,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showVinylLoFiDialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showVinylLoFiDialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
@@ -6332,7 +6419,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showPhaserDialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showPhaserDialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
@@ -6431,7 +6518,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showMegaphoneDialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showMegaphoneDialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
@@ -6530,7 +6617,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showRobotVocoderDialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showRobotVocoderDialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
@@ -6625,7 +6712,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showChorusDialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showChorusDialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
@@ -6720,7 +6807,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showUnderwaterDialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showUnderwaterDialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
@@ -6834,7 +6921,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showTranceGateDialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showTranceGateDialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
@@ -6929,7 +7016,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showPingPongDelayDialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showPingPongDelayDialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
@@ -7024,7 +7111,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showChiptuneDialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showChiptuneDialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
@@ -7119,7 +7206,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showShimmerReverbDialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showShimmerReverbDialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
@@ -7214,7 +7301,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showRotarySpeakerDialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showRotarySpeakerDialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
@@ -7309,7 +7396,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showTapeSaturationDialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showTapeSaturationDialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
@@ -7404,7 +7491,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showSubOctaverDialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showSubOctaverDialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
@@ -7499,7 +7586,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showEmptyMallDialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showEmptyMallDialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
@@ -7594,7 +7681,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showGramophoneDialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showGramophoneDialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
@@ -7689,7 +7776,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showReverseEchoDialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showReverseEchoDialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
@@ -7784,7 +7871,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showStadiumDialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showStadiumDialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
@@ -7879,7 +7966,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showWalkmanDialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showWalkmanDialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
@@ -7974,7 +8061,7 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showAsmrVocalDialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showAsmrVocalDialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
@@ -8069,17 +8156,10 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showNightDriveDialog = false }) {
+                    TextButton(onClick = hapticAction(HapticKind.UI) { showNightDriveDialog = false }) {
                         Text(stringResource(R.string.btn_ok))
                     }
                 }
-            )
-        }
-
-        if (showEqualizerSheet) {
-            com.alananasss.kittytune.ui.player.audio.EqualizerSheet(
-                viewModel = viewModel,
-                onDismiss = { showEqualizerSheet = false }
             )
         }
 
@@ -8092,7 +8172,10 @@ fun AudioControlDock(viewModel: PlayerViewModel) {
                 AudioFxStudioSheet(
                     viewModel = viewModel,
                     allEffects = allEffects,
-                    onOpenEqualizerSheet = { showEqualizerSheet = true },
+                    onOpenEqualizerSheet = {
+                        showStudioEditSheet = false
+                        viewModel.showEqualizerScreen = true
+                    },
                     onOpenBassBoostDialog = { showBassBoostDialog = true },
                     onOpenEarrapeDialog = { showEarrapeDialog = true },
                     onOpenEightDDialog = { showEightDDialog = true },
@@ -8189,7 +8272,7 @@ fun FxTile(
     }
 
     FilledTonalButton(
-        onClick = {
+        onClick = hapticAction(HapticKind.UI) {
             if (!longPressConsumed) onClick()
             longPressConsumed = false
         },
@@ -8762,7 +8845,7 @@ fun AudioFxStudioSheet(
 
             Surface(
                 onClick = {
-                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                    view.performAppHaptic(HapticFeedbackConstants.LONG_PRESS)
                     viewModel.resetPinnedAudioFx()
                 },
                 shape = CircleShape,
@@ -8830,7 +8913,7 @@ fun AudioFxStudioSheet(
                     viewModel = viewModel,
                     onDragStateChanged = { isDraggingTile = it },
                     onRemoveFx = { fxId ->
-                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        view.performAppHaptic(HapticFeedbackConstants.CLOCK_TICK)
                         viewModel.togglePinAudioFx(fxId)
                     }
                 )
@@ -8847,7 +8930,7 @@ fun AudioFxStudioSheet(
                     effects = fxList,
                     viewModel = viewModel,
                     onToggleFx = { fxId ->
-                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        view.performAppHaptic(HapticFeedbackConstants.CLOCK_TICK)
                         viewModel.togglePinAudioFx(fxId)
                     }
                 )
@@ -8975,7 +9058,7 @@ fun DraggablePinnedTilesGrid(
                                         dragTouchOffsetInItem = offsetInItem
                                         currentFingerPos =
                                             Offset(itemOriginX + offsetInItem.x, itemOriginY + offsetInItem.y)
-                                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                        view.performAppHaptic(HapticFeedbackConstants.LONG_PRESS)
                                     }
                                 },
                                 onDrag = { change, dragAmount ->
@@ -8997,7 +9080,7 @@ fun DraggablePinnedTilesGrid(
                                                 add(targetIdx, fx.id)
                                             }
                                             currentOrder = updated
-                                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                            view.performAppHaptic(HapticFeedbackConstants.CLOCK_TICK)
                                         }
                                     }
                                 },
@@ -9158,7 +9241,7 @@ fun AvailableCategorySection(
                         AvailableTile(
                             fx = fx,
                             isPinned = isPinned,
-                            onClick = { onToggleFx(fx.id) },
+                            onClick = hapticAction(HapticKind.UI) { onToggleFx(fx.id) },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -9324,14 +9407,17 @@ fun CommentsSheetContent(viewModel: PlayerViewModel, onClose: () -> Unit) {
     val tabs = remember { CommentSort.values() }
     var isSortMenuExpanded by remember { mutableStateOf(false) }
 
-    val targetTrack = viewModel.selectedTrackForSheet ?: viewModel.currentTrack
+    val targetTrack = viewModel.selectedTrackForSheet ?: viewModel.uiCurrentTrack
 
     var isViewingReactions by remember { mutableStateOf(false) }
     var selectedReactionTabIndex by remember { mutableIntStateOf(0) }
     val reactionEmojis = remember { listOf("🔥", "👏", "🥹", "❤️") }
 
     LaunchedEffect(targetTrack?.id) {
-        targetTrack?.let { viewModel.loadTrackReactions(it.id) }
+        targetTrack?.let {
+            viewModel.loadTrackReactions(it.id)
+            viewModel.loadComments(refresh = true, specificTrack = it)
+        }
     }
 
     val allStandardEmojis = remember { listOf("🔥", "👏", "🥹", "❤️") }
@@ -9352,10 +9438,49 @@ fun CommentsSheetContent(viewModel: PlayerViewModel, onClose: () -> Unit) {
 
     LaunchedEffect(replyingTo) {
         if (replyingTo != null) {
-            val username = replyingTo.user?.username ?: ""; commentText = "@$username: "
+            val username = replyingTo.user?.username ?: ""
+            if (username.isNotBlank() && !commentText.startsWith("@$username")) {
+                commentText = "@$username: "
+            }
         }
     }
     val isPosting = viewModel.isPostingComment
+
+    val organizedComments = remember(comments.toList()) {
+        val list = mutableListOf<Comment>()
+        val alreadyNestedIds = mutableSetOf<Long>()
+        for (c in comments) {
+            c.replies?.forEach { r -> if (r.id > 0) alreadyNestedIds.add(r.id) }
+        }
+        val mentionRegex = Regex("""^@([a-zA-Z0-9_\-\.]+):?""")
+        for (comment in comments) {
+            if (alreadyNestedIds.contains(comment.id)) {
+                continue
+            }
+            if (comment.body.trim().startsWith("@") && list.isNotEmpty()) {
+                val match = mentionRegex.find(comment.body.trim())
+                val targetUser = match?.groupValues?.getOrNull(1)
+                val parentIndex = list.indexOfLast {
+                    it.trackTimestamp == comment.trackTimestamp && (targetUser == null || it.user?.username.equals(targetUser, ignoreCase = true))
+                }.takeIf { it != -1 } ?: list.indexOfLast {
+                    it.trackTimestamp != null && it.trackTimestamp == comment.trackTimestamp
+                }.takeIf { it != -1 } ?: list.indexOfLast {
+                    targetUser != null && it.user?.username.equals(targetUser, ignoreCase = true)
+                }
+
+                if (parentIndex != -1) {
+                    val parent = list[parentIndex]
+                    val existingReplies = parent.replies ?: emptyList()
+                    if (existingReplies.none { it.id == comment.id }) {
+                        list[parentIndex] = parent.copy(replies = existingReplies + comment)
+                    }
+                    continue
+                }
+            }
+            list.add(comment)
+        }
+        list
+    }
 
     if (commentToDelete != null) {
         AlertDialog(
@@ -9363,7 +9488,7 @@ fun CommentsSheetContent(viewModel: PlayerViewModel, onClose: () -> Unit) {
             title = { Text(stringResource(R.string.dialog_delete_comment_title)) },
             text = { Text(stringResource(R.string.dialog_delete_comment_msg)) },
             confirmButton = {
-                TextButton(onClick = {
+                TextButton(onClick = hapticAction(HapticKind.UI) {
                     viewModel.deleteComment(commentToDelete!!); commentToDelete = null
                 }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
                     Text(
@@ -9372,7 +9497,7 @@ fun CommentsSheetContent(viewModel: PlayerViewModel, onClose: () -> Unit) {
                 }
             },
             dismissButton = {
-                TextButton(onClick = {
+                TextButton(onClick = hapticAction(HapticKind.UI) {
                     commentToDelete = null
                 }) { Text(stringResource(R.string.btn_cancel)) }
             },
@@ -9392,7 +9517,7 @@ fun CommentsSheetContent(viewModel: PlayerViewModel, onClose: () -> Unit) {
                             )
                         },
                         navigationIcon = {
-                            IconButton(onClick = { isViewingReactions = false }) {
+                            IconButton(onClick = hapticAction(HapticKind.UI) { isViewingReactions = false }) {
                                 Icon(
                                     Icons.AutoMirrored.Rounded.ArrowBack,
                                     stringResource(R.string.btn_back)
@@ -9411,7 +9536,7 @@ fun CommentsSheetContent(viewModel: PlayerViewModel, onClose: () -> Unit) {
                         availableEmojis.forEachIndexed { index, emoji ->
                             Tab(
                                 selected = safeTabIndex == index,
-                                onClick = { selectedReactionTabIndex = index },
+                                onClick = hapticAction(HapticKind.UI) { selectedReactionTabIndex = index },
                                 text = {
                                     Text(
                                         text = emoji,
@@ -9453,7 +9578,7 @@ fun CommentsSheetContent(viewModel: PlayerViewModel, onClose: () -> Unit) {
                                 .clickable {
                                     val ts = item.timestampSeconds
                                     val t = viewModel.selectedTrackForSheet
-                                    if (t != null && t.id != viewModel.currentTrack?.id) {
+                                    if (t != null && t.id != viewModel.uiCurrentTrack?.id) {
                                         viewModel.playTrackAtPosition(t, ts)
                                     } else {
                                         viewModel.seekTo(ts)
@@ -9526,8 +9651,8 @@ fun CommentsSheetContent(viewModel: PlayerViewModel, onClose: () -> Unit) {
                                 if (isCurrentUser) {
                                     Spacer(Modifier.width(6.dp))
                                     IconButton(
-                                        onClick = {
-                                            val track = viewModel.selectedTrackForSheet ?: viewModel.currentTrack
+                                        onClick = hapticAction(HapticKind.UI) {
+                                            val track = viewModel.selectedTrackForSheet ?: viewModel.uiCurrentTrack
                                             viewModel.removeQuickReaction(
                                                 currentEmoji,
                                                 track,
@@ -9626,7 +9751,7 @@ fun CommentsSheetContent(viewModel: PlayerViewModel, onClose: () -> Unit) {
                             modifier = Modifier.fillMaxWidth().padding(16.dp).height(56.dp).background(
                                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                                 RoundedCornerShape(24.dp)
-                            ).clickable { Toast.makeText(context, loginToCommentMsg, Toast.LENGTH_SHORT).show() },
+                            ).hapticClickable { Toast.makeText(context, loginToCommentMsg, Toast.LENGTH_SHORT).show() },
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
@@ -9664,7 +9789,7 @@ fun CommentsSheetContent(viewModel: PlayerViewModel, onClose: () -> Unit) {
                             )
                             Spacer(Modifier.width(8.dp))
                             IconButton(
-                                onClick = {
+                                onClick = hapticAction(HapticKind.UI) {
                                     if (commentText.isNotBlank()) {
                                         viewModel.postComment(commentText, null); commentText = ""
                                     }
@@ -9697,12 +9822,12 @@ fun CommentsSheetContent(viewModel: PlayerViewModel, onClose: () -> Unit) {
         },
         containerColor = MaterialTheme.colorScheme.surface
     ) { innerPadding ->
-        if (comments.isEmpty() && isLoading) {
+        if (organizedComments.isEmpty() && isLoading) {
             Box(
                 Modifier.fillMaxSize().padding(innerPadding),
                 contentAlignment = Alignment.Center
             ) { ContainedLoadingIndicator() }
-        } else if (comments.isEmpty()) {
+        } else if (organizedComments.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally
@@ -9771,7 +9896,7 @@ fun CommentsSheetContent(viewModel: PlayerViewModel, onClose: () -> Unit) {
                         Surface(
                             shape = RoundedCornerShape(16.dp),
                             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
-                            modifier = Modifier.clickable { isViewingReactions = true }
+                            modifier = Modifier.hapticClickable { isViewingReactions = true }
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -9781,7 +9906,7 @@ fun CommentsSheetContent(viewModel: PlayerViewModel, onClose: () -> Unit) {
                                 Spacer(Modifier.width(6.dp))
                                 Text(
                                     text = if (totalReactionCount > 0) totalReactionCount.toString() else formatSoundCloudCount(
-                                        targetTrack?.commentCount ?: comments.size
+                                        targetTrack?.commentCount ?: organizedComments.size
                                     ),
                                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                     color = MaterialTheme.colorScheme.onSurface
@@ -9792,7 +9917,7 @@ fun CommentsSheetContent(viewModel: PlayerViewModel, onClose: () -> Unit) {
                         Text(
                             text = stringResource(
                                 R.string.comments_count_label,
-                                formatSoundCloudCount(targetTrack?.commentCount ?: comments.size)
+                                formatSoundCloudCount(targetTrack?.commentCount ?: organizedComments.size)
                             ),
                             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -9802,7 +9927,7 @@ fun CommentsSheetContent(viewModel: PlayerViewModel, onClose: () -> Unit) {
 
                 item {
                     Box(modifier = Modifier.padding(start = 16.dp, top = 6.dp, bottom = 8.dp)) {
-                        OutlinedButton(onClick = { isSortMenuExpanded = true }) {
+                        OutlinedButton(onClick = hapticAction(HapticKind.UI) { isSortMenuExpanded = true }) {
                             Text(
                                 text = stringResource(
                                     id = R.string.sorted_by,
@@ -9820,7 +9945,7 @@ fun CommentsSheetContent(viewModel: PlayerViewModel, onClose: () -> Unit) {
                             tabs.forEach { sortOption ->
                                 DropdownMenuItem(
                                     text = { Text(stringResource(id = sortOption.labelResId)) },
-                                    onClick = {
+                                    onClick = hapticAction(HapticKind.UI) {
                                         viewModel.onCommentSortChanged(sortOption)
                                         isSortMenuExpanded = false
                                     },
@@ -9837,51 +9962,21 @@ fun CommentsSheetContent(viewModel: PlayerViewModel, onClose: () -> Unit) {
                         }
                     }
                 }
-                items(count = comments.size, key = { index -> comments[index].id }) { index ->
-                    val comment = comments[index]
-                    Column {
-                        val userId = comment.user?.id ?: 0L
-                        CommentRowItem(
-                            comment = comment,
-                            isMine = (userId == myId),
-                            isReply = false,
-                            isGuest = isGuest,
-                            onNavigateToProfile = { if (userId != 0L) viewModel.navigateToArtist(userId) },
-                            onSeekTo = { pos ->
-                                val t = viewModel.selectedTrackForSheet; if (t != null) {
-                                if (t.id == viewModel.currentTrack?.id) viewModel.seekTo(pos) else viewModel.playTrackAtPosition(
-                                    t,
-                                    pos
-                                )
-                            }
-                            },
-                            onToggleLike = { viewModel.toggleCommentLike(comment) },
-                            onReply = { viewModel.startReplying(comment) },
-                            onDelete = { commentToDelete = comment })
-                        comment.replies?.forEach { reply ->
-                            val rUserId = reply.user?.id ?: 0L
-                            CommentRowItem(
-                                comment = reply,
-                                isMine = (rUserId == myId),
-                                isReply = true,
-                                isGuest = isGuest,
-                                onNavigateToProfile = { if (rUserId != 0L) viewModel.navigateToArtist(rUserId) },
-                                onSeekTo = { pos ->
-                                    val t = viewModel.selectedTrackForSheet; if (t != null) {
-                                    if (t.id == viewModel.currentTrack?.id) viewModel.seekTo(
-                                        reply.trackTimestamp ?: 0
-                                    ) else viewModel.playTrackAtPosition(t, reply.trackTimestamp ?: 0)
-                                }
-                                },
-                                onToggleLike = { viewModel.toggleCommentLike(reply) },
-                                onReply = { viewModel.startReplying(comment) },
-                                onDelete = { commentToDelete = reply })
+                items(count = organizedComments.size, key = { index -> organizedComments[index].id }) { index ->
+                    val comment = organizedComments[index]
+                    if (index >= organizedComments.size - 3 && !viewModel.isCommentsLoading && viewModel.commentNextHref != null) {
+                        LaunchedEffect(index) {
+                            viewModel.loadComments(refresh = false)
                         }
-                        HorizontalDivider(
-                            modifier = Modifier.padding(start = 72.dp, end = 16.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
-                        )
                     }
+                    CommentThreadCard(
+                        comment = comment,
+                        viewModel = viewModel,
+                        myId = myId,
+                        isGuest = isGuest,
+                        onDeleteComment = { commentToDelete = it },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 5.dp)
+                    )
                 }
                 if (viewModel.commentNextHref != null) {
                     item {
@@ -9895,231 +9990,140 @@ fun CommentsSheetContent(viewModel: PlayerViewModel, onClose: () -> Unit) {
     }
 }
 
+/**
+ * One comment thread card: the parent comment and, below it, its replies connected by a thread line.
+ * Matches KittyTuneDesktop architecture and Material 3 design exactly.
+ */
 @Composable
-fun CommentRowItem(
+fun CommentThreadCard(
     comment: Comment,
-    isMine: Boolean,
-    isReply: Boolean,
-    isGuest: Boolean,
-    onNavigateToProfile: () -> Unit,
-    onSeekTo: (Long) -> Unit,
-    onToggleLike: () -> Unit,
-    onReply: () -> Unit,
-    onDelete: () -> Unit
+    viewModel: PlayerViewModel,
+    myId: Long = viewModel.currentUserId,
+    isGuest: Boolean = (myId == 0L),
+    onDeleteComment: (Comment) -> Unit = {},
+    modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-    val avatarUrl = comment.user?.avatarUrl
-    val username = comment.user?.username ?: stringResource(R.string.comment_anonymous)
-    val isVisuallyReply = isReply || comment.body.trim().startsWith("@")
-    val startPadding = if (isVisuallyReply) 56.dp else 16.dp
-    val avatarSize = if (isVisuallyReply) 40.dp else 48.dp
-    val loginToInteractMsg = stringResource(R.string.login_to_interact)
+    CommentItemUI(
+        comment = comment,
+        viewModel = viewModel,
+        myId = myId,
+        isGuest = isGuest,
+        isReply = false,
+        onDeleteComment = onDeleteComment,
+        modifier = modifier
+    )
+}
 
-    var translatedText by remember { mutableStateOf<String?>(null) }
-    var showTranslation by remember { mutableStateOf(false) }
-    var isTranslating by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-
-    Row(modifier = Modifier.fillMaxWidth().padding(start = startPadding, end = 16.dp, top = 12.dp, bottom = 12.dp)) {
-        Box(
-            modifier = Modifier.size(avatarSize).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)
-                .clickable { onNavigateToProfile() }, contentAlignment = Alignment.Center
+@Composable
+fun CommentItemUI(
+    comment: Comment,
+    viewModel: PlayerViewModel,
+    myId: Long = viewModel.currentUserId,
+    isGuest: Boolean = (myId == 0L),
+    isReply: Boolean = false,
+    onDeleteComment: (Comment) -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    if (isReply) {
+        CommentThread(
+            comment = comment,
+            viewModel = viewModel,
+            myId = myId,
+            isGuest = isGuest,
+            isReply = true,
+            onDeleteComment = onDeleteComment
+        )
+    } else {
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            modifier = modifier.fillMaxWidth()
         ) {
-            if (!avatarUrl.isNullOrEmpty()) {
-                AsyncImage(
-                    model = avatarUrl,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                Icon(
-                    Icons.Default.Person,
-                    contentDescription = stringResource(R.string.comment_default_avatar),
-                    modifier = Modifier.size(if (isVisuallyReply) 24.dp else 28.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+            Box(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+                CommentThread(
+                    comment = comment,
+                    viewModel = viewModel,
+                    myId = myId,
+                    isGuest = isGuest,
+                    isReply = false,
+                    onDeleteComment = onDeleteComment
                 )
             }
         }
-        Spacer(Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = username,
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = if (isVisuallyReply) 13.sp else 14.sp
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false).clickable { onNavigateToProfile() })
-                Spacer(Modifier.width(8.dp))
-                if (comment.user?.verified == true) {
-                    Icon(
-                        Icons.Rounded.Verified,
-                        null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(12.dp)
+    }
+}
+
+@Composable
+private fun CommentThread(
+    comment: Comment,
+    viewModel: PlayerViewModel,
+    myId: Long,
+    isGuest: Boolean,
+    isReply: Boolean,
+    onDeleteComment: (Comment) -> Unit
+) {
+    val avatar = if (isReply) 26.dp else 38.dp
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            val userId = comment.user?.id ?: 0L
+            Box(
+                modifier = Modifier
+                    .size(avatar)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .hapticClickable { if (userId != 0L) viewModel.navigateToArtist(userId) },
+                contentAlignment = Alignment.Center
+            ) {
+                if (!comment.user?.avatarUrl.isNullOrEmpty()) {
+                    AsyncImage(
+                        model = comment.user?.avatarUrl?.replace("large", "t50x50") ?: comment.user?.avatarUrl,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
                     )
-                    Spacer(Modifier.width(4.dp))
-                }
-                Text(
-                    text = getRelativeTime(comment.createdAt, context),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = if (showTranslation && !translatedText.isNullOrEmpty()) translatedText!! else comment.body,
-                style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 20.sp, fontSize = 15.sp),
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
-            )
-
-            val currentLocale = java.util.Locale.getDefault()
-            val langName = remember(currentLocale) {
-                currentLocale.getDisplayLanguage(currentLocale)
-                    .replaceFirstChar { if (it.isLowerCase()) it.titlecase(currentLocale) else it.toString() }
-            }
-            val langCode = currentLocale.language
-            val context = LocalContext.current
-
-            var isTargetLanguage by remember(comment.body, langCode) { mutableStateOf(false) }
-            LaunchedEffect(comment.body, langCode) {
-                val cleanText = comment.body.replace(Regex("[^\\p{L}\\p{Nd}\\s]"), "").trim()
-                if (cleanText.isBlank()) {
-                    isTargetLanguage = true
                 } else {
-                    val languageIdentifier = com.google.mlkit.nl.languageid.LanguageIdentification.getClient()
-                    languageIdentifier.identifyLanguage(cleanText)
-                        .addOnSuccessListener { language ->
-                            if (language == langCode || language == "und") {
-                                isTargetLanguage = true
-                            }
-                        }
+                    Icon(
+                        Icons.Default.Person,
+                        contentDescription = stringResource(R.string.comment_default_avatar),
+                        modifier = Modifier.size(if (isReply) 16.dp else 22.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 
-            if (translatedText == null && !isTranslating && !isTargetLanguage) {
-                Text(
-                    text = stringResource(R.string.comment_translate, langName),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable {
-                            isTranslating = true
-                            scope.launch(Dispatchers.IO) {
-                                val res = com.alananasss.kittytune.data.network.FreeTranslator.translateMissing(
-                                    listOf(comment.body),
-                                    langCode
-                                )
-                                val t = res[comment.body.trim()]
-                                withContext(Dispatchers.Main) {
-                                    if (t != null && t.lowercase() != comment.body.trim().lowercase()) {
-                                        translatedText = t
-                                        showTranslation = true
-                                    } else {
-                                        translatedText = ""
-                                    }
-                                    isTranslating = false
-                                }
-                            }
-                        }
-                        .padding(vertical = 2.dp)
-                )
-            } else if (isTranslating) {
-                Text(
-                    text = stringResource(R.string.comment_translating),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    modifier = Modifier.padding(vertical = 2.dp)
-                )
-            } else if (!translatedText.isNullOrEmpty()) {
-                Text(
-                    text = if (showTranslation) stringResource(R.string.comment_see_original) else stringResource(
-                        R.string.comment_translate,
-                        langName
-                    ),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable { showTranslation = !showTranslation }
-                        .padding(vertical = 2.dp)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                CommentHeader(comment = comment, viewModel = viewModel)
+                CommentContent(comment = comment, viewModel = viewModel)
+                CommentActions(
+                    comment = comment,
+                    viewModel = viewModel,
+                    myId = myId,
+                    isGuest = isGuest,
+                    onDelete = { onDeleteComment(comment) }
                 )
             }
-            Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (comment.trackTimestamp != null) {
-                    Surface(
-                        onClick = { onSeekTo(comment.trackTimestamp) },
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                        contentColor = MaterialTheme.colorScheme.primary
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                Icons.Rounded.PlayArrow,
-                                null,
-                                modifier = Modifier.size(12.dp)
-                            ); Spacer(Modifier.width(4.dp)); Text(
-                            text = makeTimeString(comment.trackTimestamp),
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
-                        )
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.weight(1f))
-                if (isMine) {
-                    IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-                        Icon(
-                            Icons.Outlined.Delete,
-                            contentDescription = "Delete",
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }; Spacer(Modifier.width(4.dp))
-                }
-                IconButton(onClick = {
-                    if (isGuest) Toast.makeText(context, loginToInteractMsg, Toast.LENGTH_SHORT).show() else onReply()
-                }, modifier = Modifier.size(32.dp)) {
-                    Icon(
-                        Icons.AutoMirrored.Rounded.Reply,
-                        contentDescription = "Reply",
-                        tint = if (isGuest) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f) else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
+        }
+
+        if (!comment.replies.isNullOrEmpty()) {
+            // The thread line runs under the comment's avatar, so the replies read as hanging off it.
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                Box(Modifier.width(avatar).fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
+                    Box(
+                        Modifier.width(2.dp).fillMaxHeight()
+                            .clip(RoundedCornerShape(1.dp))
+                            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
                     )
                 }
-                Spacer(Modifier.width(8.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clip(RoundedCornerShape(50)).clickable {
-                        if (isGuest) Toast.makeText(context, loginToInteractMsg, Toast.LENGTH_SHORT)
-                            .show() else onToggleLike()
-                    }.padding(4.dp)
-                ) {
-                    val icon = if (comment.isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder
-                    val tint =
-                        if (comment.isLiked) Color(0xFFFF4081) else MaterialTheme.colorScheme.onSurfaceVariant.let {
-                            if (isGuest) it.copy(alpha = 0.3f) else it
-                        }
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = stringResource(R.string.player_like_action),
-                        tint = tint,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    if (comment.likesCount > 0) {
-                        Spacer(Modifier.width(4.dp)); Text(
-                            text = formatNumber(comment.likesCount),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    comment.replies.forEach { reply ->
+                        CommentItemUI(
+                            comment = reply,
+                            viewModel = viewModel,
+                            myId = myId,
+                            isGuest = isGuest,
+                            isReply = true,
+                            onDeleteComment = onDeleteComment
                         )
                     }
                 }
@@ -10127,6 +10131,407 @@ fun CommentRowItem(
         }
     }
 }
+
+/** Name, verified mark, the moment of the track it was left at, and how long ago, on one line that never wraps. */
+@Composable
+private fun CommentHeader(comment: Comment, viewModel: PlayerViewModel) {
+    val context = LocalContext.current
+    val userId = comment.user?.id ?: 0L
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = comment.user?.username ?: stringResource(R.string.comment_anonymous),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .weight(1f, fill = false)
+                .clip(RoundedCornerShape(4.dp))
+                .hapticClickable { if (userId != 0L) viewModel.navigateToArtist(userId) }
+        )
+        if (comment.user?.verified == true) {
+            Icon(
+                Icons.Rounded.Verified,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(13.dp)
+            )
+        }
+        val at = comment.trackTimestamp
+        if (at != null && at > 0) {
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable {
+                        val t = viewModel.selectedTrackForSheet
+                        if (t != null && t.id != viewModel.uiCurrentTrack?.id) {
+                            viewModel.playTrackAtPosition(t, at)
+                        } else {
+                            viewModel.seekTo(at)
+                        }
+                    }
+            ) {
+                Text(
+                    text = String.format(Locale.getDefault(), "%d:%02d", at / 60000, (at % 60000) / 1000),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
+        }
+        val relTime = getRelativeTime(comment.createdAt, context)
+        if (relTime.isNotBlank()) {
+            Text(
+                text = relTime,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                maxLines = 1,
+                softWrap = false
+            )
+        }
+    }
+}
+
+/** The words, the foreign words glossed under them, and the translate link when the comment is in another language. */
+@Composable
+private fun CommentContent(comment: Comment, viewModel: PlayerViewModel) {
+    var translatedText by remember { mutableStateOf<String?>(null) }
+    var showTranslation by remember { mutableStateOf(false) }
+    var isTranslating by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val haptics = rememberAppHaptics()
+
+    if (showTranslation && !translatedText.isNullOrEmpty()) {
+        CommentBodyText(body = translatedText!!, onMentionClick = {
+            haptics.perform(HapticKind.LIGHT)
+            viewModel.resolveAndNavigateToArtist(it)
+        })
+    } else {
+        CommentBodyText(body = comment.body, onMentionClick = {
+            haptics.perform(HapticKind.LIGHT)
+            viewModel.resolveAndNavigateToArtist(it)
+        })
+    }
+
+    val currentLocale = java.util.Locale.getDefault()
+    val langCode = currentLocale.language
+    val langName = remember(currentLocale) {
+        currentLocale.getDisplayLanguage(currentLocale)
+            .replaceFirstChar { if (it.isLowerCase()) it.titlecase(currentLocale) else it.toString() }
+    }
+
+    // A comment that mixes the reader's language with another one: the foreign words, each with its meaning, under it.
+    val glosses by produceState(emptyList<Pair<String, String>>(), comment.body, langCode) {
+        value = if (!com.alananasss.kittytune.util.WordGloss.isMixed(comment.body, langCode)) emptyList()
+        else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            com.alananasss.kittytune.util.WordGloss.glossFor(comment.body, langCode)
+        }
+    }
+    if (glosses.isNotEmpty()) {
+        Text(
+            text = com.alananasss.kittytune.util.WordGloss.line(glosses),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+
+    // Hidden until the detector has answered, so it never flashes up on a comment already in the reader's language.
+    val needsTranslation by produceState(false, comment.body, langCode) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            com.alananasss.kittytune.util.LanguageDetection.needsTranslation(comment.body, langCode)
+        }
+    }
+    if (translatedText == null && !isTranslating && needsTranslation) {
+        Text(
+            text = stringResource(R.string.comment_translate, langName),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .clip(RoundedCornerShape(4.dp))
+                .hapticClickable {
+                    isTranslating = true
+                    scope.launch(Dispatchers.IO) {
+                        val res = com.alananasss.kittytune.data.network.FreeTranslator.translateMissing(
+                            listOf(comment.body),
+                            langCode
+                        )
+                        val t = res[comment.body.trim()]
+                        withContext(Dispatchers.Main) {
+                            if (t != null && t.lowercase() != comment.body.trim().lowercase()) {
+                                translatedText = t
+                                showTranslation = true
+                            } else {
+                                translatedText = ""
+                            }
+                            isTranslating = false
+                        }
+                    }
+                }
+                .padding(vertical = 2.dp)
+        )
+    } else if (isTranslating) {
+        Text(
+            text = stringResource(R.string.comment_translating),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+            modifier = Modifier.padding(vertical = 2.dp)
+        )
+    } else if (!translatedText.isNullOrEmpty()) {
+        Text(
+            text = if (showTranslation) stringResource(R.string.comment_see_original) else stringResource(
+                R.string.comment_translate,
+                langName
+            ),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .clip(RoundedCornerShape(4.dp))
+                .hapticClickable { showTranslation = !showTranslation }
+                .padding(vertical = 2.dp)
+        )
+    }
+}
+
+/** Like and reply, as quiet pills under the words. */
+@Composable
+private fun CommentActions(
+    comment: Comment,
+    viewModel: PlayerViewModel,
+    myId: Long,
+    isGuest: Boolean,
+    onDelete: () -> Unit
+) {
+    val context = LocalContext.current
+    val loginToInteractMsg = stringResource(R.string.login_to_interact)
+    val isMine = myId != 0L && comment.user?.id == myId
+    val liked = comment.isLiked
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        CommentActionPill(
+            onClick = hapticAction(HapticKind.UI) {
+                if (isGuest) Toast.makeText(context, loginToInteractMsg, Toast.LENGTH_SHORT).show()
+                else viewModel.toggleCommentLike(comment)
+            },
+            tint = if (liked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.let {
+                if (isGuest) it.copy(alpha = 0.38f) else it
+            },
+            container = if (liked) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else Color.Transparent,
+        ) {
+            Icon(
+                if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                contentDescription = stringResource(R.string.desc_like),
+                modifier = Modifier.size(15.dp)
+            )
+            if (comment.likesCount > 0) {
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = formatNumber(comment.likesCount),
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+        }
+
+        CommentActionPill(
+            onClick = hapticAction(HapticKind.UI) {
+                if (isGuest) Toast.makeText(context, loginToInteractMsg, Toast.LENGTH_SHORT).show()
+                else viewModel.startReplying(comment)
+            },
+            tint = if (isGuest) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f) else MaterialTheme.colorScheme.onSurfaceVariant,
+            container = Color.Transparent,
+        ) {
+            Text(
+                text = stringResource(R.string.comment_reply),
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1
+            )
+        }
+
+        if (comment.isLikedByCreator) {
+            val track = viewModel.selectedTrackForSheet ?: viewModel.uiCurrentTrack
+            val creatorArt = comment.creatorArtworkUrl ?: track?.user?.avatarUrl ?: track?.artworkUrl
+            val creatorName = comment.creatorUsername ?: track?.displayArtist?.ifBlank { track.user?.username } ?: stringResource(R.string.comment_artist_fallback)
+            CreatorLikedBadge(
+                artworkUrl = creatorArt,
+                creatorName = creatorName
+            )
+        }
+
+        if (isMine) {
+            CommentActionPill(
+                onClick = onDelete,
+                tint = MaterialTheme.colorScheme.error,
+                container = Color.Transparent
+            ) {
+                Icon(
+                    Icons.Outlined.Delete,
+                    contentDescription = stringResource(R.string.btn_delete),
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CommentActionPill(
+    onClick: () -> Unit,
+    tint: Color,
+    container: Color,
+    content: @Composable RowScope.() -> Unit
+) {
+    CompositionLocalProvider(LocalContentColor provides tint) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(container)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 8.dp, vertical = 5.dp),
+            content = content,
+        )
+    }
+}
+
+@Composable
+fun CommentRowUI(
+    comment: Comment,
+    viewModel: PlayerViewModel,
+    myId: Long = viewModel.currentUserId,
+    isGuest: Boolean = (myId == 0L),
+    onDeleteComment: (Comment) -> Unit = {}
+) {
+    CommentItemUI(
+        comment = comment,
+        viewModel = viewModel,
+        myId = myId,
+        isGuest = isGuest,
+        isReply = false,
+        onDeleteComment = onDeleteComment
+    )
+}
+
+@Composable
+private fun CommentBodyText(body: String, onMentionClick: (String) -> Unit) {
+    val mentionPattern = remember { """@[a-zA-Z0-9_\-\. ]+?:|@[\w\.-]+""".toRegex() }
+    val urlPattern = remember { """https?://[^\s]+""".toRegex() }
+    val tertiaryColor = MaterialTheme.colorScheme.tertiary
+    val primaryColor = MaterialTheme.colorScheme.primary
+
+    val annotatedString = remember(body, tertiaryColor, primaryColor) {
+        buildAnnotatedString {
+            append(body)
+            for (match in mentionPattern.findAll(body)) {
+                val username = match.value.removePrefix("@").removeSuffix(":")
+                addLink(
+                    LinkAnnotation.Clickable(
+                        tag = "MENTION",
+                        styles = TextLinkStyles(
+                            style = SpanStyle(
+                                color = tertiaryColor,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        ),
+                        linkInteractionListener = { onMentionClick(username) }
+                    ),
+                    match.range.first, match.range.last + 1
+                )
+            }
+            for (match in urlPattern.findAll(body)) {
+                addLink(
+                    LinkAnnotation.Url(
+                        url = match.value,
+                        styles = TextLinkStyles(
+                            style = SpanStyle(
+                                color = primaryColor,
+                                textDecoration = TextDecoration.Underline
+                            )
+                        )
+                    ),
+                    match.range.first, match.range.last + 1
+                )
+            }
+        }
+    }
+
+    androidx.compose.foundation.text.selection.SelectionContainer {
+        Text(
+            text = annotatedString,
+            style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp, fontSize = 14.sp),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
+        )
+    }
+}
+
+@Composable
+fun CreatorLikedBadge(
+    artworkUrl: String?,
+    creatorName: String,
+    modifier: Modifier = Modifier
+) {
+    val description = stringResource(R.string.comment_creator_liked_this, creatorName)
+    val context = LocalContext.current
+
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .hapticClickable {
+                Toast.makeText(context, description, Toast.LENGTH_SHORT).show()
+            }
+            .semantics { this.contentDescription = description }
+            .padding(vertical = 2.dp, horizontal = 4.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier.size(20.dp),
+            contentAlignment = Alignment.BottomEnd
+        ) {
+            if (!artworkUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = artworkUrl.replace("large", "t50x50"),
+                    contentDescription = description,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(17.dp)
+                        .clip(CircleShape)
+                        .align(Alignment.TopStart)
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(17.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                        .align(Alignment.TopStart),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Rounded.Person,
+                        contentDescription = null,
+                        modifier = Modifier.size(11.dp),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+
+            Image(
+                painter = painterResource(R.drawable.ic_actions_heart_active_with_outline),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(9.dp)
+                    .align(Alignment.BottomEnd)
+            )
+        }
+    }
+}
+
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -10138,6 +10543,11 @@ fun DetailsSheetContent(track: Track, onClose: () -> Unit, onOpenComments: () ->
     // VK exposes no play/like/repost counters and has no comment or "similar tracks" endpoint, so
     // those SoundCloud-only blocks are hidden instead of being rendered as a row of zeros.
     val isVkTrack = track.source == "vk"
+    val isDeezerTrack = track.source == "deezer" || track.user?.urn?.startsWith("deezer:") == true || track.permalinkUrl?.contains("deezer.com") == true
+    val isTidalTrack = track.source == "tidal" || track.user?.urn?.startsWith("tidal:") == true || track.permalinkUrl?.contains("tidal.com") == true
+    val isQobuzTrack = track.source == "qobuz" || track.user?.urn?.startsWith("qobuz:") == true || track.permalinkUrl?.contains("qobuz.com") == true
+    val isYtTrack = track.source in listOf("youtube", "youtube_music") || track.permalinkUrl?.contains("youtube.com") == true || track.permalinkUrl?.contains("youtu.be") == true
+    val isExternalStreamTrack = isDeezerTrack || isTidalTrack || isQobuzTrack || isYtTrack
     val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US);
     val displayFormat = SimpleDateFormat("d MMMM yyyy", Locale.getDefault())
     val releaseDateStr = remember(track.releaseDate, track.createdAt) {
@@ -10252,14 +10662,21 @@ fun DetailsSheetContent(track: Track, onClose: () -> Unit, onOpenComments: () ->
                 )
                 Spacer(Modifier.width(16.dp))
                 Column {
-                    Text(
-                        text = track.title ?: stringResource(R.string.untitled_track),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = track.title ?: stringResource(R.string.untitled_track),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        if (track.isGoPlus) {
+                            Spacer(Modifier.width(8.dp))
+                            com.alananasss.kittytune.ui.common.GoPlusBadge()
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.hapticClickable {
                         onClose()
                         viewModel.navigateToTrackArtist(track)
                     }) {
@@ -10382,7 +10799,7 @@ fun DetailsSheetContent(track: Track, onClose: () -> Unit, onOpenComments: () ->
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
-                            .clickable {
+                            .hapticClickable {
                                 onClose()
                                 viewModel.navigateToSpotifyArtist(artist.id)
                             }
@@ -10444,7 +10861,7 @@ fun DetailsSheetContent(track: Track, onClose: () -> Unit, onOpenComments: () ->
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
-                            .clickable {
+                            .hapticClickable {
                                 onClose()
                                 viewModel.navigateToSpotifyArtist(artist.id)
                             }
@@ -10622,6 +11039,31 @@ fun DetailsSheetContent(track: Track, onClose: () -> Unit, onOpenComments: () ->
                 DetailInfoRow(stringResource(R.string.detail_stats_source), "VKontakte")
                 Spacer(Modifier.height(32.dp))
             }
+        } else if (isExternalStreamTrack) {
+            item {
+                DetailInfoRow(stringResource(R.string.detail_duration), makeTimeString(track.actualDurationMs))
+                if (!track.publisherMetadata?.albumTitle.isNullOrBlank()) {
+                    DetailInfoRow(
+                        stringResource(R.string.profile_tab_albums),
+                        track.publisherMetadata!!.albumTitle!!
+                    )
+                }
+                if (!track.displayArtist.isBlank()) {
+                    DetailInfoRow(stringResource(R.string.detail_stats_artist), track.displayArtist)
+                }
+                val sourceLabel = when {
+                    isDeezerTrack -> "Deezer"
+                    isTidalTrack -> "TIDAL"
+                    isQobuzTrack -> "Qobuz"
+                    isYtTrack -> "YouTube Music"
+                    else -> track.source?.replaceFirstChar { it.uppercase() } ?: "External"
+                }
+                DetailInfoRow(stringResource(R.string.detail_stats_source), sourceLabel)
+                track.publisherMetadata?.isrc?.takeIf { it.isNotBlank() }?.let { isrc ->
+                    DetailInfoRow("ISRC", isrc)
+                }
+                Spacer(Modifier.height(32.dp))
+            }
         } else {
             item {
                 Row(
@@ -10637,20 +11079,20 @@ fun DetailsSheetContent(track: Track, onClose: () -> Unit, onOpenComments: () ->
                         icon = Icons.Rounded.Favorite,
                         value = formatNumber(track.likesCount),
                         label = stringResource(R.string.detail_stats_likes),
-                        onClick = { viewModel.navigateToTrackDetails(track.id, 0) }
+                        onClick = hapticAction(HapticKind.UI) { viewModel.navigateToTrackDetails(track.id, 0) }
                     )
                     DetailStatItem(
                         icon = Icons.Rounded.Repeat,
                         value = formatNumber(track.repostsCount),
                         label = stringResource(R.string.detail_stats_reposts),
-                        onClick = { viewModel.navigateToTrackDetails(track.id, 1) }
+                        onClick = hapticAction(HapticKind.UI) { viewModel.navigateToTrackDetails(track.id, 1) }
                     )
                 }
                 Spacer(Modifier.height(24.dp))
             }
             item {
                 OutlinedButton(
-                    onClick = { onClose(); viewModel.navigateToTrackDetails(track.id) },
+                    onClick = hapticAction(HapticKind.UI) { onClose(); viewModel.navigateToTrackDetails(track.id) },
                     modifier = Modifier.fillMaxWidth().height(50.dp),
                     shapes = ButtonDefaults.shapes(),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
@@ -10688,10 +11130,16 @@ fun DetailsSheetContent(track: Track, onClose: () -> Unit, onOpenComments: () ->
                 Spacer(Modifier.height(24.dp))
             }
             item {
+                if (track.isGoPlus) {
+                    DetailInfoRow("SoundCloud Go+") {
+                        com.alananasss.kittytune.ui.common.GoPlusBadge()
+                    }
+                }
                 DetailInfoRow(stringResource(R.string.detail_release_date), releaseDateStr)
                 if (!track.genre.isNullOrBlank()) {
                     DetailInfoRow(stringResource(R.string.detail_genre), track.genre)
                 }
+                DetailInfoRow(stringResource(R.string.detail_duration), makeTimeString(track.actualDurationMs))
                 Spacer(Modifier.height(16.dp))
             }
             if (!track.description.isNullOrBlank()) {
@@ -10724,7 +11172,7 @@ fun DetailsSheetContent(track: Track, onClose: () -> Unit, onOpenComments: () ->
                     ) {
                         tags.forEach { tag ->
                             AssistChip(
-                                onClick = { onClose(); viewModel.navigateToTag(tag) },
+                                onClick = hapticAction(HapticKind.UI) { onClose(); viewModel.navigateToTag(tag) },
                                 label = { Text("#${tag.uppercase()}") },
                                 colors = AssistChipDefaults.assistChipColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -10765,13 +11213,31 @@ fun DetailStatItem(icon: ImageVector, value: String, label: String, onClick: () 
 fun DetailInfoRow(label: String, value: String) {
     Row(
         Modifier.fillMaxWidth().padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             label,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
-        ); Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+        )
+        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
+fun DetailInfoRow(label: String, content: @Composable () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        content()
     }
 }
 
@@ -10834,7 +11300,7 @@ fun ExpandableDescription(text: String, onUrlClick: (String) -> Unit, onMentionC
                 text = if (isExpanded) stringResource(R.string.detail_show_less) else stringResource(R.string.detail_show_more),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(top = 4.dp).clickable { isExpanded = !isExpanded })
+                modifier = Modifier.padding(top = 4.dp).hapticClickable { isExpanded = !isExpanded })
         }
     }
 }
@@ -10902,7 +11368,7 @@ fun OldPlayerScreen(
     viewModel: PlayerViewModel,
     onClose: () -> Unit
 ) {
-    val track = viewModel.currentTrack ?: return
+    val track = viewModel.uiCurrentTrack ?: return
 
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
@@ -10966,7 +11432,7 @@ fun OldPlayerScreen(
             activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
-    var backgroundStyle by remember { mutableStateOf(prefs.getPlayerStyle()) }
+    val backgroundStyle = viewModel.fullPlayerBgStyle
     val fadeUiEnabled by prefs.getAnimatedCoversFadeUiFlow().collectAsState(initial = prefs.getAnimatedCoversFadeUiEnabled())
     val backdropAnimatedUrl = if (fadeUiEnabled) {
         viewModel.currentAnimatedCoverTallUrl ?: viewModel.currentAnimatedCoverUrl
@@ -10977,8 +11443,6 @@ fun OldPlayerScreen(
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             if (key == "show_lyrics_button_enabled") {
                 showLyricsButtonEnabled = prefs.getShowLyricsButtonEnabled()
-            } else if (key == PlayerPreferences.KEY_PLAYER_STYLE) {
-                backgroundStyle = prefs.getPlayerStyle()
             }
         }
         sharedPrefs.registerOnSharedPreferenceChangeListener(listener)
@@ -10987,7 +11451,7 @@ fun OldPlayerScreen(
         }
     }
 
-    val isBlurMode = backgroundStyle == PlayerBackgroundStyle.BLUR || backgroundStyle == PlayerBackgroundStyle.APPLE_MUSIC
+    val isBlurMode = backgroundStyle == FullPlayerBgStyle.BLUR || backgroundStyle == FullPlayerBgStyle.APPLE_MUSIC || backgroundStyle == FullPlayerBgStyle.PURE_BLACK
     val windowSizeInfo = rememberWindowSizeInfo()
 
     val mainContentColor by animateColorAsState(
@@ -11021,51 +11485,17 @@ fun OldPlayerScreen(
     val predictiveTranslationY = if (pProgress.isFinite()) (pProgress.coerceAtLeast(0f) * dismissTargetY) else 0f
     val predictiveCorner = (clampedProgress * 32.dp.value).coerceAtLeast(0f).dp
 
-    val verticalDragModifier = Modifier.pointerInput(dismissTargetY) {
-        detectVerticalDragGestures(
-            onDragEnd = {
-                if (dismissProgress.value > 0.18f) {
-                    handleClose()
-                } else {
-                    scope.launch {
-                        dismissProgress.animateTo(
-                            0f,
-                            spring(
-                                dampingRatio = Spring.DampingRatioLowBouncy,
-                                stiffness = Spring.StiffnessMediumLow
-                            )
-                        )
-                    }
-                }
-            },
-            onDragCancel = {
-                scope.launch {
-                    dismissProgress.animateTo(
-                        0f,
-                        spring(
-                            dampingRatio = Spring.DampingRatioLowBouncy,
-                            stiffness = Spring.StiffnessMediumLow
-                        )
-                    )
-                }
-            },
-            onVerticalDrag = { change, dragAmount ->
-                if (dragAmount > 0 || dismissProgress.value > 0f) {
-                    change.consume()
-                    val delta = dragAmount / dismissTargetY
-                    scope.launch {
-                        dismissProgress.snapTo(
-                            (dismissProgress.value + delta).coerceIn(0f, 1f)
-                        )
-                    }
-                }
-            }
-        )
-    }
+    val verticalDragModifier = Modifier
 
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .playerDismissGesture(
+                dismissTargetY = dismissTargetY,
+                dismissProgress = dismissProgress,
+                scope = scope,
+                onDismiss = handleClose
+            )
             .then(
                 if (clampedProgress > 0f) {
                     Modifier
@@ -11083,7 +11513,7 @@ fun OldPlayerScreen(
             .background(if (isBlurMode) Color.Black else MaterialTheme.colorScheme.background)
     ) {
         when (backgroundStyle) {
-            PlayerBackgroundStyle.BLUR -> {
+            FullPlayerBgStyle.BLUR -> {
                 Crossfade(
                     targetState = track.fullResArtwork,
                     animationSpec = tween(durationMillis = 1000, easing = LinearEasing),
@@ -11093,22 +11523,40 @@ fun OldPlayerScreen(
                         model = artworkUrl,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize().blur(80.dp).alpha(0.6f)
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                scaleX = 1.25f
+                                scaleY = 1.25f
+                            }
+                            .blur(90.dp)
+                            .alpha(0.75f)
                     )
                 }
                 if (!backdropAnimatedUrl.isNullOrBlank()) {
                     CanvasVideo(
                         canvasUrl = backdropAnimatedUrl,
-                        isPlaying = viewModel.isPlaying,
+                        isPlaying = viewModel.uiIsPlaying,
                         modifier = Modifier
                             .fillMaxSize()
                             .blur(40.dp)
                             .alpha(0.85f)
                     )
                 }
+                // Gradient scrim to ensure high contrast for controls and metadata
+                Box(
+                    Modifier.fillMaxSize().background(
+                        Brush.verticalGradient(
+                            0.0f to Color.Black.copy(alpha = 0.45f),
+                            0.35f to Color.Black.copy(alpha = 0.20f),
+                            0.65f to Color.Black.copy(alpha = 0.35f),
+                            1.0f to Color.Black.copy(alpha = 0.65f)
+                        )
+                    )
+                )
             }
 
-            PlayerBackgroundStyle.GRADIENT -> {
+            FullPlayerBgStyle.GRADIENT -> {
                 Box(
                     Modifier.fillMaxSize().background(
                         Brush.verticalGradient(
@@ -11122,14 +11570,18 @@ fun OldPlayerScreen(
                 )
             }
 
-            PlayerBackgroundStyle.THEME -> {
-                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface))
+            FullPlayerBgStyle.PURE_BLACK -> {
+                Box(Modifier.fillMaxSize().background(Color.Black))
             }
 
-            PlayerBackgroundStyle.APPLE_MUSIC -> {
+            FullPlayerBgStyle.APPLE_MUSIC -> {
+                // The night screen covers this fully: freeze the drift while it is up, and save the
+                // 30 fps of AGSL blur nobody can see.
                 FluidArtworkBackground(
                     artworkUrl = track.fullResArtwork,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    motionSuppressed = viewModel.showNightScreen,
+                    animate = viewModel.uiIsPlaying
                 ) {
                     AsyncImage(
                         model = track.fullResArtwork,
@@ -11141,7 +11593,7 @@ fun OldPlayerScreen(
                 if (!backdropAnimatedUrl.isNullOrBlank()) {
                     CanvasVideo(
                         canvasUrl = backdropAnimatedUrl,
-                        isPlaying = viewModel.isPlaying,
+                        isPlaying = viewModel.uiIsPlaying,
                         modifier = Modifier
                             .fillMaxSize()
                             .blur(40.dp)
@@ -11194,23 +11646,23 @@ fun OldPlayerScreen(
                 )
 
                 val pagerState = androidx.compose.foundation.pager.rememberPagerState(
-                    initialPage = viewModel.currentQueueIndex.coerceAtLeast(0),
-                    pageCount = { viewModel.queueState.size.takeIf { it > 0 } ?: 1 }
+                    initialPage = viewModel.uiCurrentQueueIndex.coerceAtLeast(0),
+                    pageCount = { viewModel.uiQueueState.size.takeIf { it > 0 } ?: 1 }
                 )
 
-                LaunchedEffect(viewModel.currentQueueIndex) {
-                    if (viewModel.currentQueueIndex >= 0 && viewModel.currentQueueIndex != pagerState.currentPage && viewModel.currentQueueIndex < pagerState.pageCount) {
+                LaunchedEffect(viewModel.uiCurrentQueueIndex) {
+                    if (viewModel.uiCurrentQueueIndex >= 0 && viewModel.uiCurrentQueueIndex != pagerState.currentPage && viewModel.uiCurrentQueueIndex < pagerState.pageCount) {
                         try {
-                            pagerState.animateScrollToPage(viewModel.currentQueueIndex)
+                            pagerState.animateScrollToPage(viewModel.uiCurrentQueueIndex)
                         } catch (e: Exception) {
-                            pagerState.scrollToPage(viewModel.currentQueueIndex)
+                            pagerState.scrollToPage(viewModel.uiCurrentQueueIndex)
                         }
                     }
                 }
 
                 LaunchedEffect(pagerState) {
                     snapshotFlow { pagerState.settledPage }.collect { settledPage ->
-                        if (settledPage != viewModel.currentQueueIndex && settledPage in viewModel.queueState.indices) {
+                        if (settledPage != viewModel.uiCurrentQueueIndex && settledPage in viewModel.uiQueueState.indices) {
                             viewModel.skipToQueueItem(settledPage)
                         }
                     }
@@ -11234,14 +11686,14 @@ fun OldPlayerScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Box(modifier = Modifier.fillMaxWidth().alpha(coverAlpha).zIndex(if (showLyrics) 0f else 1f)) {
-                        if (viewModel.queueState.isNotEmpty()) {
+                        if (viewModel.uiQueueState.isNotEmpty()) {
                             androidx.compose.foundation.pager.HorizontalPager(
                                 state = pagerState,
                                 modifier = Modifier.fillMaxWidth(),
                                 pageSpacing = 16.dp,
                                 contentPadding = PaddingValues(24.dp)
                             ) { page ->
-                                val pageTrack = viewModel.queueState.getOrNull(page) ?: track
+                                val pageTrack = viewModel.uiQueueState.getOrNull(page) ?: track
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -11253,7 +11705,7 @@ fun OldPlayerScreen(
                                     AnimatedArtwork(
                                         artworkUrl = pageTrack.fullResArtwork,
                                         animatedCoverUrl = if (pageTrack.id == track.id) viewModel.currentAnimatedCoverUrl else null,
-                                        isPlaying = viewModel.isPlaying,
+                                        isPlaying = viewModel.uiIsPlaying,
                                         contentDescription = null,
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier.fillMaxSize()
@@ -11273,7 +11725,7 @@ fun OldPlayerScreen(
                                 AnimatedArtwork(
                                     artworkUrl = track.fullResArtwork,
                                     animatedCoverUrl = viewModel.currentAnimatedCoverUrl,
-                                    isPlaying = viewModel.isPlaying,
+                                    isPlaying = viewModel.uiIsPlaying,
                                     contentDescription = null,
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize()
@@ -11302,7 +11754,7 @@ fun OldPlayerScreen(
                     PlayerInlineLyrics(
                         viewModel = viewModel,
                         textColor = mainContentColor,
-                        onClick = { viewModel.openLyrics() },
+                        onClick = hapticAction(HapticKind.UI) { viewModel.openLyrics() },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 24.dp, vertical = 4.dp)
@@ -11347,31 +11799,51 @@ fun OldPlayerScreen(
                                         )
 
                                         Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.clickable {
-                                                viewModel.navigateToTrackArtist(track)
-                                            }
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            PremiumMarqueeText(
-                                                text = track.displayArtist.ifBlank {
-                                                    stringResource(R.string.unknown_artist)
-                                                },
-                                                style = MaterialTheme.typography.titleMedium,
-                                                color = subContentColor,
-                                                edgeGradientWidth = 16.dp,
-                                                modifier = Modifier.weight(1f, fill = false)
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier
+                                                    .weight(1f, fill = false)
+                                                    .hapticClickable {
+                                                        viewModel.navigateToTrackArtist(track)
+                                                    }
+                                            ) {
+                                                PremiumMarqueeText(
+                                                    text = track.displayArtist.ifBlank {
+                                                        stringResource(R.string.unknown_artist)
+                                                    },
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    color = subContentColor,
+                                                    edgeGradientWidth = 16.dp,
+                                                    modifier = Modifier.weight(1f, fill = false)
+                                                )
+
+                                                val isAnyVerified = track.user?.verified == true || track.artists?.any { it.verified } == true
+                                                if (isAnyVerified) {
+                                                    Spacer(Modifier.width(4.dp))
+                                                    Icon(
+                                                        imageVector = Icons.Rounded.Verified,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                            }
+
+                                            val aiResult by com.alananasss.kittytune.audio.ai.AiDetectionManager.result.collectAsState()
+                                            com.alananasss.kittytune.ui.player.ai.AiDetectionBadge(
+                                                result = aiResult,
+                                                textColor = mainContentColor,
+                                                onClick = { viewModel.showAiDetectionSheet = true },
+                                                modifier = Modifier.padding(start = 8.dp)
                                             )
 
-                                            val isAnyVerified = track.user?.verified == true || track.artists?.any { it.verified } == true
-                                            if (isAnyVerified) {
-                                                Spacer(Modifier.width(4.dp))
-                                                Icon(
-                                                    imageVector = Icons.Rounded.Verified,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.size(16.dp)
-                                                )
-                                            }
+                                            com.alananasss.kittytune.ui.common.TrackSourceBadge(
+                                                track = track,
+                                                resolvedSource = viewModel.currentStreamSource,
+                                                modifier = Modifier.padding(start = 6.dp)
+                                            )
                                         }
                                     }
                                 }
@@ -11394,7 +11866,7 @@ fun OldPlayerScreen(
                                         .combinedClickable(
                                             onClick = { viewModel.openLyrics() },
                                             onLongClick = {
-                                                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                                view.performAppHaptic(HapticFeedbackConstants.LONG_PRESS)
                                                 viewModel.openLyrics(forceSheet = true)
                                             }
                                         ),
@@ -11411,14 +11883,12 @@ fun OldPlayerScreen(
 
                             val view = LocalView.current
                             IconButton(
-                                onClick = {
-                                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                                    viewModel.toggleLike()
+                                onClick = { viewModel.toggleLike()
                                 },
                                 modifier = Modifier.size(44.dp)
                             ) {
                                 val targetColor =
-                                    if (viewModel.isLiked) animatedColor else iconTint
+                                    if (viewModel.uiIsLiked) animatedColor else iconTint
                                 val heartColor by animateColorAsState(
                                     targetValue = targetColor,
                                     animationSpec = tween(300),
@@ -11426,7 +11896,7 @@ fun OldPlayerScreen(
                                 )
 
                                 AnimatedContent(
-                                    targetState = viewModel.isLiked,
+                                    targetState = viewModel.uiIsLiked,
                                     transitionSpec = {
                                         if (targetState) {
                                             (fadeIn(tween(300)) + scaleIn(
@@ -11465,7 +11935,7 @@ fun OldPlayerScreen(
                                 Spacer(Modifier.width(4.dp))
                                 IconButton(
                                     onClick = {
-                                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                        view.performAppHaptic(HapticFeedbackConstants.CLOCK_TICK)
                                         viewModel.dislikeCurrentTrackInMix()
                                     },
                                     modifier = Modifier.size(44.dp)
@@ -11483,10 +11953,22 @@ fun OldPlayerScreen(
                 }
                 Spacer(modifier = Modifier.weight(1f))
 
-                val automixDebugOverlayEnabled = prefs.getAutomixDebugOverlayEnabled()
+                // Memoised + observed: a synchronous SharedPreferences read on every
+                // recomposition of this scope is pure overhead for a debug toggle.
+                var automixDebugOverlayEnabled by remember { mutableStateOf(prefs.getAutomixDebugOverlayEnabled()) }
+                DisposableEffect(Unit) {
+                    val sp = context.getSharedPreferences("player_state", Context.MODE_PRIVATE)
+                    val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                        if (key == PlayerPreferences.KEY_AUTOMIX_DEBUG_OVERLAY || key == PlayerPreferences.KEY_AUTOMIX_ENABLED) {
+                            automixDebugOverlayEnabled = prefs.getAutomixDebugOverlayEnabled()
+                        }
+                    }
+                    sp.registerOnSharedPreferenceChangeListener(listener)
+                    onDispose { sp.unregisterOnSharedPreferenceChangeListener(listener) }
+                }
                 if (automixDebugOverlayEnabled) {
                     com.alananasss.kittytune.ui.player.automix.AutomixDebugOverlay(
-                        currentPositionMs = viewModel.currentPosition
+                        currentPositionMs = viewModel.uiCurrentPosition
                     )
                 }
 
@@ -11542,6 +12024,25 @@ fun OldPlayerScreen(
         SleepTimerDialog(viewModel)
         TrackTrimDialog(viewModel)
         DjDevDebugSheet(viewModel)
+
+        // The night screen over the whole player: fades in over it, and everything under stays untouched.
+        if (viewModel.showNightScreen) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = true,
+                enter = androidx.compose.animation.fadeIn(
+                    androidx.compose.animation.core.tween(320, easing = androidx.compose.animation.core.LinearOutSlowInEasing)
+                ),
+                exit = androidx.compose.animation.fadeOut(
+                    androidx.compose.animation.core.tween(220, easing = androidx.compose.animation.core.FastOutLinearInEasing)
+                ),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                com.alananasss.kittytune.ui.player.NightScreen(
+                    viewModel = viewModel,
+                    onWake = { viewModel.showNightScreen = false },
+                )
+            }
+        }
     }
 }
 
@@ -11568,20 +12069,23 @@ fun OldPlayerProgress(viewModel: PlayerViewModel, textColor: Color) {
     val progressState = remember { Animatable(0f) }
     val sliderPosition = if (isDragging) dragPosition else progressState.value
 
+    val clip = viewModel.uiClipWindow
+    val shownOf = { songMs: Long -> clip?.toShown(songMs) ?: songMs }
+    val songOf = { shownMs: Long -> clip?.toSong(shownMs) ?: shownMs }
+    val clipDuration = clip?.lengthMs
+
     var lastValidDuration by remember { mutableFloatStateOf(180000f) }
-    if (viewModel.duration > 1000) {
-        lastValidDuration = viewModel.duration.toFloat()
+    if (viewModel.uiDuration > 1000) {
+        lastValidDuration = viewModel.uiDuration.toFloat()
     }
-    val totalDuration = if (viewModel.duration > 1000) viewModel.duration.toFloat() else lastValidDuration
+    val totalDuration = (clipDuration?.toFloat()) ?: (if (viewModel.uiDuration > 1000) viewModel.uiDuration.toFloat() else lastValidDuration)
 
-    val rawPosition = viewModel.currentPosition.toFloat()
-
-    var currentTrackId by remember { mutableStateOf(viewModel.currentTrack?.id) }
+    var currentTrackId by remember { mutableStateOf(viewModel.uiCurrentTrack?.id) }
     var isTransitioning by remember { mutableStateOf(false) }
 
-    LaunchedEffect(viewModel.currentTrack?.id) {
-        if (viewModel.currentTrack?.id != currentTrackId) {
-            currentTrackId = viewModel.currentTrack?.id
+    LaunchedEffect(viewModel.uiCurrentTrack?.id) {
+        if (viewModel.uiCurrentTrack?.id != currentTrackId) {
+            currentTrackId = viewModel.uiCurrentTrack?.id
             progressState.snapTo(0f)
             dragPosition = 0f
             isDragging = false
@@ -11591,32 +12095,33 @@ fun OldPlayerProgress(viewModel: PlayerViewModel, textColor: Color) {
         }
     }
 
-    LaunchedEffect(rawPosition) {
-        if (isTransitioning && rawPosition < 2000f) {
-            isTransitioning = false
-        }
-    }
+    // The position is observed through snapshotFlow instead of being read in the body:
+    // the body read recomposed this component on every playback tick and the keyed effect
+    // restarted the tween twice per second forever. Same transition logic, no churn.
+    LaunchedEffect(isTransitioning, isDragging, totalDuration, clip) {
+        snapshotFlow {
+            val raw = shownOf(viewModel.uiCurrentPosition).toFloat()
+            if (isTransitioning) 0f else if (raw > totalDuration) 0f else raw
+        }.collectLatest { rawPosition ->
+            if (isTransitioning && rawPosition < 2000f) {
+                isTransitioning = false
+            }
 
-    val targetPos = when {
-        isTransitioning -> 0f
-        rawPosition > totalDuration -> 0f
-        else -> rawPosition
-    }
+            if (isDragging) {
+                progressState.snapTo(dragPosition)
+            } else {
+                val targetPos = rawPosition
+                val currentVal = progressState.value
+                val diff = targetPos - currentVal
+                val absDiff = kotlin.math.abs(diff)
 
-    LaunchedEffect(targetPos, isDragging) {
-        if (isDragging) {
-            progressState.snapTo(dragPosition)
-        } else {
-            val currentVal = progressState.value
-            val diff = targetPos - currentVal
-            val absDiff = kotlin.math.abs(diff)
-
-            if (targetPos == 0f || (targetPos < 1000f && currentVal > 2000f)) {
-                progressState.snapTo(0f)
-            } else if (absDiff > 2000f) {
-                progressState.animateTo(targetPos, tween(300, easing = FastOutSlowInEasing))
-            } else if (diff > 0) {
-                progressState.animateTo(targetPos, tween(1000, easing = LinearEasing))
+                if (targetPos == 0f || (targetPos < 1000f && currentVal > 2000f)) {
+                    progressState.snapTo(0f)
+                } else if (absDiff > 2000f) {
+                    progressState.animateTo(targetPos, tween(300, easing = FastOutSlowInEasing))
+                } else if (diff > 0) {
+                    progressState.animateTo(targetPos, tween(1000, easing = LinearEasing))
+                }
             }
         }
     }
@@ -11626,6 +12131,11 @@ fun OldPlayerProgress(viewModel: PlayerViewModel, textColor: Color) {
         activeTrackColor = textColor,
         inactiveTrackColor = textColor.copy(alpha = 0.2f)
     )
+
+    val mix = rememberMixTransition()
+    val behindGlow = Modifier.fillMaxWidth().mixGlow(mix, textColor) {
+        if (totalDuration > 0f) (sliderPosition.coerceIn(0f, totalDuration) / totalDuration) else 0f
+    }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         when (sliderStyle) {
@@ -11637,14 +12147,14 @@ fun OldPlayerProgress(viewModel: PlayerViewModel, textColor: Color) {
                         isDragging = true
                         dragPosition = it
                         viewModel.updateScrubPosition(it.toLong())
-                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        view.performAppHaptic(HapticFeedbackConstants.CLOCK_TICK)
                     },
                     onValueChangeFinished = {
-                        viewModel.seekTo(dragPosition.toLong())
+                        viewModel.seekTo(songOf(dragPosition.toLong()))
                         isDragging = false
                     },
                     colors = sliderColors,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = behindGlow
                 )
             }
             PlayerSliderStyle.WAVY -> {
@@ -11655,18 +12165,20 @@ fun OldPlayerProgress(viewModel: PlayerViewModel, textColor: Color) {
                         isDragging = true
                         dragPosition = it
                         viewModel.updateScrubPosition(it.toLong())
-                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        view.performAppHaptic(HapticFeedbackConstants.CLOCK_TICK)
                     },
                     onValueCommit = { finalPos ->
-                        viewModel.seekTo(finalPos.toLong())
+                        viewModel.seekTo(songOf(finalPos.toLong()))
                         isDragging = false
                     },
                     onValueChangeFinished = {
-                        viewModel.seekTo(dragPosition.toLong())
+                        viewModel.seekTo(songOf(dragPosition.toLong()))
                         isDragging = false
                     },
                     colors = sliderColors,
-                    isPlaying = viewModel.isPlaying,
+                    isPlaying = viewModel.uiIsPlaying,
+                    mix = mix,
+                    mixColor = textColor,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -11700,10 +12212,10 @@ fun OldPlayerProgress(viewModel: PlayerViewModel, textColor: Color) {
                         isDragging = true
                         dragPosition = it
                         viewModel.updateScrubPosition(it.toLong())
-                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        view.performAppHaptic(HapticFeedbackConstants.CLOCK_TICK)
                     },
                     onValueChangeFinished = {
-                        viewModel.seekTo(dragPosition.toLong())
+                        viewModel.seekTo(songOf(dragPosition.toLong()))
                         isDragging = false
                     },
                     interactionSource = trackInteractionSource,
@@ -11716,7 +12228,7 @@ fun OldPlayerProgress(viewModel: PlayerViewModel, textColor: Color) {
                         )
                     },
                     colors = sliderColors,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = behindGlow
                 )
             }
             PlayerSliderStyle.SQUIGGLY -> {
@@ -11727,15 +12239,15 @@ fun OldPlayerProgress(viewModel: PlayerViewModel, textColor: Color) {
                         isDragging = true
                         dragPosition = it
                         viewModel.updateScrubPosition(it.toLong())
-                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        view.performAppHaptic(HapticFeedbackConstants.CLOCK_TICK)
                     },
                     onValueChangeFinished = {
-                        viewModel.seekTo(dragPosition.toLong())
+                        viewModel.seekTo(songOf(dragPosition.toLong()))
                         isDragging = false
                     },
                     colors = sliderColors,
-                    isPlaying = viewModel.isPlaying,
-                    modifier = Modifier.fillMaxWidth()
+                    isPlaying = viewModel.uiIsPlaying,
+                    modifier = behindGlow
                 )
             }
         }
@@ -11757,7 +12269,7 @@ fun OldPlayerProgress(viewModel: PlayerViewModel, textColor: Color) {
                 color = textColor.copy(alpha = 0.7f),
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
-                    .clickable {
+                    .hapticClickable {
                         prefs.setShowRemainingTime(!showRemaining)
                     }
                     .padding(horizontal = 8.dp, vertical = 8.dp)
@@ -11776,12 +12288,12 @@ fun OldPlayerControls(
     contentColorOverride: Color
 ) {
     val buttonWidth by animateDpAsState(
-        targetValue = if (viewModel.isPlaying) 110.dp else 72.dp,
+        targetValue = if (viewModel.uiIsPlaying) 110.dp else 72.dp,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
         label = "width"
     )
-    val buttonColor = if (viewModel.isPlaying) animatedMainColor else contentColorOverride.copy(alpha = 0.2f)
-    val targetPlayIconColor = if (viewModel.isPlaying) {
+    val buttonColor = if (viewModel.uiIsPlaying) animatedMainColor else contentColorOverride.copy(alpha = 0.2f)
+    val targetPlayIconColor = if (viewModel.uiIsPlaying) {
         if (buttonColor.luminance() > 0.42f) DarkContentColor else Color.White
     } else contentColorOverride
     val playIconColor by animateColorAsState(
@@ -11812,12 +12324,20 @@ fun OldPlayerControls(
                     .clickable { viewModel.togglePlayPause() }, contentAlignment = Alignment.Center
             ) {
                 AnimatedContent(
-                    targetState = Pair(viewModel.isLoading, viewModel.isPlaying),
+                    targetState = Pair(viewModel.isLoading, viewModel.uiIsPlaying),
                     transitionSpec = { (scaleIn() + fadeIn()).togetherWith(scaleOut() + fadeOut()) },
                     label = "playPauseLoading"
                 ) { (isLoading, isPlaying) ->
-                    if (isLoading) {
-                        LoadingIndicator(color = playIconColor, modifier = Modifier.size(32.dp))
+                    if (isLoading && isPlaying) {
+                        Box(contentAlignment = Alignment.Center) {
+                            LoadingIndicator(color = playIconColor, modifier = Modifier.size(36.dp))
+                            Icon(
+                                imageVector = Icons.Rounded.Pause,
+                                contentDescription = null,
+                                tint = playIconColor,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     } else {
                         Icon(
                             imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
@@ -11854,7 +12374,7 @@ fun LandscapePlayerView(
     animatedColor: Color,
     isBlurMode: Boolean
 ) {
-    val track = viewModel.currentTrack ?: return
+    val track = viewModel.uiCurrentTrack ?: return
     var selectedRightTab by remember { mutableIntStateOf(0) }
 
     Row(
@@ -11903,7 +12423,7 @@ fun LandscapePlayerView(
                 AnimatedArtwork(
                     artworkUrl = track.fullResArtwork,
                     animatedCoverUrl = viewModel.currentAnimatedCoverUrl,
-                    isPlaying = viewModel.isPlaying,
+                    isPlaying = viewModel.uiIsPlaying,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
@@ -11940,7 +12460,13 @@ fun LandscapePlayerView(
                     com.alananasss.kittytune.ui.player.ai.AiDetectionBadge(
                         result = aiResult,
                         textColor = mainContentColor,
-                        onClick = { viewModel.showAiDetectionSheet = true },
+                        onClick = hapticAction(HapticKind.UI) { viewModel.showAiDetectionSheet = true },
+                        modifier = Modifier.padding(start = 6.dp)
+                    )
+
+                    com.alananasss.kittytune.ui.common.TrackSourceBadge(
+                        track = track,
+                        resolvedSource = viewModel.currentStreamSource,
                         modifier = Modifier.padding(start = 6.dp)
                     )
                 }
@@ -11960,14 +12486,14 @@ fun LandscapePlayerView(
                 IconButton(onClick = { viewModel.toggleShuffle() }) {
                     Icon(
                         imageVector = Icons.Rounded.Shuffle,
-                        contentDescription = "Shuffle",
-                        tint = if (viewModel.shuffleEnabled) animatedColor else iconTint.copy(alpha = 0.7f)
+                        contentDescription = stringResource(R.string.btn_shuffle),
+                        tint = if (viewModel.uiShuffleEnabled) animatedColor else iconTint.copy(alpha = 0.7f)
                     )
                 }
                 IconButton(onClick = { viewModel.smartPrevious() }) {
                     Icon(
                         imageVector = Icons.Rounded.SkipPrevious,
-                        contentDescription = "Previous",
+                        contentDescription = stringResource(R.string.desc_previous),
                         tint = iconTint,
                         modifier = Modifier.size(32.dp)
                     )
@@ -11979,8 +12505,8 @@ fun LandscapePlayerView(
                 ) {
                     IconButton(onClick = { viewModel.togglePlayPause() }) {
                         Icon(
-                            imageVector = if (viewModel.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                            contentDescription = "Play/Pause",
+                            imageVector = if (viewModel.uiIsPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                            contentDescription = stringResource(if (viewModel.uiIsPlaying) R.string.btn_pause else R.string.btn_play),
                             tint = Color.White,
                             modifier = Modifier.size(28.dp)
                         )
@@ -11989,19 +12515,19 @@ fun LandscapePlayerView(
                 IconButton(onClick = { viewModel.requestSkipNext() }) {
                     Icon(
                         imageVector = Icons.Rounded.SkipNext,
-                        contentDescription = "Next",
+                        contentDescription = stringResource(R.string.desc_next),
                         tint = iconTint,
                         modifier = Modifier.size(32.dp)
                     )
                 }
                 IconButton(onClick = { viewModel.toggleRepeatMode() }) {
                     Icon(
-                        imageVector = when (viewModel.repeatMode) {
+                        imageVector = when (viewModel.uiRepeatMode) {
                             RepeatMode.ONE -> Icons.Rounded.RepeatOne
                             else -> Icons.Rounded.Repeat
                         },
-                        contentDescription = "Repeat",
-                        tint = if (viewModel.repeatMode != RepeatMode.NONE) animatedColor else iconTint.copy(alpha = 0.7f)
+                        contentDescription = stringResource(R.string.menu_repeat),
+                        tint = if (viewModel.uiRepeatMode != RepeatMode.NONE) animatedColor else iconTint.copy(alpha = 0.7f)
                     )
                 }
             }
@@ -12022,19 +12548,19 @@ fun LandscapePlayerView(
                 ) {
                     Tab(
                         selected = selectedRightTab == 0,
-                        onClick = { selectedRightTab = 0 },
+                        onClick = hapticAction(HapticKind.UI) { selectedRightTab = 0 },
                         text = { Text(stringResource(R.string.player_queue), fontWeight = FontWeight.Bold) },
                         icon = { Icon(Icons.AutoMirrored.Rounded.QueueMusic, null, modifier = Modifier.size(18.dp)) }
                     )
                     Tab(
                         selected = selectedRightTab == 1,
-                        onClick = { selectedRightTab = 1 },
+                        onClick = hapticAction(HapticKind.UI) { selectedRightTab = 1 },
                         text = { Text(stringResource(R.string.player_lyrics), fontWeight = FontWeight.Bold) },
                         icon = { Icon(Icons.Rounded.Description, null, modifier = Modifier.size(18.dp)) }
                     )
                     Tab(
                         selected = selectedRightTab == 2,
-                        onClick = { selectedRightTab = 2 },
+                        onClick = hapticAction(HapticKind.UI) { selectedRightTab = 2 },
                         text = { Text(stringResource(R.string.menu_details), fontWeight = FontWeight.Bold) },
                         icon = { Icon(Icons.Rounded.Info, null, modifier = Modifier.size(18.dp)) }
                     )
@@ -12056,8 +12582,8 @@ fun LandscapePlayerView(
 
 @Composable
 fun PlayerQueueSideContent(viewModel: PlayerViewModel) {
-    val queueState = viewModel.queueState
-    val currentTrack = viewModel.currentTrack
+    val queueState = viewModel.uiQueueState
+    val currentTrack = viewModel.uiCurrentTrack
     val listState = rememberLazyListState()
 
     LaunchedEffect(currentTrack) {
@@ -12077,7 +12603,7 @@ fun PlayerQueueSideContent(viewModel: PlayerViewModel) {
         itemsIndexed(queueState, key = { index, item -> "${item.id}_$index" }) { index, track ->
             val isCurrent = track.id == currentTrack?.id
             Surface(
-                onClick = { viewModel.skipToQueueItem(index) },
+                onClick = hapticAction(HapticKind.UI) { viewModel.skipToQueueItem(index) },
                 shape = RoundedCornerShape(12.dp),
                 color = if (isCurrent) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
                 modifier = Modifier.fillMaxWidth()
@@ -12181,21 +12707,21 @@ fun PlayerTrackDetailsSideContent(viewModel: PlayerViewModel, track: Track) {
                 onClick = { viewModel.toggleLike() },
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (viewModel.isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = if (viewModel.isLiked) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                    containerColor = if (viewModel.uiIsLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (viewModel.uiIsLiked) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             ) {
                 Icon(
-                    if (viewModel.isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                    if (viewModel.uiIsLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                     null,
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(Modifier.width(8.dp))
-                Text(if (viewModel.isLiked) stringResource(R.string.filter_liked) else stringResource(R.string.player_like_action))
+                Text(if (viewModel.uiIsLiked) stringResource(R.string.filter_liked) else stringResource(R.string.player_like_action))
             }
 
             OutlinedButton(
-                onClick = { viewModel.navigateToTrackDetails(track.id, 0) },
+                onClick = hapticAction(HapticKind.UI) { viewModel.navigateToTrackDetails(track.id, 0) },
                 modifier = Modifier.weight(1f)
             ) {
                 Icon(Icons.Rounded.Info, null, modifier = Modifier.size(18.dp))
@@ -12219,7 +12745,7 @@ fun PhoneLandscapePlayerView(
     isBlurMode: Boolean,
     verticalDragModifier: Modifier = Modifier
 ) {
-    val track = viewModel.currentTrack ?: return
+    val track = viewModel.uiCurrentTrack ?: return
 
     Row(
         modifier = Modifier
@@ -12268,14 +12794,13 @@ fun PhoneLandscapePlayerView(
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Spacer(Modifier.size(48.dp))
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     val contextStr = viewModel.currentContext
                     Text(
-                        text = stringResource(R.string.player_playing_now),
+                        text = viewModel.playbackDeviceLabel ?: stringResource(R.string.player_playing_now),
                         style = MaterialTheme.typography.labelMedium,
                         color = mainContentColor,
                         fontWeight = FontWeight.Bold,
@@ -12291,8 +12816,8 @@ fun PhoneLandscapePlayerView(
                         )
                     }
                 }
-                IconButton(onClick = {
-                    viewModel.currentTrack?.let {
+                IconButton(onClick = hapticAction(HapticKind.UI) {
+                    viewModel.uiCurrentTrack?.let {
                         viewModel.showTrackOptions(
                             it,
                             fromPlayer = true
@@ -12315,13 +12840,33 @@ fun PhoneLandscapePlayerView(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(4.dp))
-                Text(
-                    text = track.displayArtist.ifBlank { track.user?.username ?: stringResource(R.string.unknown_artist) },
-                    style = MaterialTheme.typography.titleMedium,
-                    color = subContentColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = track.displayArtist.ifBlank { track.user?.username ?: stringResource(R.string.unknown_artist) },
+                        style = MaterialTheme.typography.titleMedium,
+                        color = subContentColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .hapticClickable { viewModel.navigateToTrackArtist(track) }
+                    )
+                    val aiResult by com.alananasss.kittytune.audio.ai.AiDetectionManager.result.collectAsState()
+                    com.alananasss.kittytune.ui.player.ai.AiDetectionBadge(
+                        result = aiResult,
+                        textColor = mainContentColor,
+                        onClick = hapticAction(HapticKind.UI) { viewModel.showAiDetectionSheet = true },
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
+                    com.alananasss.kittytune.ui.common.TrackSourceBadge(
+                        track = track,
+                        resolvedSource = viewModel.currentStreamSource,
+                        modifier = Modifier.padding(start = 6.dp)
+                    )
+                }
             }
 
             Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
@@ -12463,6 +13008,45 @@ private fun StaticWaveformPlaceholder(track: Track, viewModel: PlayerViewModel? 
     }
 }
 
+/**
+ * Cover artwork with the SoundCloud-style progress parallax. Isolated in its own composable
+ * so that reading the playback position invalidates only this artwork layer instead of the
+ * entire player screen.
+ */
+@Composable
+private fun SoundCloudParallaxArtwork(
+    model: Any?,
+    positionProvider: () -> Float,
+    totalDuration: Float,
+    isScrubbing: Boolean,
+    snapAnimation: Boolean,
+    isCurrentPage: Boolean,
+    enableParallax: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val progressFrac = if (enableParallax) {
+        (positionProvider() / totalDuration.coerceAtLeast(1f)).coerceIn(0f, 1f)
+    } else 0f
+
+    val animatedPanProgress by animateFloatAsState(
+        targetValue = progressFrac,
+        animationSpec = if (snapAnimation) snap() else tween(durationMillis = 1000, easing = LinearEasing),
+        label = "coverPan"
+    )
+
+    val effectivePanFrac = if (enableParallax) (if (isScrubbing) progressFrac else animatedPanProgress) else 0f
+    val pageProgressFrac = if (isCurrentPage) effectivePanFrac else 0f
+    val panBias = (pageProgressFrac * 2f - 1f) * 0.35f
+
+    AsyncImage(
+        model = model,
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        alignment = androidx.compose.ui.BiasAlignment(panBias, 0f),
+        modifier = modifier
+    )
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SoundCloudPlayerView(
@@ -12473,7 +13057,7 @@ fun SoundCloudPlayerView(
     animatedColor: Color,
     verticalDragModifier: Modifier = Modifier
 ) {
-    val track = viewModel.currentTrack ?: return
+    val track = viewModel.uiCurrentTrack ?: return
     val context = LocalContext.current
     val view = LocalView.current
     val prefs = remember { PlayerPreferences(context) }
@@ -12519,23 +13103,23 @@ fun SoundCloudPlayerView(
     var isScrubbing by remember { mutableStateOf(false) }
 
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(
-        initialPage = viewModel.currentQueueIndex.coerceAtLeast(0),
-        pageCount = { viewModel.queueState.size.takeIf { it > 0 } ?: 1 }
+        initialPage = viewModel.uiCurrentQueueIndex.coerceAtLeast(0),
+        pageCount = { viewModel.uiQueueState.size.takeIf { it > 0 } ?: 1 }
     )
 
-    LaunchedEffect(viewModel.currentQueueIndex) {
-        if (viewModel.currentQueueIndex >= 0 && viewModel.currentQueueIndex != pagerState.currentPage && viewModel.currentQueueIndex < pagerState.pageCount) {
+    LaunchedEffect(viewModel.uiCurrentQueueIndex) {
+        if (viewModel.uiCurrentQueueIndex >= 0 && viewModel.uiCurrentQueueIndex != pagerState.currentPage && viewModel.uiCurrentQueueIndex < pagerState.pageCount) {
             try {
-                pagerState.animateScrollToPage(viewModel.currentQueueIndex)
+                pagerState.animateScrollToPage(viewModel.uiCurrentQueueIndex)
             } catch (e: Exception) {
-                pagerState.scrollToPage(viewModel.currentQueueIndex)
+                pagerState.scrollToPage(viewModel.uiCurrentQueueIndex)
             }
         }
     }
 
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.settledPage }.collect { settledPage ->
-            if (settledPage != viewModel.currentQueueIndex && settledPage in viewModel.queueState.indices) {
+            if (settledPage != viewModel.uiCurrentQueueIndex && settledPage in viewModel.uiQueueState.indices) {
                 viewModel.skipToQueueItem(settledPage)
             }
         }
@@ -12543,9 +13127,7 @@ fun SoundCloudPlayerView(
 
     var currentPlayingTrackId by remember { mutableStateOf(track.id) }
 
-    val totalDuration = if (viewModel.duration > 1000) viewModel.duration.toFloat() else 180000f
-    val currentPosition = if (isScrubbing) scrubbedMs else viewModel.currentPosition.toFloat()
-    val progressFrac = (currentPosition / totalDuration.coerceAtLeast(1f)).coerceIn(0f, 1f)
+    val totalDuration = if (viewModel.uiDuration > 1000) viewModel.uiDuration.toFloat() else 180000f
 
     val isNewTrack = track.id != currentPlayingTrackId
     if (isNewTrack) {
@@ -12554,13 +13136,12 @@ fun SoundCloudPlayerView(
         isScrubbing = false
     }
 
-    val animatedPanProgress by animateFloatAsState(
-        targetValue = progressFrac,
-        animationSpec = if (isScrubbing || isNewTrack) snap() else tween(durationMillis = 1000, easing = LinearEasing),
-        label = "coverPan"
-    )
-
-    val effectivePanFrac = if (enableParallax) (if (isScrubbing) progressFrac else animatedPanProgress) else 0f
+    // Playback position is read ONLY inside SoundCloudParallaxArtwork below: reading it in
+    // this scope recomposed the entire screen (pager, overlays, controls) on every position
+    // tick. The cover reads it through a provider lambda so only the artwork layer re-lays out.
+    val positionProvider: () -> Float = {
+        if (isScrubbing) scrubbedMs else viewModel.uiCurrentPosition.toFloat()
+    }
 
     androidx.compose.foundation.pager.HorizontalPager(
         state = pagerState,
@@ -12568,11 +13149,11 @@ fun SoundCloudPlayerView(
             .fillMaxSize()
             .background(Color.Black),
         pageSpacing = 12.dp,
-        key = { page -> viewModel.queueState.getOrNull(page)?.id ?: page }
+        key = { page -> viewModel.uiQueueState.getOrNull(page)?.id ?: page }
     ) { page ->
-        val pageTrack = viewModel.queueState.getOrNull(page) ?: track
+        val pageTrack = viewModel.uiQueueState.getOrNull(page) ?: track
         val isSpotifyTrack = pageTrack.source == "spotify" || pageTrack.user?.urn?.startsWith("spotify") == true || pageTrack.artists?.isNotEmpty() == true
-        val isCurrentPage = page == viewModel.currentQueueIndex
+        val isCurrentPage = page == viewModel.uiCurrentQueueIndex
         val isUserPaused = !viewModel.playWhenReady && !viewModel.isLoading
         val isCoverBlurred = isUserPaused || (isCurrentPage && isScrubbing)
 
@@ -12603,8 +13184,6 @@ fun SoundCloudPlayerView(
                     .clip(RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomStart = 28.dp, bottomEnd = 28.dp))
                     .background(Color(0xFF141414))
             ) {
-                val pageProgressFrac = if (isCurrentPage) effectivePanFrac else 0f
-                val panBias = if (enableParallax) (pageProgressFrac * 2f - 1f) * 0.35f else 0f
                 val imageScale = if (enableParallax) 1.06f else 1.0f
 
                 Box(
@@ -12617,7 +13196,7 @@ fun SoundCloudPlayerView(
                             indication = null
                         ) {
                             if (isCurrentPage) {
-                                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                view.performAppHaptic(HapticFeedbackConstants.CLOCK_TICK)
                                 viewModel.togglePlayPause()
                             } else {
                                 viewModel.skipToQueueItem(page)
@@ -12629,11 +13208,14 @@ fun SoundCloudPlayerView(
                             .fillMaxSize()
                             .blur(animatedBlurRadius)
                     ) {
-                        AsyncImage(
+                        SoundCloudParallaxArtwork(
                             model = pageTrack.fullResArtwork,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            alignment = androidx.compose.ui.BiasAlignment(panBias, 0f),
+                            positionProvider = positionProvider,
+                            totalDuration = totalDuration,
+                            isScrubbing = isScrubbing,
+                            snapAnimation = isScrubbing || isNewTrack,
+                            isCurrentPage = isCurrentPage,
+                            enableParallax = enableParallax,
                             modifier = Modifier
                                 .fillMaxSize()
                                 .scale(imageScale)
@@ -12681,7 +13263,7 @@ fun SoundCloudPlayerView(
                     Surface(
                         shape = RoundedCornerShape(3.dp),
                         color = Color(0xCC000000),
-                        modifier = Modifier.clickable {
+                        modifier = Modifier.hapticClickable {
                             viewModel.navigateToTrackDetails(pageTrack.id, 0)
                         }
                     ) {
@@ -12700,7 +13282,7 @@ fun SoundCloudPlayerView(
                     Surface(
                         shape = RoundedCornerShape(3.dp),
                         color = Color(0xCC000000),
-                        modifier = Modifier.clickable {
+                        modifier = Modifier.hapticClickable {
                             viewModel.navigateToTrackArtist(pageTrack)
                         }
                     ) {
@@ -12727,11 +13309,33 @@ fun SoundCloudPlayerView(
                             }
                         }
                     }
+                    if (pageTrack.id == viewModel.uiCurrentTrack?.id) {
+                        val aiResult by com.alananasss.kittytune.audio.ai.AiDetectionManager.result.collectAsState()
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .background(Color(0xB3000000), RoundedCornerShape(50))
+                            ) {
+                                com.alananasss.kittytune.ui.player.ai.AiDetectionBadge(
+                                    result = aiResult,
+                                    textColor = Color.White,
+                                    onClick = { viewModel.showAiDetectionSheet = true }
+                                )
+                            }
+                            com.alananasss.kittytune.ui.common.TrackSourceBadge(
+                                track = pageTrack,
+                                resolvedSource = viewModel.currentStreamSource
+                            )
+                        }
+                    }
                     if (!isSpotifyTrack && pageTrack.source != "youtube") {
                         Surface(
                             shape = RoundedCornerShape(3.dp),
                             color = Color(0xCC000000),
-                            modifier = Modifier.clickable { viewModel.navigateToTrackDetails(pageTrack.id, 0) }
+                            modifier = Modifier.hapticClickable { viewModel.navigateToTrackDetails(pageTrack.id, 0) }
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -12768,7 +13372,7 @@ fun SoundCloudPlayerView(
                         modifier = Modifier
                             .size(36.dp)
                             .background(Color(0xE6FFFFFF), CircleShape)
-                            .clickable { onClose() },
+                            .hapticClickable { onClose() },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -12793,8 +13397,7 @@ fun SoundCloudPlayerView(
                             modifier = Modifier
                                 .size(36.dp)
                                 .background(Color(0xE6FFFFFF), CircleShape)
-                                .clickable {
-                                    viewModel.toggleFollowArtist(pageTrack.user)
+                                .clickable { viewModel.toggleFollowArtist(pageTrack.user)
                                 },
                             contentAlignment = Alignment.Center
                         ) {
@@ -12816,12 +13419,13 @@ fun SoundCloudPlayerView(
                             .align(Alignment.Center)
                             .padding(bottom = 50.dp)
                     ) {
+                        val displayPosition = (if (isScrubbing) scrubbedMs else viewModel.uiCurrentPosition.toFloat()).toLong()
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
                             Text(
-                                text = makeTimeString(currentPosition.toLong()),
+                                text = makeTimeString(displayPosition),
                                 style = MaterialTheme.typography.displayMedium.copy(
                                     fontSize = 38.sp,
                                     fontWeight = FontWeight.Normal,
@@ -12839,7 +13443,7 @@ fun SoundCloudPlayerView(
                             )
                             val showRemaining by prefs.getShowRemainingTimeFlow().collectAsState(initial = prefs.getShowRemainingTime())
                             Text(
-                                text = if (showRemaining) com.alananasss.kittytune.utils.makeRemainingTimeString(currentPosition.toLong(), totalDuration.toLong()) else makeTimeString(totalDuration.toLong()),
+                                text = if (showRemaining) com.alananasss.kittytune.utils.makeRemainingTimeString(displayPosition, totalDuration.toLong()) else makeTimeString(totalDuration.toLong()),
                                 style = MaterialTheme.typography.displayMedium.copy(
                                     fontSize = 38.sp,
                                     fontWeight = FontWeight.Normal,
@@ -12848,7 +13452,7 @@ fun SoundCloudPlayerView(
                                 color = Color.White,
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
-                                    .clickable { prefs.setShowRemainingTime(!showRemaining) }
+                                    .hapticClickable { prefs.setShowRemainingTime(!showRemaining) }
                             )
                         }
                     }
@@ -12877,10 +13481,10 @@ fun SoundCloudPlayerView(
                                 .background(Color.Black.copy(alpha = 0.88f), CircleShape)
                                 .clip(CircleShape)
                                 .clickable {
-                                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                                     if (isCurrentPage) {
                                         viewModel.smartPrevious()
                                     } else {
+                                        view.performAppHaptic(HapticFeedbackConstants.CLOCK_TICK)
                                         viewModel.skipToQueueItem((page - 1).coerceAtLeast(0))
                                     }
                                 },
@@ -12899,7 +13503,7 @@ fun SoundCloudPlayerView(
                                 .background(Color.Black.copy(alpha = 0.88f), CircleShape)
                                 .clip(CircleShape)
                                 .clickable {
-                                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                    view.performAppHaptic(HapticFeedbackConstants.CLOCK_TICK)
                                     if (isCurrentPage) {
                                         viewModel.togglePlayPause()
                                     } else {
@@ -12923,11 +13527,11 @@ fun SoundCloudPlayerView(
                                 .background(Color.Black.copy(alpha = 0.88f), CircleShape)
                                 .clip(CircleShape)
                                 .clickable {
-                                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                    view.performAppHaptic(HapticFeedbackConstants.CLOCK_TICK)
                                     if (isCurrentPage) {
                                         viewModel.requestSkipNext()
                                     } else {
-                                        viewModel.skipToQueueItem((page + 1).coerceAtMost(viewModel.queueState.lastIndex))
+                                        viewModel.skipToQueueItem((page + 1).coerceAtMost(viewModel.uiQueueState.lastIndex))
                                     }
                                 },
                             contentAlignment = Alignment.Center
@@ -12981,9 +13585,8 @@ fun SoundCloudPlayerView(
                                     color = Color.White.copy(alpha = 0.85f),
                                     modifier = Modifier
                                         .weight(1f)
-                                        .clickable {
-                                            viewModel.selectedTrackForSheet = pageTrack
-                                            viewModel.showCommentsSheet = true
+                                        .hapticClickable {
+                                            viewModel.openComments(pageTrack)
                                         }
                                 )
 
@@ -12996,7 +13599,7 @@ fun SoundCloudPlayerView(
                                             text = emoji,
                                             fontSize = 19.sp,
                                             modifier = Modifier.clickable {
-                                                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                                view.performAppHaptic(HapticFeedbackConstants.CLOCK_TICK)
                                                 viewModel.toggleQuickReaction(emoji, pageTrack)
                                             }
                                         )
@@ -13035,13 +13638,13 @@ fun SoundCloudPlayerView(
                     when (effectiveSlot) {
                         PlayerActionButtonSlot.LIKE -> {
                             val isTrackLiked =
-                                if (isCurrentPage) viewModel.isLiked else com.alananasss.kittytune.data.LikeRepository.isTrackLiked(
+                                if (isCurrentPage) viewModel.uiIsLiked else com.alananasss.kittytune.data.LikeRepository.isTrackLiked(
                                     pageTrack.id
                                 )
                             val baseLikes = pageTrack.likesCount
                             val displayLikes = if (isCurrentPage) {
-                                if (viewModel.isLiked != pageTrack.isLiked) {
-                                    if (viewModel.isLiked) baseLikes + 1 else (baseLikes - 1).coerceAtLeast(0)
+                                if (viewModel.uiIsLiked != pageTrack.isLiked) {
+                                    if (viewModel.uiIsLiked) baseLikes + 1 else (baseLikes - 1).coerceAtLeast(0)
                                 } else baseLikes
                             } else baseLikes
 
@@ -13049,7 +13652,6 @@ fun SoundCloudPlayerView(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
                                     .clickable {
-                                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                                         if (isCurrentPage) {
                                             viewModel.toggleLike()
                                         } else {
@@ -13082,9 +13684,8 @@ fun SoundCloudPlayerView(
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
-                                    .clickable {
-                                        viewModel.selectedTrackForSheet = pageTrack
-                                        viewModel.showCommentsSheet = true
+                                    .hapticClickable {
+                                        viewModel.openComments(pageTrack)
                                     }
                                     .padding(vertical = 6.dp)
                             ) {
@@ -13110,7 +13711,7 @@ fun SoundCloudPlayerView(
 
                         PlayerActionButtonSlot.SHARE -> {
                             IconButton(
-                                onClick = { viewModel.openShareCard(pageTrack) },
+                                onClick = hapticAction(HapticKind.UI) { viewModel.openShareCard(pageTrack) },
                                 modifier = Modifier.size(40.dp)
                             ) {
                                 Icon(
@@ -13158,7 +13759,7 @@ fun SoundCloudPlayerView(
                                 Icon(
                                     imageVector = Icons.Rounded.Shuffle,
                                     contentDescription = null,
-                                    tint = if (viewModel.shuffleEnabled) scAccentColor else Color.White.copy(alpha = 0.65f),
+                                    tint = if (viewModel.uiShuffleEnabled) scAccentColor else Color.White.copy(alpha = 0.65f),
                                     modifier = Modifier.size(22.dp)
                                 )
                             }
@@ -13170,9 +13771,9 @@ fun SoundCloudPlayerView(
                                 modifier = Modifier.size(40.dp)
                             ) {
                                 Icon(
-                                    imageVector = if (viewModel.repeatMode == RepeatMode.ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+                                    imageVector = if (viewModel.uiRepeatMode == RepeatMode.ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
                                     contentDescription = null,
-                                    tint = if (viewModel.repeatMode != RepeatMode.NONE) scAccentColor else Color.White.copy(
+                                    tint = if (viewModel.uiRepeatMode != RepeatMode.NONE) scAccentColor else Color.White.copy(
                                         alpha = 0.65f
                                     ),
                                     modifier = Modifier.size(22.dp)
@@ -13182,7 +13783,7 @@ fun SoundCloudPlayerView(
 
                         PlayerActionButtonSlot.LYRICS -> {
                             IconButton(
-                                onClick = { viewModel.openLyrics(pageTrack, forceSheet = true) },
+                                onClick = hapticAction(HapticKind.UI) { viewModel.openLyrics(pageTrack, forceSheet = true) },
                                 modifier = Modifier.size(40.dp)
                             ) {
                                 Icon(
@@ -13226,7 +13827,7 @@ fun SoundCloudPlayerView(
                             val isHapticsOn = viewModel.isHapticsEnabled
                             IconButton(
                                 onClick = {
-                                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                    view.performAppHaptic(HapticFeedbackConstants.CLOCK_TICK)
                                     viewModel.toggleHaptics()
                                 },
                                 modifier = Modifier.size(40.dp)
@@ -13240,15 +13841,45 @@ fun SoundCloudPlayerView(
                             }
                         }
 
+                        PlayerActionButtonSlot.CONNECT -> {
+                            val isConnected = com.alananasss.kittytune.data.sync.ConnectManager.selectedDevice.value != null
+                            IconButton(
+                                onClick = hapticAction(HapticKind.UI) { viewModel.showConnectSheet = true },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isConnected) Icons.Rounded.CastConnected else Icons.Rounded.Devices,
+                                    contentDescription = stringResource(R.string.slot_connect),
+                                    tint = if (isConnected) Color(0xFFFF5500) else Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+
                         PlayerActionButtonSlot.MORE -> {
                             IconButton(
-                                onClick = { viewModel.showTrackOptions(pageTrack, fromPlayer = true) },
+                                onClick = hapticAction(HapticKind.UI) { viewModel.showTrackOptions(pageTrack, fromPlayer = true) },
                                 modifier = Modifier.size(40.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.MoreVert,
                                     contentDescription = null,
                                     tint = Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+
+                        PlayerActionButtonSlot.DEVICES -> {
+                            val isConnected = com.alananasss.kittytune.data.sync.ConnectManager.selectedDevice.value != null
+                            IconButton(
+                                onClick = hapticAction(HapticKind.UI) { viewModel.showConnectSheet = true },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isConnected) Icons.Rounded.CastConnected else Icons.Rounded.Devices,
+                                    contentDescription = stringResource(R.string.slot_devices),
+                                    tint = if (isConnected) Color(0xFFFF5500) else Color.White,
                                     modifier = Modifier.size(24.dp)
                                 )
                             }

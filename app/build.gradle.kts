@@ -25,13 +25,30 @@ extensions.configure<ApplicationExtension> {
         applicationId = "com.alananasss.kittytune"
         minSdk = 26
         targetSdk = 37
-        versionCode = 54
-        versionName = "2.68.0"
+        // Timestamp-based versionCode (Morphe-style): minutes since epoch plus an
+        // offset. Every build — beta or stable — gets a higher code than any
+        // previous one, so switching channels is always an upgrade and user
+        // data survives. The offset exceeds all legacy sequential codes (54)
+        // and early beta-scheme codes, making this a one-way jump.
+        versionCode = (System.currentTimeMillis() / 60000).toInt() + 10_000_000
+        versionName = "2.69.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+        }
+        externalNativeBuild {
+            cmake {
+                // ccache (CI sets USE_CCACHE=1): native code hits the cache
+                // instead of recompiling from scratch on every clean runner.
+                if (System.getenv("USE_CCACHE") == "1") {
+                    arguments += listOf(
+                        "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
+                        "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
+                    )
+                }
+            }
         }
     }
 
@@ -65,7 +82,8 @@ extensions.configure<ApplicationExtension> {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             val releaseSigning = signingConfigs.getByName("release")
             if (releaseSigning.storeFile?.exists() == true) {
                 signingConfig = releaseSigning
@@ -116,6 +134,7 @@ dependencies {
     implementation(libs.androidx.media3.session)
     implementation(libs.androidx.media3.exoplayer.hls)
     implementation(libs.androidx.media3.exoplayer.dash)
+    implementation(libs.androidx.media3.datasource.okhttp)
     implementation(libs.retrofit)
     implementation(libs.retrofit.gson)
     implementation(libs.okhttp)
@@ -127,6 +146,7 @@ dependencies {
     implementation(libs.androidx.glance.material3)
     implementation(libs.compose.markdown)
     implementation(libs.newpipe.extractor)
+    implementation(libs.paho.mqtt)
     implementation(libs.rhino)
     coreLibraryDesugaring(libs.desugar.jdk.libs)
     implementation(project(":innertube"))
@@ -162,8 +182,8 @@ dependencies {
     implementation(libs.lottie.compose)
     implementation(libs.zxing.core)
 
-    // AI music detector — on-device ONNX inference (ArtifactNet, ~17.2 MB on-demand)
-    implementation(libs.onnxruntime)
+    // AI music detector — on-device LiteRT inference (ArtifactNet TFLite, ~17.4 MB on-demand)
+    implementation(libs.litert)
 
     // Scanning the desktop's pairing QR. zxing above already does the decoding; these are only
     // the camera frames to hand it (issue #33).
@@ -177,6 +197,12 @@ dependencies {
     implementation(libs.material)
     implementation(libs.androidx.ui.text.google.fonts)
     implementation(libs.rive.android)
+    implementation(libs.androidx.documentfile)
+
+    // "Sign in with Google" for the Qobuz account: the same Google Identity
+    // stack the official Qobuz app uses to get an id token.
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
 }
 
 kotlin {

@@ -6,11 +6,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.FilterList
 import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Science
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.Translate
+import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -23,6 +27,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.ui.common.hapticClickable
 import com.alananasss.kittytune.data.local.AppLanguage
 import com.alananasss.kittytune.data.local.PlayerPreferences
 import com.alananasss.kittytune.data.local.StartDestination
@@ -33,15 +40,28 @@ import com.alananasss.kittytune.ui.common.SettingsItem
 import com.alananasss.kittytune.ui.common.SettingsScaffold
 
 /**
- * The MISC category: everything that is not a colour, a sound, a source or a device.
- *
- * Language, start screen and auto-update live here, as on the desktop. They were in the Appearance
- * screen, where none of them belongs: none of them changes how anything looks, and hiding them
- * there is what made that screen long enough to lose people in.
+ * The Miscellaneous category folder hub:
+ * General, Content filter, About, Developer options.
  */
 @Composable
 fun MiscSettingsScreen(
     navController: NavController,
+    onBackClick: () -> Unit
+) {
+    SettingsFolderScreen(
+        title = stringResource(R.string.settings_cat_misc),
+        pages = SettingsSubPage.miscPages,
+        navController = navController,
+        onBackClick = onBackClick
+    )
+}
+
+/**
+ * The General subpage:
+ * Language, start screen, updates, remember search filter, playlist total duration.
+ */
+@Composable
+fun MiscGeneralSettingsScreen(
     onBackClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -49,9 +69,33 @@ fun MiscSettingsScreen(
     var appLanguage by remember { mutableStateOf(prefs.getAppLanguage()) }
     var startDestination by remember { mutableStateOf(prefs.getStartDestination()) }
     var autoUpdate by remember { mutableStateOf(prefs.getAutoUpdateEnabled()) }
+    var betaUpdates by remember { mutableStateOf(prefs.getBetaUpdatesEnabled()) }
     var rememberSearchFilter by remember { mutableStateOf(prefs.getRememberSearchFilter()) }
+    var verifiedFilterEnabled by remember { mutableStateOf(prefs.getVerifiedFilterEnabled()) }
+    var showPlaylistTotalDuration by remember { mutableStateOf(prefs.getShowPlaylistTotalDuration()) }
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showStartDialog by remember { mutableStateOf(false) }
+    var showBetaWarning by remember { mutableStateOf(false) }
+
+    if (showBetaWarning) {
+        AlertDialog(
+            onDismissRequest = { showBetaWarning = false },
+            title = { Text(stringResource(R.string.beta_warning_title)) },
+            text = { Text(stringResource(R.string.beta_warning_message)) },
+            confirmButton = {
+                TextButton(onClick = hapticAction(HapticKind.UI) {
+                    showBetaWarning = false
+                    betaUpdates = true
+                    prefs.setBetaUpdatesEnabled(true)
+                }) { Text(stringResource(R.string.btn_enable)) }
+            },
+            dismissButton = {
+                TextButton(onClick = hapticAction(HapticKind.UI) { showBetaWarning = false }) {
+                    Text(stringResource(R.string.btn_cancel))
+                }
+            }
+        )
+    }
 
     if (showLanguageDialog) {
         AlertDialog(
@@ -106,13 +150,16 @@ fun MiscSettingsScreen(
             "pref_language" to 0,
             "pref_start_screen" to 0,
             "pref_auto_update" to 0,
-            "pref_remember_search_filter" to 0
+            "pref_beta_updates" to 0,
+            "pref_remember_search_filter" to 0,
+            "pref_verified_filter" to 0,
+            "pref_show_playlist_total_duration" to 0
         )
     )
 
     SettingsScaffold(
         title = stringResource(R.string.settings_cat_general),
-        subtitle = stringResource(R.string.settings_cat_general_sub),
+        subtitle = stringResource(R.string.misc_general_sub),
         onBackClick = onBackClick
     ) { innerPadding ->
         LazyColumn(
@@ -141,7 +188,7 @@ fun MiscSettingsScreen(
                                     AppLanguage.ITALIAN -> stringResource(R.string.lang_italian)
                                 },
                                 icon = Icons.Rounded.Translate,
-                                onClick = { showLanguageDialog = true },
+                                onClick = hapticAction(HapticKind.UI) { showLanguageDialog = true },
                                 highlightKey = "pref_language"
                             )
                         },
@@ -155,7 +202,7 @@ fun MiscSettingsScreen(
                                     stringResource(R.string.nav_library)
                                 },
                                 icon = Icons.Rounded.Home,
-                                onClick = { showStartDialog = true },
+                                onClick = hapticAction(HapticKind.UI) { showStartDialog = true },
                                 highlightKey = "pref_start_screen"
                             )
                         },
@@ -177,6 +224,25 @@ fun MiscSettingsScreen(
                         { shape ->
                             SettingsItem(
                                 shape = shape,
+                                title = stringResource(R.string.beta_updates_title),
+                                subtitle = stringResource(R.string.beta_updates_subtitle),
+                                icon = Icons.Rounded.Science,
+                                hasSwitch = true,
+                                switchState = betaUpdates,
+                                onSwitchChange = {
+                                    if (it) {
+                                        showBetaWarning = true
+                                    } else {
+                                        betaUpdates = false
+                                        prefs.setBetaUpdatesEnabled(false)
+                                    }
+                                },
+                                highlightKey = "pref_beta_updates"
+                            )
+                        },
+                        { shape ->
+                            SettingsItem(
+                                shape = shape,
                                 title = stringResource(R.string.pref_remember_search_filter),
                                 subtitle = stringResource(R.string.pref_remember_search_filter_sub),
                                 icon = Icons.Rounded.FilterList,
@@ -187,6 +253,36 @@ fun MiscSettingsScreen(
                                     prefs.setRememberSearchFilter(it)
                                 },
                                 highlightKey = "pref_remember_search_filter"
+                            )
+                        },
+                        { shape ->
+                            SettingsItem(
+                                shape = shape,
+                                title = stringResource(R.string.pref_verified_filter),
+                                subtitle = stringResource(R.string.pref_verified_filter_sub),
+                                icon = Icons.Rounded.Verified,
+                                hasSwitch = true,
+                                switchState = verifiedFilterEnabled,
+                                onSwitchChange = {
+                                    verifiedFilterEnabled = it
+                                    prefs.setVerifiedFilterEnabled(it)
+                                },
+                                highlightKey = "pref_verified_filter"
+                            )
+                        },
+                        { shape ->
+                            SettingsItem(
+                                shape = shape,
+                                title = stringResource(R.string.pref_show_playlist_total_duration),
+                                subtitle = stringResource(R.string.pref_show_playlist_total_duration_sub),
+                                icon = Icons.Rounded.Schedule,
+                                hasSwitch = true,
+                                switchState = showPlaylistTotalDuration,
+                                onSwitchChange = {
+                                    showPlaylistTotalDuration = it
+                                    prefs.setShowPlaylistTotalDuration(it)
+                                },
+                                highlightKey = "pref_show_playlist_total_duration"
                             )
                         }
                     )
@@ -206,7 +302,7 @@ internal fun LanguageRadioButton(
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable { onSelect(lang) }
+            .hapticClickable { onSelect(lang) }
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -226,7 +322,7 @@ internal fun StartDestRadioButton(
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable { onSelect(dest) }
+            .hapticClickable { onSelect(dest) }
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

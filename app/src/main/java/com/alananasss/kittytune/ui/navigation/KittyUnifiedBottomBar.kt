@@ -3,17 +3,23 @@ package com.alananasss.kittytune.ui.navigation
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Devices
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SkipNext
@@ -41,6 +47,7 @@ import com.alananasss.kittytune.R
 import com.alananasss.kittytune.data.local.MiniPlayerSwipeAction
 import com.alananasss.kittytune.data.local.PlayerPreferences
 import com.alananasss.kittytune.ui.player.PlayerViewModel
+import com.alananasss.kittytune.ui.player.lyrics.FloatingLyricChip
 import com.alananasss.kittytune.ui.player.pixel.miniPlayerDismissHorizontalGesture
 import com.alananasss.kittytune.ui.player.pixel.rememberMiniPlayerDismissGestureHandler
 import androidx.compose.ui.platform.LocalContext
@@ -66,8 +73,8 @@ fun KittyUnifiedBottomBar(
     style: String = "modern",
     blurEnabled: Boolean = true
 ) {
-    val track = playerViewModel.currentTrack
-    val isPlaying = playerViewModel.isPlaying
+    val track = playerViewModel.uiCurrentTrack
+    val isPlaying = playerViewModel.uiIsPlaying
 
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
@@ -114,11 +121,16 @@ fun KittyUnifiedBottomBar(
                 }
         ) {
             if (track != null) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(64.dp)
-                        .clipToBounds()
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    FloatingLyricChip(
+                        vm = playerViewModel,
+                        modifier = Modifier.align(Alignment.TopCenter)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(64.dp)
+                            .clipToBounds()
                         .systemGestureExclusion()
                         .graphicsLayer {
                             translationX = offsetAnimatable.value
@@ -167,15 +179,43 @@ fun KittyUnifiedBottomBar(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            Text(
-                                text = track.displayArtist.ifBlank { stringResource(R.string.unknown_artist) },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                val deviceLabel = playerViewModel.playbackDeviceLabel
+                                if (deviceLabel != null) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.clickable { playerViewModel.showConnectSheet = true }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Devices,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                        Spacer(Modifier.width(3.dp))
+                                        Text(
+                                            text = deviceLabel,
+                                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                                            color = MaterialTheme.colorScheme.primary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("·", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Spacer(Modifier.width(4.dp))
+                                }
+                                Text(
+                                    text = track.displayArtist.ifBlank { stringResource(R.string.unknown_artist) },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
-
                         IconButton(onClick = { playerViewModel.togglePlayPause() }) {
                             Icon(
                                 imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
@@ -206,7 +246,8 @@ fun KittyUnifiedBottomBar(
                     )
                 }
             }
-            NavigationBar(
+        }
+        NavigationBar(
                 modifier = Modifier.fillMaxWidth(),
                 containerColor = MaterialTheme.colorScheme.surface,
                 tonalElevation = 0.dp
@@ -214,7 +255,10 @@ fun KittyUnifiedBottomBar(
                 tabs.filter { it.visible }.forEach { tab ->
                     NavigationBarItem(
                         selected = selectedRoute == tab.route,
-                        onClick = { onTabSelected(tab) },
+                        onClick = {
+                            com.alananasss.kittytune.audio.haptics.HapticUtil.performUIHaptic(context)
+                            onTabSelected(tab)
+                        },
                         icon = { Icon(tab.icon, contentDescription = tab.title) },
                         label = { Text(tab.title) },
                         colors = NavigationBarItemDefaults.colors(
@@ -243,11 +287,16 @@ fun KittyUnifiedBottomBar(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (track != null) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(64.dp)
-                        .clipToBounds()
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    FloatingLyricChip(
+                        vm = playerViewModel,
+                        modifier = Modifier.align(Alignment.TopCenter)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(64.dp)
+                            .clipToBounds()
                         .systemGestureExclusion()
                         .graphicsLayer {
                             translationX = offsetAnimatable.value
@@ -291,15 +340,43 @@ fun KittyUnifiedBottomBar(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            Text(
-                                text = track.displayArtist.ifBlank { stringResource(R.string.unknown_artist) },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                val deviceLabel = playerViewModel.playbackDeviceLabel
+                                if (deviceLabel != null) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.clickable { playerViewModel.showConnectSheet = true }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Devices,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                        Spacer(Modifier.width(3.dp))
+                                        Text(
+                                            text = deviceLabel,
+                                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                                            color = MaterialTheme.colorScheme.primary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("·", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Spacer(Modifier.width(4.dp))
+                                }
+                                Text(
+                                    text = track.displayArtist.ifBlank { stringResource(R.string.unknown_artist) },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
-
                         IconButton(onClick = { playerViewModel.togglePlayPause() }) {
                             Icon(
                                 imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
@@ -330,7 +407,8 @@ fun KittyUnifiedBottomBar(
                     )
                 }
             }
-            BoxWithConstraints(
+        }
+        BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
                     .widthIn(max = 480.dp),
@@ -373,25 +451,68 @@ fun KittyUnifiedBottomBar(
                                     val isSelected = selectedRoute == tab.route
 
                                     val shape = CircleShape
+                                    // AyuGram createMaterial3ColorSpring: dampingRatio 1.0f, stiffness 1600f
                                     val containerColor by animateColorAsState(
                                         targetValue = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+                                        animationSpec = spring(dampingRatio = 1.0f, stiffness = 1600f),
                                         label = "containerColor"
                                     )
                                     val contentColor by animateColorAsState(
                                         targetValue = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        animationSpec = spring(dampingRatio = 1.0f, stiffness = 1600f),
                                         label = "contentColor"
+                                    )
+
+                                    // AyuGram ButtonBounce: 60ms cubic press down to ~0.92, overshoot spring release
+                                    val tabInteractionSource = remember { MutableInteractionSource() }
+                                    val isPressed by tabInteractionSource.collectIsPressedAsState()
+                                    val tabBounceScale = remember { Animatable(1f) }
+
+                                    LaunchedEffect(isPressed) {
+                                        if (isPressed) {
+                                            tabBounceScale.animateTo(
+                                                targetValue = 0.92f,
+                                                animationSpec = tween(durationMillis = 60, easing = FastOutSlowInEasing)
+                                            )
+                                        } else {
+                                            tabBounceScale.animateTo(
+                                                targetValue = 1f,
+                                                animationSpec = spring(
+                                                    dampingRatio = 0.55f,
+                                                    stiffness = 450f
+                                                )
+                                            )
+                                        }
+                                    }
+
+                                    val iconScale by animateFloatAsState(
+                                        targetValue = if (isSelected) 1.05f else 1.0f,
+                                        animationSpec = spring(dampingRatio = 0.6f, stiffness = 500f),
+                                        label = "iconScale"
                                     )
 
                                     Row(
                                         modifier = Modifier
+                                            .graphicsLayer {
+                                                scaleX = tabBounceScale.value
+                                                scaleY = tabBounceScale.value
+                                            }
                                             .clip(shape)
                                             .background(color = containerColor, shape = shape)
-                                            .clickable(onClick = { onTabSelected(tab) })
+                                            .clickable(
+                                                interactionSource = tabInteractionSource,
+                                                indication = null,
+                                                onClick = {
+                                                    com.alananasss.kittytune.audio.haptics.HapticUtil.performUIHaptic(context)
+                                                    onTabSelected(tab)
+                                                }
+                                            )
                                             .padding(
                                                 horizontal = if (isSelected) selectedTabHorizontalPadding else tabHorizontalPadding,
                                                 vertical = 10.dp
                                             )
-                                            .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
+                                            // AyuGram createMaterial3IndicatorSizeSpring: dampingRatio 0.8f, stiffness 380f
+                                            .animateContentSize(animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f)),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.Center
                                     ) {
@@ -399,7 +520,12 @@ fun KittyUnifiedBottomBar(
                                             imageVector = tab.icon,
                                             contentDescription = tab.title,
                                             tint = contentColor,
-                                            modifier = Modifier.size(24.dp)
+                                            modifier = Modifier
+                                                .size(24.dp)
+                                                .graphicsLayer {
+                                                    scaleX = iconScale
+                                                    scaleY = iconScale
+                                                }
                                         )
 
                                         if (isSelected) {
@@ -422,7 +548,10 @@ fun KittyUnifiedBottomBar(
                     Spacer(modifier = Modifier.width(8.dp))
 
                     FloatingToolbarDefaults.VibrantFloatingActionButton(
-                        onClick = onFabClick,
+                        onClick = {
+                            com.alananasss.kittytune.audio.haptics.HapticUtil.performMediumHaptic(context)
+                            onFabClick()
+                        },
                         modifier = Modifier.size(56.dp),
                         containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                         contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
@@ -452,9 +581,7 @@ internal fun rememberDockProgress(viewModel: com.alananasss.kittytune.ui.player.
     val progress = remember { Animatable(0f) }
     LaunchedEffect(viewModel) {
         snapshotFlow {
-            if (viewModel.duration > 0) {
-                (viewModel.currentPosition.toFloat() / viewModel.duration.toFloat()).coerceIn(0f, 1f)
-            } else 0f
+            viewModel.progressOf(viewModel.uiCurrentPosition.toFloat())
         }.collect { target ->
             // Snap on a track change or a seek, glide in between, so the line does not stutter at
             // the tick rate.

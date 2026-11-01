@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material3.*
 import com.alananasss.kittytune.ui.icons.Icon
 import androidx.compose.runtime.*
@@ -19,6 +20,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.ui.common.hapticClickable
 import com.alananasss.kittytune.data.musicimport.MusicApi
 import com.alananasss.kittytune.data.musicimport.MusicImportCoordinator
 import com.alananasss.kittytune.ui.common.SettingsGroup
@@ -26,11 +30,15 @@ import com.alananasss.kittytune.ui.common.SettingsItem
 import com.alananasss.kittytune.ui.common.SettingsScaffold
 import androidx.compose.material.icons.rounded.AccountCircle
 
+import androidx.compose.material.icons.rounded.Link
+
 @Composable
 fun MusicImportScreen(
     onBackClick: () -> Unit,
     onPlatformSelected: (String) -> Unit,
+    onOpenPlaylist: (Long) -> Unit = {},
     onLoginClick: () -> Unit = {},
+    onPortableImportClick: () -> Unit = {},
     viewModel: MusicImportViewModel = viewModel()
 ) {
     val context = LocalContext.current
@@ -41,6 +49,17 @@ fun MusicImportScreen(
     val isLoggedIn = remember(tokenManager) { tokenManager.hasAccessToken() && !tokenManager.isGuestMode() }
 
     var platformPendingAuth by remember { mutableStateOf<MusicApi?>(null) }
+    var showVkImport by remember { mutableStateOf(false) }
+
+    if (showVkImport) {
+        VkImportDialog(
+            onDismiss = { showVkImport = false },
+            onOpenPlaylist = {
+                showVkImport = false
+                onOpenPlaylist(it)
+            },
+        )
+    }
 
     LaunchedEffect(Unit) {
         viewModel.refreshConnection()
@@ -116,6 +135,22 @@ fun MusicImportScreen(
                             style = MaterialTheme.typography.titleMedium
                         )
                     }
+                    // VK needs no account of any kind, so it is offered without the SoundCloud login too.
+                    Spacer(modifier = Modifier.height(24.dp))
+                    SettingsGroup(items = listOf { shape -> VkImportItem(shape) { showVkImport = true } })
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    SettingsGroup(
+                        items = listOf { shape ->
+                            SettingsItem(
+                                shape = shape,
+                                title = stringResource(R.string.portable_import_title),
+                                subtitle = stringResource(R.string.portable_import_subtitle),
+                                icon = Icons.Rounded.Description,
+                                onClick = onPortableImportClick,
+                            )
+                        }
+                    )
                 }
             } else {
                 LazyColumn(
@@ -133,7 +168,7 @@ fun MusicImportScreen(
                 item {
                     SettingsGroup(
                         title = stringResource(R.string.music_import_platforms_header),
-                        items = viewModel.platforms.map { platform ->
+                        items = viewModel.platforms.map<MusicApi, @Composable (androidx.compose.ui.graphics.Shape) -> Unit> { platform ->
                             { shape ->
                                 val visual = platform.visual()
                                 SettingsItem(
@@ -150,7 +185,7 @@ fun MusicImportScreen(
                                     } else {
                                         null
                                     },
-                                    onClick = {
+                                    onClick = hapticAction(HapticKind.UI) {
                                         if (viewModel.isConnected(platform)) {
                                             onPlatformSelected(platform.providerName)
                                         } else {
@@ -159,6 +194,20 @@ fun MusicImportScreen(
                                     }
                                 )
                             }
+                        } + listOf { shape -> VkImportItem(shape) { showVkImport = true } }
+                    )
+                }
+
+                item {
+                    SettingsGroup(
+                        items = listOf { shape ->
+                            SettingsItem(
+                                shape = shape,
+                                title = stringResource(R.string.portable_import_title),
+                                subtitle = stringResource(R.string.portable_import_subtitle),
+                                icon = Icons.Rounded.Description,
+                                onClick = onPortableImportClick,
+                            )
                         }
                     )
                 }
@@ -204,7 +253,7 @@ fun MusicImportScreen(
             },
             confirmButton = {
                 TextButton(
-                    onClick = { 
+                    onClick = hapticAction(HapticKind.UI) { 
                         val platform = platformPendingAuth!!
                         platformPendingAuth = null
                         viewModel.markConnecting(true)
@@ -228,4 +277,23 @@ fun MusicApi.labelRes(): Int = when (this) {
     MusicApi.TIDAL -> R.string.music_provider_tidal
     MusicApi.AMAZON_MUSIC -> R.string.music_provider_amazon_music
     MusicApi.BOOMPLAY -> R.string.music_provider_boomplay
+}
+
+/** VK sits in the platform list like the others; it opens a link field instead of a sign-in. */
+@Composable
+private fun VkImportItem(shape: androidx.compose.ui.graphics.Shape, onClick: () -> Unit) {
+    val state by VkImportSession.state.collectAsState()
+    SettingsItem(
+        shape = shape,
+        title = stringResource(R.string.vk_import_platform),
+        subtitle = stringResource(R.string.vk_import_platform_sub),
+        icon = Icons.Rounded.Link,
+        // An import keeps running with the dialog closed; this says so and is the way back to it.
+        trailingContent = if (state is VkImportState.Importing || state is VkImportState.Loading) {
+            { CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp) }
+        } else {
+            null
+        },
+        onClick = onClick,
+    )
 }

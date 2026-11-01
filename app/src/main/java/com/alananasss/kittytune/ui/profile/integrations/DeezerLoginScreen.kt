@@ -11,6 +11,8 @@ import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import com.alananasss.kittytune.ui.common.SafeWebView
+import com.alananasss.kittytune.ui.common.createSafeWebView
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -35,6 +37,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.ui.common.hapticClickable
 import com.alananasss.kittytune.audio.providers.deezer.isDeezerCookieConfigured
 import com.alananasss.kittytune.audio.providers.deezer.mergeDeezerCookieInputs
 import com.alananasss.kittytune.data.local.PlayerPreferences
@@ -151,7 +156,7 @@ fun DeezerLoginScreen(
                 },
                 actions = {
                     FilledTonalIconButton(
-                        onClick = {
+                        onClick = hapticAction(HapticKind.UI) {
                             val captured = captureDeezerCookieString()
                             if (captured != null && isDeezerCookieConfigured(captured)) {
                                 prefs.setDeezerCookie(captured)
@@ -181,12 +186,8 @@ fun DeezerLoginScreen(
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = { ctx ->
-                    WebView(ctx).apply {
+                    SafeWebView(ctx).apply {
                         mainWebView = this
-                        layoutParams = ViewGroup.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
-                        )
                         settings.apply {
                             javaScriptEnabled = true
                             domStorageEnabled = true
@@ -239,11 +240,7 @@ fun DeezerLoginScreen(
                                 resultMsg: Message?
                             ): Boolean {
                                 if (resultMsg == null) return false
-                                val popup = WebView(view?.context ?: ctx).apply {
-                                    layoutParams = ViewGroup.LayoutParams(
-                                        ViewGroup.LayoutParams.MATCH_PARENT,
-                                        ViewGroup.LayoutParams.MATCH_PARENT
-                                    )
+                                val popup = createSafeWebView(view?.context ?: ctx).apply {
                                     settings.apply {
                                         javaScriptEnabled = true
                                         domStorageEnabled = true
@@ -321,7 +318,7 @@ fun DeezerLoginScreen(
                             factory = { popup }
                         )
                         FilledTonalIconButton(
-                            onClick = {
+                            onClick = hapticAction(HapticKind.UI) {
                                 popupWebView = null
                                 checkAndSaveCookies(forceRedirect = true)
                             },

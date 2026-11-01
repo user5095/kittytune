@@ -29,6 +29,9 @@ import com.alananasss.kittytune.audio.TrimSegment
 import androidx.compose.material3.AlertDialog
 import androidx.compose.ui.res.stringResource
 import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.ui.common.hapticClickable
 
 /**
  * Trimming the track that is playing, by ear (issue #33).
@@ -50,15 +53,15 @@ import com.alananasss.kittytune.R
 @Composable
 fun TrackTrimDialog(viewModel: PlayerViewModel) {
     if (!viewModel.showTrimDialog) return
-    val track = viewModel.currentTrack ?: return
+    val track = viewModel.uiCurrentTrack ?: return
 
     // Edited as a draft and committed on save, so half-built spans never reach playback — a start with no end
     // yet would otherwise be a cut running to the end of the track, applied the moment it was typed.
     var mode by remember(track.id) { mutableStateOf(viewModel.currentTrim.mode) }
     var segments by remember(track.id) { mutableStateOf(viewModel.currentTrim.segments) }
 
-    val duration = viewModel.duration.coerceAtLeast(0L)
-    val position = viewModel.currentPosition.coerceIn(0L, if (duration > 0) duration else Long.MAX_VALUE)
+    val duration = viewModel.uiDuration.coerceAtLeast(0L)
+    val position = viewModel.uiCurrentPosition.coerceIn(0L, if (duration > 0) duration else Long.MAX_VALUE)
     val draft = TrackTrim.of(mode, segments)
 
     AlertDialog(
@@ -84,13 +87,13 @@ fun TrackTrimDialog(viewModel: PlayerViewModel) {
                     ).forEach { (picked, label) ->
                         if (mode == picked) {
                             Button(
-                                onClick = { mode = picked },
+                                onClick = hapticAction(HapticKind.UI) { mode = picked },
                                 shapes = ButtonDefaults.shapes(),
                                 modifier = Modifier.weight(1f),
                             ) { Text(label, maxLines = 1) }
                         } else {
                             FilledTonalButton(
-                                onClick = { mode = picked },
+                                onClick = hapticAction(HapticKind.UI) { mode = picked },
                                 shapes = ButtonDefaults.shapes(),
                                 modifier = Modifier.weight(1f),
                             ) { Text(label, maxLines = 1) }
@@ -135,7 +138,7 @@ fun TrackTrimDialog(viewModel: PlayerViewModel) {
                 }
 
                 FilledTonalButton(
-                    onClick = {
+                    onClick = hapticAction(HapticKind.UI) {
                         // Opens at the playhead and runs to the end, which is the shape you want when you
                         // have just heard the part start: press once, keep listening, then mark the end.
                         val end = if (duration > position) duration else position + 1_000L
@@ -159,7 +162,7 @@ fun TrackTrimDialog(viewModel: PlayerViewModel) {
             }
         },
         confirmButton = {
-            TextButton(onClick = {
+            TextButton(onClick = hapticAction(HapticKind.UI) {
                 viewModel.saveCurrentTrim(draft)
                 viewModel.showTrimDialog = false
             }) { Text(stringResource(R.string.btn_save)) }
@@ -167,13 +170,13 @@ fun TrackTrimDialog(viewModel: PlayerViewModel) {
         dismissButton = {
             Row {
                 if (!viewModel.currentTrim.isEmpty) {
-                    TextButton(onClick = {
+                    TextButton(onClick = hapticAction(HapticKind.UI) {
                         viewModel.clearCurrentTrim()
                         segments = emptyList()
                         viewModel.showTrimDialog = false
                     }) { Text(stringResource(R.string.trim_clear)) }
                 }
-                TextButton(onClick = { viewModel.showTrimDialog = false }) { Text(stringResource(R.string.btn_cancel)) }
+                TextButton(onClick = hapticAction(HapticKind.UI) { viewModel.showTrimDialog = false }) { Text(stringResource(R.string.btn_cancel)) }
             }
         },
     )

@@ -1,41 +1,18 @@
 <p align="center">
-  <img src="app/src/main/ic_launcher-playstore.png" width="128" alt="KittyTune Logo">
-</p>
-
-<h1 align="center">KittyTune (=^･ω･^=)</h1>
-
-<p align="center">
-  <a href="https://github.com/alan7383/kittytune/blob/main/LICENSE">
-    <img src="https://img.shields.io/github/license/alan7383/kittytune?style=for-the-badge&logo=github" alt="License">
-  </a>
-  <a href="https://github.com/alan7383/kittytune/releases">
-    <img src="https://img.shields.io/github/v/tag/alan7383/kittytune?style=for-the-badge&logo=github&color=orange" alt="Release">
-  </a>
-  <a href="https://github.com/alan7383/kittytune/stargazers">
-    <img src="https://img.shields.io/github/stars/alan7383/kittytune?style=for-the-badge&logo=github" alt="Stars">
-  </a>
-  <a href="https://ko-fi.com/alan7383">
-    <img src="https://img.shields.io/badge/Ko--fi-Support-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-fi">
-  </a>
-  <a href="https://discord.gg/thyHQH9jV9">
-    <img src="https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord">
-  </a>
-  <img src="https://img.shields.io/badge/status-beta-yellow?style=for-the-badge" alt="Status: Beta">
-  <img src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android Badge">
-  <a href="https://github.com/alan7383/KittyTuneDesktop">
-    <img src="https://img.shields.io/badge/Desktop-Windows%20%7C%20Linux%20%7C%20macOS-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Desktop Version">
-  </a>
+  <a href="https://alan7383.github.io/kittytune-website/download" title="Download KittyTune"><img src="images/banner.png" alt="KittyTune - click to download"></a>
 </p>
 
 <p align="center">
-  <strong>A SoundCloud-first Android player with guest mode, YouTube fallback, local files, offline downloads, lyrics, widgets, and a lot of real extras.</strong>
+  <img src=".github/assets/badges.svg" alt="Android | Kotlin | Material Design | Jetpack Compose" width="100%"/>
+</p>
+<p align="center">
+  <a href="https://alan7383.github.io/kittytune-website/download" title="Download KittyTune"><img src=".github/assets/download-kittytune.svg" alt="Download KittyTune" width="460"/></a>
 </p>
 
-> [!NOTE]
-> KittyTune is still in active development and far from finished, so please treat it as a beta. Some features might be broken or incomplete. If you run into any bugs or weird behavior, feel free to [open an issue](https://github.com/alan7383/kittytune/issues) to help track them down! Keep in mind I'm working on this alone during my free time, so I won't always be able to fix things right away.
-
-> [!TIP]
-> 💻 **Looking for KittyTune on Desktop?** KittyTune is also available for **Windows**, **Linux** (*Arch Linux*, *Debian / Ubuntu `.deb`*, *Fedora / openSUSE `.rpm`*, and *universal `.AppImage`*), and **macOS**! Check out [KittyTuneDesktop](https://github.com/alan7383/KittyTuneDesktop).
+<p align="center">
+  <sub>[!] <b>KittyTune is in active beta</b> - some features may be incomplete. Found a bug? Feel free to <a href="https://github.com/alan7383/kittytune/issues">open an issue</a>!</sub><br/>
+  <sub>[&gt;] <b>Looking for desktop?</b> KittyTune is also available for <b>Windows</b>, <b>Linux</b>, and <b>macOS</b> on <a href="https://github.com/alan7383/KittyTuneDesktop"><b>KittyTuneDesktop</b></a>.</sub>
+</p>
 
 ---
 
@@ -83,6 +60,7 @@ On top of playback it bundles what many players leave out or bury in menus: offl
 
 * **SoundCloud-first discovery** with home feed, stream, charts, moods, genres, tags, albums, and radio/station flows.
 * **Search tracks, artists, playlists, and albums** from SoundCloud.
+* **Verified search filter** compares title, artist, cover art, and duration with Deezer, Tidal, Qobuz, and Spotify so re-uploads and mislabelled copies stay out of the way.
 * **Track recognition** built right in via ShazamKit to identify songs playing around you and find them instantly.
 * **Switch search source to YouTube** when you want direct video/audio results instead.
 * **Paste SoundCloud or YouTube links** directly into search and jump to the right track, playlist, profile, or station.
@@ -214,13 +192,7 @@ flowchart TD
 
 ### > install
 
-<p align="center">
-  <a href="https://github.com/alan7383/kittytune/releases">
-    <img src="https://img.shields.io/badge/Download-Latest_APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="Download APK">
-  </a>
-</p>
-
-Download the latest APK from the [releases page](https://github.com/alan7383/kittytune/releases).
+Download the latest APK from the [download page](https://alan7383.github.io/kittytune-website/download) or the [releases page](https://github.com/alan7383/kittytune/releases).
 
 KittyTune targets **Android 8.0+ (API 26+)**.
 
@@ -255,9 +227,7 @@ cd kittytune
 If you enjoy using **KittyTune** and want to support its ongoing development, consider buying me a coffee!
 
 <p align="center">
-  <a href="https://ko-fi.com/alan7383" target="_blank">
-    <img src="https://storage.ko-fi.com/cdn/kofi3.png?v=3" height="42" alt="Buy Me a Coffee at ko-fi.com">
-  </a>
+  <a href="https://ko-fi.com/alan7383" target="_blank"><img src="https://storage.ko-fi.com/cdn/kofi3.png?v=3" height="42" alt="Buy Me a Coffee at ko-fi.com"></a>
 </p>
 
 ---
@@ -266,38 +236,36 @@ If you enjoy using **KittyTune** and want to support its ongoing development, co
 
 thanks to everyone who helps make KittyTune better:
 
-<a href="https://github.com/jason-fastner007" title="jason-fastner007 — 🇩🇪 German translation">
-  <img src="https://images.weserv.nl/?url=github.com/jason-fastner007.png&mask=circle&w=64&h=64" width="64" height="64" alt="jason-fastner007" />
-</a>
-<a href="https://github.com/wynriu" title="wynriu — 🇻🇳 Vietnamese translation">
-  <img src="https://images.weserv.nl/?url=github.com/wynriu.png&mask=circle&w=64&h=64" width="64" height="64" alt="wynriu" />
-</a>
-<a href="https://crowdin.com/profile/kivoyoso" title="kivoyoso — 🇷🇺 Russian translation">
-  <img src="https://images.weserv.nl/?url=github.com/kivoyoso.png&mask=circle&w=64&h=64" width="64" height="64" alt="kivoyoso" />
-</a>
-<a href="https://github.com/meowsite" title="meowsite — 🌐 QA & Feedback">
-  <img src="https://images.weserv.nl/?url=github.com/meowsite.png&mask=circle&w=64&h=64" width="64" height="64" alt="meowsite" />
-</a>
-<a href="https://github.com/sneoww98" title="sneoww98 — Contributor">
-  <img src="https://images.weserv.nl/?url=github.com/sneoww98.png&mask=circle&w=64&h=64" width="64" height="64" alt="sneoww98" />
-</a>
-<a href="https://github.com/quntqunt" title="quntqunt — Contributor">
-  <img src="https://images.weserv.nl/?url=github.com/quntqunt.png&mask=circle&w=64&h=64" width="64" height="64" alt="quntqunt" />
-</a>
-<a href="https://github.com/tankist939-afk" title="tankist939-afk — Contributor">
-  <img src="https://images.weserv.nl/?url=github.com/tankist939-afk.png&mask=circle&w=64&h=64" width="64" height="64" alt="tankist939-afk" />
-</a>
+<a href="https://github.com/alan7383/kittytune/graphs/contributors"><img src="https://contrib.rocks/image?repo=alan7383/kittytune" alt="Contributors" /></a>
 
 ---
 
 ### ~ credits & license
 
-Big thanks to the projects that help power KittyTune:
+Big thanks to the open-source projects that help power KittyTune:
 
-* [NewPipe Extractor](https://github.com/TeamNewPipe/NewPipeExtractor)
-* [InnerTune](https://github.com/z-huang/InnerTune)
-* [LrcLib](https://lrclib.net/)
-* [Kizzy RPC](https://github.com/dead8309/Kizzy)
+* **Streaming & Playback**:
+  * [NewPipe Extractor](https://github.com/TeamNewPipe/NewPipeExtractor) - YouTube stream extraction and audio fallback
+  * [InnerTune](https://github.com/z-huang/InnerTune) & [ViMusic](https://github.com/vfsfitvnm/ViMusic) - Innertube client architecture & player components
+  * [Metrolist](https://github.com/MetrolistGroup/Metrolist) & [OuterTune](https://github.com/DD3Boh/OuterTune) - Multi-source playback & UI inspirations
+
+* **Scrapers & Metadata**:
+  * [SpotifyScraper](https://github.com/AliAkhtari78/SpotifyScraper) - Spotify entity parsing, URL normalization & scraping
+  * [Spotify Canvas API](https://github.com/Paxsenix0/Spotify-Canvas-API) - Spotify Canvas & metadata
+
+* **Lyrics**:
+  * [LRCLIB](https://lrclib.net/) - Synced lyrics provider
+  * [Better Lyrics](https://better-lyrics.boidu.dev) - Synced & translated lyrics service
+  * [SimpMusic](https://github.com/maxrave-dev/SimpMusic) - Lyrics providers & integrations
+
+* **Audio Recognition & DSP**:
+  * [SongRec](https://github.com/marin-m/SongRec) / [MusicRecognizer](https://github.com/aleksey-saenko/MusicRecognizer) - Shazam audio fingerprinting & recognition
+  * [libebur128](https://github.com/jiixyj/libebur128) - EBU R128 loudness normalization
+
+* **Integrations & UI**:
+  * [Kizzy RPC](https://github.com/dead8309/Kizzy) - Discord Rich Presence on Android
+  * [smooth-corner-rect](https://github.com/racra/smooth-corner-rect-android-compose) - Continuous smooth rounded corners for Compose
+  * [AboutLibraries](https://github.com/mikepenz/AboutLibraries) - In-app open-source license management
 
 KittyTune is licensed under **GNU GPL v3.0**. See the [LICENSE](LICENSE) file for details.
 

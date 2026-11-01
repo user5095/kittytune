@@ -14,6 +14,9 @@ import com.alananasss.kittytune.ui.icons.Icon
     import androidx.compose.ui.text.style.TextOverflow
     import androidx.lifecycle.viewmodel.compose.viewModel
     import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.ui.common.hapticClickable
     import com.alananasss.kittytune.ui.track.UserList // importing userlist from trackdetailscreen
     import kotlinx.coroutines.launch
 
@@ -61,7 +64,7 @@ import com.alananasss.kittytune.ui.icons.Icon
                     tabs.forEachIndexed { index, title ->
                         Tab(
                             selected = pagerState.currentPage == index,
-                            onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
+                            onClick = hapticAction(HapticKind.UI) { scope.launch { pagerState.animateScrollToPage(index) } },
                             text = { Text(text = title) }
                         )
                     }

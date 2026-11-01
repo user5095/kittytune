@@ -19,7 +19,14 @@
     class PlayPauseAction : ActionCallback {
         override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
             val controller = getMediaController(context)
-            if (controller?.isPlaying == true) controller.pause() else controller?.play()
+            if (controller != null) {
+                val isBufferingPlay = controller.playbackState == androidx.media3.common.Player.STATE_BUFFERING && controller.playWhenReady
+                if (controller.isPlaying || isBufferingPlay) {
+                    controller.pause()
+                } else {
+                    controller.play()
+                }
+            }
             controller?.release()
         }
     }
@@ -70,6 +77,7 @@
                 val newState = current.copy(speed = newSpeed)
                 MusicManager.applyEffects(newState)
                 prefs.saveEffects(newState)
+                MusicWidget.invalidateEffectsCache()
 
                 // if fast speed, achievement
                 if (newSpeed >= 1.2f) AchievementManager.increment("speed_demon", 1)
@@ -101,6 +109,7 @@
 
                 MusicManager.applyEffects(newState)
                 prefs.saveEffects(newState)
+                MusicWidget.invalidateEffectsCache()
                 MusicWidget.update(context)
             }
         }
