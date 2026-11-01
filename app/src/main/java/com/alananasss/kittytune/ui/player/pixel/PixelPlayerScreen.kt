@@ -78,6 +78,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.input.pointer.pointerInput
+import com.alananasss.kittytune.audio.haptics.performAppHaptic
+import com.alananasss.kittytune.ui.player.playerDismissGesture
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -112,6 +114,9 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.SliderState
 import com.alananasss.kittytune.R
+import com.alananasss.kittytune.ui.common.HapticKind
+import com.alananasss.kittytune.ui.common.hapticAction
+import com.alananasss.kittytune.ui.common.hapticClickable
 import com.alananasss.kittytune.data.local.PlayerBackgroundStyle
 import com.alananasss.kittytune.data.local.PlayerPreferences
 import com.alananasss.kittytune.data.local.PlayerSliderStyle
@@ -146,7 +151,7 @@ fun PixelPlayerScreen(
     viewModel: PlayerViewModel,
     onClose: () -> Unit
 ) {
-    val track = viewModel.currentTrack ?: return
+    val track = viewModel.uiCurrentTrack ?: return
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
     val screenHeightPx = remember(configuration, density) {
@@ -299,6 +304,12 @@ fun PixelPlayerScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .playerDismissGesture(
+                dismissTargetY = sheetCollapsedTargetY,
+                dismissProgress = predictiveBackProgress,
+                scope = scope,
+                onDismiss = handleClose
+            )
             .graphicsLayer {
                 scaleX = predictiveScaleX
                 scaleY = predictiveScaleY
@@ -327,20 +338,36 @@ fun PixelPlayerScreen(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxSize()
-                            .blur(80.dp)
-                            .alpha(0.6f)
+                            .graphicsLayer {
+                                scaleX = 1.25f
+                                scaleY = 1.25f
+                            }
+                            .blur(90.dp)
+                            .alpha(0.75f)
                     )
                 }
                 if (!backdropAnimatedUrl.isNullOrBlank()) {
                     CanvasVideo(
                         canvasUrl = backdropAnimatedUrl,
-                        isPlaying = viewModel.isPlaying,
+                        isPlaying = viewModel.uiIsPlaying,
                         modifier = Modifier
                             .fillMaxSize()
                             .blur(40.dp)
                             .alpha(0.85f)
                     )
                 }
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                0.0f to Color.Black.copy(alpha = 0.45f),
+                                0.35f to Color.Black.copy(alpha = 0.20f),
+                                0.65f to Color.Black.copy(alpha = 0.35f),
+                                1.0f to Color.Black.copy(alpha = 0.65f)
+                            )
+                        )
+                )
             }
 
             PlayerBackgroundStyle.GRADIENT -> {
@@ -370,7 +397,8 @@ fun PixelPlayerScreen(
             PlayerBackgroundStyle.APPLE_MUSIC -> {
                 FluidArtworkBackground(
                     artworkUrl = track.fullResArtwork,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    animate = viewModel.uiIsPlaying
                 ) {
                     AsyncImage(
                         model = track.fullResArtwork,
@@ -385,7 +413,7 @@ fun PixelPlayerScreen(
                 if (!backdropAnimatedUrl.isNullOrBlank()) {
                     CanvasVideo(
                         canvasUrl = backdropAnimatedUrl,
-                        isPlaying = viewModel.isPlaying,
+                        isPlaying = viewModel.uiIsPlaying,
                         modifier = Modifier
                             .fillMaxSize()
                             .blur(40.dp)
@@ -407,47 +435,7 @@ fun PixelPlayerScreen(
             }
         }
 
-        val verticalDragModifier = Modifier.pointerInput(sheetCollapsedTargetY) {
-            detectVerticalDragGestures(
-                onDragEnd = {
-                    if (predictiveBackProgress.value > 0.18f) {
-                        handleClose()
-                    } else {
-                        scope.launch {
-                            predictiveBackProgress.animateTo(
-                                0f,
-                                spring(
-                                    dampingRatio = Spring.DampingRatioLowBouncy,
-                                    stiffness = Spring.StiffnessMediumLow
-                                )
-                            )
-                        }
-                    }
-                },
-                onDragCancel = {
-                    scope.launch {
-                        predictiveBackProgress.animateTo(
-                            0f,
-                            spring(
-                                dampingRatio = Spring.DampingRatioLowBouncy,
-                                stiffness = Spring.StiffnessMediumLow
-                            )
-                        )
-                    }
-                },
-                onVerticalDrag = { change, dragAmount ->
-                    if (dragAmount > 0 || predictiveBackProgress.value > 0f) {
-                        change.consume()
-                        val delta = dragAmount / sheetCollapsedTargetY
-                        scope.launch {
-                            predictiveBackProgress.snapTo(
-                                (predictiveBackProgress.value + delta).coerceIn(0f, 1f)
-                            )
-                        }
-                    }
-                }
-            )
-        }
+        val verticalDragModifier = Modifier
 
         // Main Player Column Layout
         Column(
@@ -489,12 +477,18 @@ fun PixelPlayerScreen(
 
                 // Center "Now Playing" title
                 Text(
-                    text = stringResource(R.string.player_now_playing),
+                    text = viewModel.playbackDeviceLabel ?: stringResource(R.string.player_now_playing),
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontFamily = if (LocalPixelTheme.current) PixelFontFamily else GoogleSansRounded,
                         fontWeight = FontWeight.SemiBold
                     ),
-                    color = mainTextColor
+                    color = mainTextColor,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 18.dp, end = 6.dp),
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
 
                 // Right connected buttons: Lyrics + Queue
@@ -520,7 +514,7 @@ fun PixelPlayerScreen(
                                     viewModel.showInlineLyrics = !viewModel.showInlineLyrics
                                 },
                                 onLongClick = {
-                                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                    view.performAppHaptic(HapticFeedbackConstants.LONG_PRESS)
                                     viewModel.openLyrics(forceSheet = true)
                                 }
                             ),
@@ -546,7 +540,7 @@ fun PixelPlayerScreen(
                                 )
                             )
                             .background(topBarBtnBg)
-                            .clickable { showQueueSheet = true },
+                            .hapticClickable { showQueueSheet = true },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -559,28 +553,28 @@ fun PixelPlayerScreen(
             }
 
             // Pager for swipe animation between queue tracks
-            val queueSize = viewModel.queueState.size
-            val currentIdx = viewModel.currentQueueIndex
+            val queueSize = viewModel.uiQueueState.size
+            val currentIdx = viewModel.uiCurrentQueueIndex
             val pagerState = rememberPagerState(
                 initialPage = currentIdx.coerceIn(0, (queueSize - 1).coerceAtLeast(0)),
                 pageCount = { queueSize.coerceAtLeast(1) }
             )
 
-            LaunchedEffect(viewModel.currentQueueIndex) {
-                if (viewModel.currentQueueIndex in 0 until pagerState.pageCount &&
-                    viewModel.currentQueueIndex != pagerState.currentPage
+            LaunchedEffect(viewModel.uiCurrentQueueIndex) {
+                if (viewModel.uiCurrentQueueIndex in 0 until pagerState.pageCount &&
+                    viewModel.uiCurrentQueueIndex != pagerState.currentPage
                 ) {
                     try {
-                        pagerState.animateScrollToPage(viewModel.currentQueueIndex)
+                        pagerState.animateScrollToPage(viewModel.uiCurrentQueueIndex)
                     } catch (_: Exception) {
-                        pagerState.scrollToPage(viewModel.currentQueueIndex)
+                        pagerState.scrollToPage(viewModel.uiCurrentQueueIndex)
                     }
                 }
             }
 
             LaunchedEffect(pagerState) {
                 snapshotFlow { pagerState.settledPage }.collect { settledPage ->
-                    if (settledPage != viewModel.currentQueueIndex && settledPage in viewModel.queueState.indices) {
+                    if (settledPage != viewModel.uiCurrentQueueIndex && settledPage in viewModel.uiQueueState.indices) {
                         viewModel.skipToQueueItem(settledPage)
                     }
                 }
@@ -619,7 +613,7 @@ fun PixelPlayerScreen(
                         pageSpacing = 16.dp,
                         contentPadding = PaddingValues(horizontal = 24.dp)
                     ) { page ->
-                        val pageTrack = viewModel.queueState.getOrNull(page) ?: track
+                        val pageTrack = viewModel.uiQueueState.getOrNull(page) ?: track
                         val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction).absoluteValue
                         val scale = lerp(0.88f, 1f, (1f - pageOffset.coerceIn(0f, 1f)))
                         val alpha = lerp(0.5f, 1f, (1f - pageOffset.coerceIn(0f, 1f)))
@@ -644,12 +638,12 @@ fun PixelPlayerScreen(
                             AnimatedArtwork(
                                 artworkUrl = pageTrack.fullResArtwork,
                                 animatedCoverUrl = if (pageTrack.id == track.id) (viewModel.currentAnimatedCoverTallUrl ?: viewModel.currentAnimatedCoverUrl) else null,
-                                isPlaying = viewModel.isPlaying && (pageTrack.id == track.id),
+                                isPlaying = viewModel.uiIsPlaying && (pageTrack.id == track.id),
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .clickable {
+                                    .hapticClickable {
                                         viewModel.showInlineLyrics = !viewModel.showInlineLyrics
                                     }
                             )
@@ -691,7 +685,7 @@ fun PixelPlayerScreen(
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .clickable { viewModel.navigateToTrackDetails(track.id, 0) }
+                        .hapticClickable { viewModel.navigateToTrackDetails(track.id, 0) }
                         .padding(horizontal = 8.dp, vertical = 2.dp)
                 )
 
@@ -701,10 +695,7 @@ fun PixelPlayerScreen(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { viewModel.navigateToTrackArtist(track) }
-                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                 ) {
                     Text(
                         text = track.displayArtist.ifBlank {
@@ -727,21 +718,46 @@ fun PixelPlayerScreen(
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(16.dp)
                         )
+                        val isAnyVerified = track.user?.verified == true || track.artists?.any { it.verified } == true
+                        if (isAnyVerified) {
+                            Spacer(Modifier.width(4.dp))
+                            Icon(
+                                imageVector = Icons.Rounded.Verified,
+                                contentDescription = stringResource(R.string.user_type_verified_artist),
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
+                    val aiResult by com.alananasss.kittytune.audio.ai.AiDetectionManager.result.collectAsState()
+                    com.alananasss.kittytune.ui.player.ai.AiDetectionBadge(
+                        result = aiResult,
+                        textColor = mainTextColor,
+                        onClick = hapticAction(HapticKind.LIGHT) { viewModel.showAiDetectionSheet = true },
+                        modifier = Modifier.padding(start = 6.dp)
+                    )
+                    com.alananasss.kittytune.ui.common.TrackSourceBadge(
+                        track = track,
+                        resolvedSource = viewModel.currentStreamSource,
+                        modifier = Modifier.padding(start = 6.dp)
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // Expressive Wavy Slider
-                val totalDuration = if (viewModel.duration > 1000) {
-                    viewModel.duration
+                val clip = viewModel.uiClipWindow
+                val shownOf = { songMs: Long -> clip?.toShown(songMs) ?: songMs }
+                val songOf = { shownMs: Long -> clip?.toSong(shownMs) ?: shownMs }
+                val totalDuration = (clip?.lengthMs ?: (if (viewModel.uiDuration > 1000) {
+                    viewModel.uiDuration
                 } else {
                     track.actualDurationMs.takeIf { it > 1000 } ?: 180000L
-                }
+                })).coerceAtLeast(1L)
 
                 val (smoothProgressState, _) = rememberSmoothProgress(
-                    isPlayingProvider = { viewModel.isPlaying },
-                    currentPositionProvider = { viewModel.currentPosition },
+                    isPlayingProvider = { viewModel.uiIsPlaying },
+                    currentPositionProvider = { shownOf(viewModel.uiCurrentPosition) },
                     totalDuration = totalDuration,
                     trackId = track.id
                 )
@@ -804,7 +820,7 @@ fun PixelPlayerScreen(
                                 val targetMs = (finalFraction * totalDuration).roundToLong()
                                 targetSeekFraction = finalFraction
                                 lastSeekFinishedTime = System.currentTimeMillis()
-                                viewModel.seekTo(targetMs)
+                                viewModel.seekTo(songOf(targetMs))
                                 sliderDragValue = null
                             },
                             onValueChangeFinished = {
@@ -812,11 +828,11 @@ fun PixelPlayerScreen(
                                     val targetMs = (finalFraction * totalDuration).roundToLong()
                                     targetSeekFraction = finalFraction
                                     lastSeekFinishedTime = System.currentTimeMillis()
-                                    viewModel.seekTo(targetMs)
+                                    viewModel.seekTo(songOf(targetMs))
                                     sliderDragValue = null
                                 }
                             },
-                            isPlaying = viewModel.isPlaying,
+                            isPlaying = viewModel.uiIsPlaying,
                             activeTrackColor = sliderActiveColor,
                             inactiveTrackColor = sliderInactiveColor,
                             thumbColor = sliderActiveColor,
@@ -837,7 +853,7 @@ fun PixelPlayerScreen(
                                     val targetMs = (finalFraction * totalDuration).roundToLong()
                                     targetSeekFraction = finalFraction
                                     lastSeekFinishedTime = System.currentTimeMillis()
-                                    viewModel.seekTo(targetMs)
+                                    viewModel.seekTo(songOf(targetMs))
                                     sliderDragValue = null
                                 }
                             },
@@ -881,7 +897,7 @@ fun PixelPlayerScreen(
                                     val targetMs = (finalFraction * totalDuration).roundToLong()
                                     targetSeekFraction = finalFraction
                                     lastSeekFinishedTime = System.currentTimeMillis()
-                                    viewModel.seekTo(targetMs)
+                                    viewModel.seekTo(songOf(targetMs))
                                     sliderDragValue = null
                                 }
                             },
@@ -912,12 +928,12 @@ fun PixelPlayerScreen(
                                     val targetMs = (finalFraction * totalDuration).roundToLong()
                                     targetSeekFraction = finalFraction
                                     lastSeekFinishedTime = System.currentTimeMillis()
-                                    viewModel.seekTo(targetMs)
+                                    viewModel.seekTo(songOf(targetMs))
                                     sliderDragValue = null
                                 }
                             },
                             colors = sliderColors,
-                            isPlaying = viewModel.isPlaying,
+                            isPlaying = viewModel.uiIsPlaying,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -947,7 +963,7 @@ fun PixelPlayerScreen(
                         ),
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .clickable { prefs.setShowRemainingTime(!showRemaining) }
+                            .hapticClickable { prefs.setShowRemainingTime(!showRemaining) }
                             .padding(horizontal = 8.dp, vertical = 8.dp)
                     )
                 }
@@ -964,7 +980,7 @@ fun PixelPlayerScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
-                    isPlayingProvider = { viewModel.isPlaying },
+                    isPlayingProvider = { viewModel.uiIsPlaying },
                     isLoadingProvider = { viewModel.isLoading },
                     onPrevious = { viewModel.smartPrevious() },
                     onPlayPause = { viewModel.togglePlayPause() },
@@ -988,13 +1004,14 @@ fun PixelPlayerScreen(
                         .height(66.dp)
                         .padding(horizontal = 24.dp),
                     slots = pixelSlots,
-                    isShuffleEnabled = viewModel.shuffleEnabled,
-                    repeatMode = viewModel.repeatMode,
-                    isFavorite = viewModel.isLiked,
+                    isShuffleEnabled = viewModel.uiShuffleEnabled,
+                    repeatMode = viewModel.uiRepeatMode,
+                    isFavorite = viewModel.uiIsLiked,
                     isLyricsActive = viewModel.showInlineLyrics || viewModel.isLyricsUnderCoverActive,
                     isFullscreenLyricsActive = viewModel.showLyricsSheet,
                     isSleepTimerActive = viewModel.isSleepTimerActive,
                     isHapticsActive = viewModel.isHapticsEnabled,
+                    isConnectActive = com.alananasss.kittytune.data.sync.ConnectManager.selectedDevice.value != null,
                     onShuffleToggle = { viewModel.toggleShuffle() },
                     onRepeatToggle = { viewModel.toggleRepeatMode() },
                     onFavoriteToggle = { viewModel.toggleLike() },
@@ -1002,14 +1019,15 @@ fun PixelPlayerScreen(
                     onEffectsClick = { showEffectsSheet = true },
                     onLyricsClick = { viewModel.openLyrics() },
                     onFullscreenLyricsClick = { viewModel.openLyrics(forceSheet = true) },
-                    onShareClick = { viewModel.currentTrack?.let { viewModel.openShareCard(it) } },
+                    onShareClick = { viewModel.uiCurrentTrack?.let { viewModel.openShareCard(it) } },
                     onCommentsClick = {
-                        viewModel.selectedTrackForSheet = viewModel.currentTrack
-                        viewModel.showCommentsSheet = true
+                        viewModel.openComments(viewModel.uiCurrentTrack)
                     },
                     onSleepTimerClick = { viewModel.showSleepTimerDialog = true },
                     onHapticsToggle = { viewModel.toggleHaptics() },
-                    onMoreClick = { viewModel.currentTrack?.let { viewModel.showTrackOptions(it, fromPlayer = true) } },
+                    onConnectClick = { viewModel.showConnectSheet = true },
+                    onMoreClick = { viewModel.uiCurrentTrack?.let { viewModel.showTrackOptions(it, fromPlayer = true) } },
+                    onDevicesClick = { viewModel.showConnectSheet = true },
                     activeColorMain = colorScheme.primary,
                     activeColorSecondary = colorScheme.secondary,
                     activeColorTertiary = colorScheme.tertiary,
