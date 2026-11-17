@@ -48,7 +48,8 @@ fun TabletBottomDock(
     fabLabel: String,
     playerViewModel: PlayerViewModel,
     onPlayerClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showLabels: Boolean = true,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val playerPrefs = remember { com.alananasss.kittytune.data.local.PlayerPreferences(context) }
@@ -115,7 +116,7 @@ fun TabletBottomDock(
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
+                            verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
                             modifier = Modifier.padding(vertical = 4.dp)
                         ) {
                             Icon(
@@ -124,8 +125,7 @@ fun TabletBottomDock(
                                 tint = iconColor,
                                 modifier = Modifier.size(24.dp)
                             )
-                            Spacer(Modifier.height(4.dp))
-                            Text(
+                            if (showLabels) Text(
                                 text = tab.title,
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontSize = 11.sp,
@@ -153,7 +153,7 @@ fun TabletBottomDock(
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
+                        verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
                         modifier = Modifier.padding(vertical = 4.dp)
                     ) {
                         Icon(
@@ -162,8 +162,7 @@ fun TabletBottomDock(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(24.dp)
                         )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
+                        if (showLabels) Text(
                             text = fabLabel,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontSize = 11.sp,

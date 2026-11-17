@@ -31,7 +31,7 @@ extensions.configure<ApplicationExtension> {
         // data survives. The offset exceeds all legacy sequential codes (54)
         // and early beta-scheme codes, making this a one-way jump.
         versionCode = (System.currentTimeMillis() / 60000).toInt() + 10_000_000
-        versionName = "2.69.4"
+        versionName = "3.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -132,6 +132,7 @@ dependencies {
     implementation(libs.coil.gif)
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.session)
+    implementation(libs.androidx.car.app)
     implementation(libs.androidx.media3.exoplayer.hls)
     implementation(libs.androidx.media3.exoplayer.dash)
     implementation(libs.androidx.media3.datasource.okhttp)
@@ -169,11 +170,15 @@ dependencies {
     implementation(libs.ktor.client.encoding)
     implementation(project(":kizzy"))
     implementation(project(":shazamkit"))
+    implementation(project(":wear-common"))
+    implementation(libs.play.services.wearable)
     implementation(libs.mlkit.language.id)
     testImplementation(libs.junit)
     testImplementation(kotlin("test"))
+    testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)

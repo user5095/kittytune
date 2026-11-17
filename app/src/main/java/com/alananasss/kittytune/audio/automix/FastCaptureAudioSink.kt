@@ -23,12 +23,19 @@ class FastCaptureAudioSink(
     private val targetDurationUs: Long,
     private val shouldCancel: () -> Boolean = { false },
     private val onComplete: () -> Unit = {},
+    /**
+     * Keep left and right, interleaved, instead of mixing to mono. Loudness needs it: a mono sum of
+     * a wide stereo mix reads up to 3 dB quieter than the mix actually plays.
+     */
+    private val keepStereo: Boolean = false,
 ) : AudioSink {
 
     class CapturedPcm(
         val samples: FloatArray,
         val sampleRate: Int,
         val firstSampleTimeUs: Long,
+        /** 1, or 2 when captured with keepStereo (then [samples] is interleaved). */
+        val channels: Int = 1,
     )
 
     private var listener: AudioSink.Listener? = null
@@ -56,7 +63,10 @@ class FastCaptureAudioSink(
             c.copyInto(all, pos)
             pos += c.size
         }
-        val result = CapturedPcm(all, sampleRate, if (firstSampleTimeUs >= 0L) firstSampleTimeUs else 0L)
+        val result = CapturedPcm(
+            all, sampleRate, if (firstSampleTimeUs >= 0L) firstSampleTimeUs else 0L,
+            channels = if (keepStereo) 2 else 1,
+        )
         cachedPcm = result
         return result
     }
@@ -65,11 +75,15 @@ class FastCaptureAudioSink(
         this.listener = listener
     }
 
+    // Only 16-bit int and float PCM are decoded correctly here (handleBuffer reads
+    // shorts/floats). Claiming 24/32-bit support used to hand raw 3-byte samples to a
+    // 16-bit reader - Hi-Res analysis turned into noise. UNSUPPORTED makes ExoPlayer
+    // convert 24/32-bit PCM to 16-bit before it ever reaches this sink.
     override fun supportsFormat(format: Format): Boolean =
-        androidx.media3.common.util.Util.isEncodingLinearPcm(format.pcmEncoding)
+        format.pcmEncoding == C.ENCODING_PCM_16BIT || format.pcmEncoding == C.ENCODING_PCM_FLOAT
 
     override fun getFormatSupport(format: Format): Int =
-        if (androidx.media3.common.util.Util.isEncodingLinearPcm(format.pcmEncoding)) {
+        if (supportsFormat(format)) {
             AudioSink.SINK_FORMAT_SUPPORTED_DIRECTLY
         } else {
             AudioSink.SINK_FORMAT_UNSUPPORTED
@@ -148,7 +162,34 @@ class FastCaptureAudioSink(
         buffer.order(ByteOrder.LITTLE_ENDIAN)
 
         val mono: FloatArray
-        if (pcmEncoding == C.ENCODING_PCM_FLOAT) {
+        var framesInBuffer = 0
+        if (keepStereo) {
+            // Left and right as they are (a mono source on both sides), interleaved.
+            val isFloat = pcmEncoding == C.ENCODING_PCM_FLOAT
+            if (isFloat) {
+                val fb = buffer.asFloatBuffer()
+                val frames = fb.remaining() / channels
+                mono = FloatArray(frames * 2)
+                for (f in 0 until frames) {
+                    val l = fb.get(f * channels)
+                    val r = if (channels > 1) fb.get(f * channels + 1) else l
+                    mono[2 * f] = l
+                    mono[2 * f + 1] = r
+                }
+                framesInBuffer = frames
+            } else {
+                val sb = buffer.asShortBuffer()
+                val frames = sb.remaining() / channels
+                mono = FloatArray(frames * 2)
+                for (f in 0 until frames) {
+                    val l = sb.get(f * channels) / 32768f
+                    val r = if (channels > 1) sb.get(f * channels + 1) / 32768f else l
+                    mono[2 * f] = l
+                    mono[2 * f + 1] = r
+                }
+                framesInBuffer = frames
+            }
+        } else if (pcmEncoding == C.ENCODING_PCM_FLOAT) {
             val fb = buffer.asFloatBuffer()
             val frames = fb.remaining() / channels
             mono = FloatArray(frames)
@@ -168,13 +209,14 @@ class FastCaptureAudioSink(
                 mono[f] = acc / channels
             }
         }
+        if (!keepStereo) framesInBuffer = mono.size
 
         if (mono.isNotEmpty()) {
             synchronized(this) {
                 chunks.add(mono)
-                totalFrames += mono.size
+                totalFrames += framesInBuffer
             }
-            val framesAdded = mono.size
+            val framesAdded = framesInBuffer
             val addedUs = framesAdded * 1_000_000L / rate
             capturedDurationUs += addedUs
             lastPositionUs = presentationTimeUs + addedUs

@@ -409,7 +409,9 @@ fun AppearanceSettingsScreen(
             "pref_track_removal" to 4,
             "pref_achievement_popups" to 4,
             "pref_home_listening_stats" to 5,
-            "pref_home_your_mix" to 5
+            "pref_home_your_mix" to 5,
+            "pref_home_my_wave" to 5,
+            "pref_home_charts" to 5
         )
     )
 
@@ -440,12 +442,10 @@ fun AppearanceSettingsScreen(
                                 onSwitchChange = { on ->
                                     dynamicTheme = on
                                     prefs.setDynamicTheme(on)
-                                    if (on) {
-                                        if (trackDynamicTheme) {
-                                            trackDynamicTheme = false
-                                            prefs.setTrackDynamicTheme(false)
-                                        }
-                                    } else if (keyColor == 0) {
+                                    // Both dynamic themes may be on at once: while a track is
+                                    // loaded the artwork seed wins, and Material You takes over
+                                    // once the mini player is emptied. (See Theme.kt.)
+                                    if (!on && keyColor == 0) {
                                         val defaultPreset = themePresets.first()
                                         keyColor = defaultPreset.seed
                                         prefs.setKeyColor(defaultPreset.seed)
@@ -466,10 +466,9 @@ fun AppearanceSettingsScreen(
                                 onSwitchChange = { on ->
                                     trackDynamicTheme = on
                                     prefs.setTrackDynamicTheme(on)
-                                    if (on && dynamicTheme) {
-                                        dynamicTheme = false
-                                        prefs.setDynamicTheme(false)
-                                    }
+                                    // Coexists with Dynamic Theme (Material You): the track seed
+                                    // wins while there is a track, Material You takes over when
+                                    // the player is emptied. (See Theme.kt.)
                                 },
                                 highlightKey = "pref_theme_track_dynamic"
                             )
@@ -813,6 +812,7 @@ fun AppearanceSettingsScreen(
             }
         }
     }
+
 }
 
 @Composable

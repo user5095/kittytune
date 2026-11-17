@@ -1,9 +1,14 @@
 package com.alananasss.kittytune.data
 
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
+import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
+import androidx.core.content.ContextCompat
 import androidx.annotation.OptIn
 import androidx.core.app.ServiceCompat
 import androidx.media3.common.C
@@ -35,6 +40,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.onEach
 import android.app.PendingIntent
 import androidx.core.net.toUri
 
@@ -73,6 +80,8 @@ class PlaybackService : MediaLibraryService() {
     private var automotiveLyricsGeneration = 0
     private var currentForwardingPlayer: KittyTuneForwardingPlayer? = null
     private lateinit var prefs: PlayerPreferences
+    private var wearPositionSyncJob: Job? = null
+    private var volumeReceiver: BroadcastReceiver? = null
 
     @OptIn(UnstableApi::class)
     override fun onCreate() {
@@ -99,6 +108,9 @@ class PlaybackService : MediaLibraryService() {
         }
 
         setMediaNotificationProvider(defaultNotificationProvider)
+        initVolumeObserver()
+        com.alananasss.kittytune.wear.WearableStatePublisher.ensurePhoneCapability(this)
+        com.alananasss.kittytune.wear.WearableStatePublisher.startDesktopObserver(this)
 
         // Watch for like changes to update custom layout (like button state)
         serviceScope.launch {
@@ -143,9 +155,22 @@ class PlaybackService : MediaLibraryService() {
             .build()
 
         val serviceListener = object : Player.Listener {
-            override fun onPlaybackStateChanged(playbackState: Int) { requestUpdate(delayed = true) }
-            override fun onIsPlayingChanged(isPlaying: Boolean) { requestUpdate(delayed = false) }
-            override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) { requestUpdate(delayed = false) }
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                requestUpdate(delayed = true)
+                syncPeriodicPositionTicker()
+            }
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                requestUpdate(delayed = false)
+                syncPeriodicPositionTicker()
+            }
+            override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
+                requestUpdate(delayed = false)
+                syncPeriodicPositionTicker()
+            }
+            override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
+                super.onPositionDiscontinuity(oldPosition, newPosition, reason)
+                requestUpdate(delayed = false)
+            }
             override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
                 super.onPlaybackParametersChanged(playbackParameters)
                 requestUpdate(delayed = false)
@@ -179,11 +204,22 @@ class PlaybackService : MediaLibraryService() {
         // Android Auto synchronized lyrics observer
         serviceScope.launch {
             combine(
+                com.alananasss.kittytune.data.auto.AndroidAutoLyricsGate.carConnectionTypeFlow(this@PlaybackService)
+                    .onEach {
+                        MusicManager.setAndroidAutoProjected(
+                            it == androidx.car.app.connection.CarConnection.CONNECTION_TYPE_PROJECTION
+                        )
+                    },
                 librarySessionCallback!!.isAutomotiveControllerConnected,
                 prefs.getAndroidAutoSyncedLyricsFlow()
-            ) { automotiveConnected, lyricsEnabled ->
-                automotiveConnected && lyricsEnabled
-            }.collectLatest { shouldRun ->
+            ) { carConnectionType, automotiveConnected, lyricsEnabled ->
+                android.util.Log.d("KittyTuneAA", "lyrics gate: car=$carConnectionType, controller=$automotiveConnected, enabled=$lyricsEnabled")
+                com.alananasss.kittytune.data.auto.AndroidAutoLyricsGate.shouldShowLyrics(
+                    carConnectionType = carConnectionType,
+                    automotiveControllerConnected = automotiveConnected,
+                    lyricsEnabled = lyricsEnabled,
+                )
+            }.distinctUntilChanged().collectLatest { shouldRun ->
                 automotiveLyricsJob?.cancel()
                 if (!shouldRun) {
                     automotiveLyricsJob = null
@@ -262,6 +298,47 @@ class PlaybackService : MediaLibraryService() {
 
         // Widget update
         MusicWidget.update(this)
+
+        // Wear OS companion state sync
+        com.alananasss.kittytune.wear.WearableStatePublisher.publishCurrentState(this)
+    }
+
+    private fun syncPeriodicPositionTicker() {
+        val isPlaying = try { MusicManager.player.isPlaying } catch (_: Exception) { false }
+        if (isPlaying) {
+            if (wearPositionSyncJob?.isActive != true) {
+                wearPositionSyncJob = serviceScope.launch {
+                    while (isActive) {
+                        delay(10_000L) // 10-second throttled position sync ticker
+                        com.alananasss.kittytune.wear.WearableStatePublisher.publishCurrentState(this@PlaybackService, immediate = true)
+                    }
+                }
+            }
+        } else {
+            wearPositionSyncJob?.cancel()
+            wearPositionSyncJob = null
+        }
+    }
+
+    private fun initVolumeObserver() {
+        val filter = IntentFilter("android.media.VOLUME_CHANGED_ACTION")
+        volumeReceiver = object : BroadcastReceiver() {
+            private var lastVolume = -1
+            override fun onReceive(context: Context?, intent: Intent?) {
+                val am = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                val current = am?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: return
+                if (current != lastVolume) {
+                    lastVolume = current
+                    com.alananasss.kittytune.wear.WearableStatePublisher.publishCurrentState(this@PlaybackService, immediate = false)
+                }
+            }
+        }
+        ContextCompat.registerReceiver(
+            this,
+            volumeReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
     }
 
     @OptIn(UnstableApi::class)
@@ -378,6 +455,9 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         if (prefs.getStopOnTaskClear()) {
+            wearPositionSyncJob?.cancel()
+            wearPositionSyncJob = null
+            com.alananasss.kittytune.wear.WearableStatePublisher.publishStoppedState(this)
             val player = MusicManager.player
             player.stop()
             player.clearMediaItems()
@@ -391,6 +471,8 @@ class PlaybackService : MediaLibraryService() {
         super.onTaskRemoved(rootIntent)
         // User removed the task while paused: drop foreground promotion so the process can idle
         if (MusicManager.player.isPlaying.not()) {
+            wearPositionSyncJob?.cancel()
+            wearPositionSyncJob = null
             ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH)
         }
     }
@@ -805,6 +887,14 @@ class PlaybackService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
+        wearPositionSyncJob?.cancel()
+        wearPositionSyncJob = null
+        volumeReceiver?.let {
+            runCatching { unregisterReceiver(it) }
+            volumeReceiver = null
+        }
+        com.alananasss.kittytune.wear.WearableStatePublisher.publishStoppedState(this)
+        com.alananasss.kittytune.wear.WearableStatePublisher.stopDesktopObserver()
         closeDiscordRpc()
         automotiveLyricsJob?.cancel()
         // Release everything registered in onCreate: the player listener, the session-keeping
@@ -815,6 +905,7 @@ class PlaybackService : MediaLibraryService() {
         mediaController?.release()
         mediaController = null
         serviceScope.cancel()
+        MusicManager.setAndroidAutoProjected(false)
         AchievementManager.flushPendingWrites()
         librarySessionCallback?.release()
         mediaSession?.run { release(); mediaSession = null }

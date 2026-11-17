@@ -95,6 +95,7 @@ fun ProviderOrderScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
+                contentPadding = PaddingValues(bottom = 180.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 itemsIndexed(currentList, key = { _, item -> item.name }) { index, item ->
@@ -185,16 +186,18 @@ fun ProviderOrderScreen(
                         }
                     }
                 }
-            }
 
-            Text(
-                text = stringResource(R.string.provider_enabled_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 12.dp)
-            )
+                item {
+                    Text(
+                        text = stringResource(R.string.provider_enabled_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 12.dp)
+                    )
+                }
 
-            TextButton(
+                item {
+                    TextButton(
                 onClick = {
                     currentList.clear()
                     currentList.addAll(AudioProviderOrder.Default)
@@ -214,6 +217,8 @@ fun ProviderOrderScreen(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(stringResource(R.string.provider_order_reset))
+                    }
+                }
             }
         }
     }

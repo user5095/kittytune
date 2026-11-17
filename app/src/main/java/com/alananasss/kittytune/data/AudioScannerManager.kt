@@ -22,9 +22,14 @@ object AudioScannerManager {
     private val isRunning = AtomicBoolean(false)
     private var hasPendingWork = AtomicBoolean(false)
 
+    // true if kittytune_audio_dsp.so has loaded. Otherwise JNI calls throw UnsatisfiedLinkError
+    // (an Error, not an Exception - catch(e: Exception) does NOT catch it and would kill the scanning coroutine).
+    private var isNativeAvailable = false
+
     init {
         try {
             System.loadLibrary("kittytune_audio_dsp")
+            isNativeAvailable = true
         } catch (e: UnsatisfiedLinkError) {
             Log.e(TAG, "Failed to load kittytune_audio_dsp library", e)
         }
@@ -48,7 +53,16 @@ object AudioScannerManager {
     }
 
     private suspend fun processUnscannedTracks(context: Context) {
+        // Without the native library, LUFS analysis is impossible: bail out right away
+        // instead of spinning up MediaExtractor/MediaCodec in vain for every track.
+        if (!isNativeAvailable) {
+            Log.w(TAG, "Native DSP library unavailable — loudness scanning disabled")
+            return
+        }
         val dao = AppDatabase.getDatabase(context).downloadDao()
+        // Downloads scanned before the player kept its own record: hand their figures over, so they
+        // start at the right level like the rest.
+        dao.getAllStoredTracksList().forEach { rememberLoudness(it) }
         val tracks = dao.getTracksWithNullLufs()
 
         for (track in tracks) {
@@ -188,6 +202,7 @@ object AudioScannerManager {
             if (lufs > -70f) {
                 val updated = track.copy(lufs = lufs, truePeak = truePeak)
                 dao.updateTrack(updated)
+                rememberLoudness(updated)
                 Log.d(TAG, "Successfully scanned track ${track.id}: LUFS=${"%.1f".format(lufs)}, TP=${"%.1f".format(truePeak)} dB")
             } else {
                 Log.w(TAG, "Track ${track.id} returned invalid LUFS ($lufs), will retry later")
@@ -211,6 +226,48 @@ object AudioScannerManager {
             try {
                 extractor.release()
             } catch (_: Exception) {}
+        }
+    }
+
+    /** A whole-file scan is the best figure there is; the player uses it for the normalization gain. */
+    private fun rememberLoudness(track: LocalTrack) {
+        val lufs = track.lufs ?: return
+        if (lufs <= -70f) return
+        com.alananasss.kittytune.audio.normalization.LoudnessStore.put(
+            track.id.toString(),
+            com.alananasss.kittytune.audio.normalization.LoudnessStore.Entry(
+                lufs, track.truePeak ?: -120f, Float.MAX_VALUE,
+                com.alananasss.kittytune.audio.normalization.LoudnessStore.Source.FULL,
+            ),
+        )
+    }
+
+    /**
+     * Integrated loudness and true peak of decoded windows of a track, each interleaved with
+     * [channels] channels (a mono window is played on both speakers, so the figure compares with a
+     * stereo measurement). Null when there is too little.
+     */
+    fun measureWindows(windows: List<FloatArray>, sampleRate: Int, channels: Int): Pair<Float, Float>? {
+        if (windows.isEmpty()) return null
+        val handle = nativeCreateAnalyzer(2, sampleRate)
+        if (handle == 0L) return null
+        try {
+            for (window in windows) {
+                if (channels >= 2) {
+                    nativeAddFramesFloat(handle, window, window.size / 2)
+                } else {
+                    val stereo = FloatArray(window.size * 2)
+                    for (i in window.indices) {
+                        stereo[2 * i] = window[i]
+                        stereo[2 * i + 1] = window[i]
+                    }
+                    nativeAddFramesFloat(handle, stereo, window.size)
+                }
+            }
+            val lufs = nativeGetAnalyzedLoudness(handle)
+            return if (lufs > -70f) lufs to nativeGetAnalyzedTruePeakDb(handle) else null
+        } finally {
+            nativeDestroyAnalyzer(handle)
         }
     }
 

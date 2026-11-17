@@ -71,7 +71,9 @@ fun KittyUnifiedBottomBar(
     onPlayerClick: () -> Unit,
     modifier: Modifier = Modifier,
     style: String = "modern",
-    blurEnabled: Boolean = true
+    blurEnabled: Boolean = true,
+    showSkipInMiniPlayer: Boolean = true,
+    showLabels: Boolean = true
 ) {
     val track = playerViewModel.uiCurrentTrack
     val isPlaying = playerViewModel.uiIsPlaying
@@ -81,14 +83,15 @@ fun KittyUnifiedBottomBar(
     val hapticFeedback = LocalHapticFeedback.current
     val coroutineScope = rememberCoroutineScope()
 
+    val context = LocalContext.current
+    val playerPrefs = remember { PlayerPreferences(context) }
+    val miniPlayerStyle by playerPrefs.miniPlayerStyleFlow().collectAsState(initial = playerPrefs.getMiniPlayerStyle())
+    val swipeAction by playerPrefs.miniPlayerSwipeActionFlow().collectAsState(initial = playerPrefs.getMiniPlayerSwipeAction())
+
     val screenWidthPx = remember(configuration, density) {
         with(density) { configuration.screenWidthDp.dp.toPx() }
     }
     val offsetAnimatable = remember { Animatable(0f) }
-
-    val context = LocalContext.current
-    val playerPrefs = remember { PlayerPreferences(context) }
-    val swipeAction by playerPrefs.miniPlayerSwipeActionFlow().collectAsState(initial = playerPrefs.getMiniPlayerSwipeAction())
 
     val miniDismissGestureHandler = rememberMiniPlayerDismissGestureHandler(
         scope = coroutineScope,
@@ -126,6 +129,13 @@ fun KittyUnifiedBottomBar(
                         vm = playerViewModel,
                         modifier = Modifier.align(Alignment.TopCenter)
                     )
+                    if (miniPlayerStyle == com.alananasss.kittytune.data.local.MiniPlayerStyle.MODERN) {
+                        com.alananasss.kittytune.ui.player.KittyModernMiniPlayer(
+                            viewModel = playerViewModel,
+                            onPlayerClick = onPlayerClick,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -224,12 +234,14 @@ fun KittyUnifiedBottomBar(
                             )
                         }
 
-                        IconButton(onClick = { playerViewModel.requestSkipNext() }) {
-                            Icon(
-                                imageVector = Icons.Rounded.SkipNext,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
+                        if (showSkipInMiniPlayer) {
+                            IconButton(onClick = { playerViewModel.requestSkipNext() }) {
+                                Icon(
+                                    imageVector = Icons.Rounded.SkipNext,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                         }
                     }
 
@@ -245,6 +257,7 @@ fun KittyUnifiedBottomBar(
                         trackColor = Color.Transparent
                     )
                 }
+                    } // else: classic mini player strip
             }
         }
         NavigationBar(
@@ -260,7 +273,8 @@ fun KittyUnifiedBottomBar(
                             onTabSelected(tab)
                         },
                         icon = { Icon(tab.icon, contentDescription = tab.title) },
-                        label = { Text(tab.title) },
+                        label = if (showLabels) ({ Text(tab.title) }) else null,
+                        alwaysShowLabel = showLabels,
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
                             selectedTextColor = MaterialTheme.colorScheme.onSurface,
@@ -292,6 +306,13 @@ fun KittyUnifiedBottomBar(
                         vm = playerViewModel,
                         modifier = Modifier.align(Alignment.TopCenter)
                     )
+                    if (miniPlayerStyle == com.alananasss.kittytune.data.local.MiniPlayerStyle.MODERN) {
+                        com.alananasss.kittytune.ui.player.KittyModernMiniPlayer(
+                            viewModel = playerViewModel,
+                            onPlayerClick = onPlayerClick,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -385,12 +406,14 @@ fun KittyUnifiedBottomBar(
                             )
                         }
 
-                        IconButton(onClick = { playerViewModel.requestSkipNext() }) {
-                            Icon(
-                                imageVector = Icons.Rounded.SkipNext,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
+                        if (showSkipInMiniPlayer) {
+                            IconButton(onClick = { playerViewModel.requestSkipNext() }) {
+                                Icon(
+                                    imageVector = Icons.Rounded.SkipNext,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                         }
                     }
 
@@ -406,6 +429,7 @@ fun KittyUnifiedBottomBar(
                         trackColor = Color.Transparent
                     )
                 }
+                    } // else: classic mini player card
             }
         }
         BoxWithConstraints(
@@ -528,7 +552,10 @@ fun KittyUnifiedBottomBar(
                                                 }
                                         )
 
-                                        if (isSelected) {
+                                        // Labels: the SELECTED pill grows its label (mini dock
+                                        // behaviour). With the unified "hide labels" switch on
+                                        // even the selected pill stays icons-only.
+                                        if (isSelected && showLabels) {
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Text(
                                                 text = tab.title,

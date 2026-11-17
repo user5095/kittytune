@@ -80,6 +80,8 @@ object LikeRepository {
     private lateinit var playerPrefs: com.alananasss.kittytune.data.local.PlayerPreferences
 
     @Volatile private var initialized = false
+    /** Whether [init] ran in this process (likes loaded from storage). */
+    val isReady: Boolean get() = ::prefs.isInitialized
 
     fun init(context: Context) {
         // Called from both MainActivity and PlaybackService: parse the likes file only once.

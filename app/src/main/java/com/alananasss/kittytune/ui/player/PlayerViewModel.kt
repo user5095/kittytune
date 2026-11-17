@@ -126,6 +126,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
     private var remoteTicker: Job? = null
     private var remoteVolumeJob: Job? = null
     private var applyingConnectCommand = false
+    private var retryAttempts = 0
     val playbackDeviceLabel: String?
         get() = ConnectManager.selectedDevice.value?.let { id ->
             val peer = remotePeer
@@ -159,9 +160,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
     var uiRepeatMode: RepeatMode
         get() = remotePeer?.snapshot?.repeatMode?.let { runCatching { RepeatMode.valueOf(it) }.getOrDefault(RepeatMode.NONE) } ?: repeatMode
         set(value) { repeatMode = value }
-
-    var playedTrackIds by mutableStateOf<Set<Long>>(emptySet())
-        private set
 
     private fun routeRemote(action: String, value: Long = 0, value2: Long = 0): Boolean {
         if (applyingConnectCommand) return false
@@ -254,6 +252,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
     var currentPosition by mutableLongStateOf(0L)
     var isScrubbing by mutableStateOf(false)
     var isPlayerExpanded by mutableStateOf(false)
+    var isTransitionEditorActive by mutableStateOf(false)
     var isSidePlayerOpen by mutableStateOf(false)
     var isTabletSplitMode by mutableStateOf(true)
     var isLiked by mutableStateOf(false)
@@ -395,9 +394,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
     var shareCardLyrics by mutableStateOf<List<String>>(emptyList())
         private set
 
+    /**
+     * Every non-blank lyric line, for the share sheet's line picker: the user chooses what
+     * goes on the card instead of getting a fixed two-line snippet.
+     */
+    var shareCardAllLyrics by mutableStateOf<List<String>>(emptyList())
+        private set
+
     fun openShareCard(track: Track) {
         shareCardTrack = track
         shareCardArtwork = null
+        shareCardAllLyrics = lyricsLines.filter { it.text.isNotBlank() }.map { it.text }
         shareCardLyrics = lyricsSnippetAt(currentPosition)
         showMenuSheet = false
         viewModelScope.launch {
@@ -412,6 +419,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
         shareCardTrack = null
         shareCardArtwork = null
         shareCardLyrics = emptyList()
+        shareCardAllLyrics = emptyList()
     }
 
     /**
@@ -608,8 +616,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
     var showInlineLyrics: Boolean
         get() = lyricsDisplayState == LyricsDisplayState.COVER_REPLACED
         set(value) {
+            // Lyrics opened by any path other than a title tap (the "lyrics" button,
+            // swipe, sheets) always resets the title-cycle origin.
+            if (!value) lyricsViaTitleCycle = false
             lyricsDisplayState = if (value) LyricsDisplayState.COVER_REPLACED else LyricsDisplayState.OFF
         }
+    /**
+     * True when the lyrics pane was opened by TAPPING THE TRACK TITLE
+     * (see [cycleLyricsFromTitle]), not via the "lyrics" button. The tablet
+     * player uses this to show the classic "cover on the left — lyrics on
+     * the right" layout even when the mini-style lyrics mode is on: a user
+     * cycling states by tapping the title expects exactly that layout.
+     */
+    var lyricsViaTitleCycle by mutableStateOf(false)
+        private set
     val isLyricsUnderCoverActive: Boolean
         get() = (lyricsDisplayState == LyricsDisplayState.UNDER_COVER || playerPrefs.getLyricsUnderCoverAlwaysVisible()) &&
                 hasLyrics && lyricsLines.isNotEmpty() && lyricsDisplayState != LyricsDisplayState.COVER_REPLACED
@@ -631,6 +651,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
     var lyricsVerticalOffset by mutableFloatStateOf(playerPrefs.getLyricsVerticalOffset())
     var lyricsActiveScale by mutableFloatStateOf(playerPrefs.getLyricsActiveScale())
     var lyricsWheelLines by mutableFloatStateOf(playerPrefs.getLyricsWheelLines())
+
+    /** Top-to-bottom fill animation for line-by-line lyrics (on/off toggle). */
+    var lyricsSweepEnabled by mutableStateOf(playerPrefs.getLyricsSweepEnabled())
+    /** What to show over long instrumental gaps in line-by-line lyrics (circle / note+wave / dots). */
+    var instrumentalIndicatorStyle by mutableStateOf(playerPrefs.getInstrumentalIndicatorStyle())
+
+    fun updateLyricsSweepEnabled(enabled: Boolean) {
+        lyricsSweepEnabled = enabled
+        playerPrefs.setLyricsSweepEnabled(enabled)
+    }
 
     var isPlainAutoScrollEnabled by mutableStateOf(true)
     var plainAutoScrollSpeed by mutableFloatStateOf(1.5f)
@@ -765,6 +795,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
         }
 
         if (!playerPrefs.getListeningStatsEnabled()) return
+        if (playerPrefs.getPauseListenHistory()) return
 
         // Nothing heard at all is not a listen and not a skip — it is a track that was loaded. Recording it
         // would put a row in the table that every aggregate then has to exclude, and would make the skip
@@ -1109,6 +1140,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
     private var queueChunkingJob: Job? = null
     private var trackInitJob: Job? = null
     private var playJob: Job? = null
+    private val playbackRecoveryBudget = PlaybackRecoveryBudget()
     private var progressJob: Job? = null
 
     private val syncReceiver = object : BroadcastReceiver() {
@@ -1181,6 +1213,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
 
         override fun onPlaybackStateChanged(state: Int) {
             if (state == Player.STATE_READY) {
+                retryAttempts = 0
                 isLoading = false
                 currentPosition = MusicManager.player.currentPosition.coerceAtLeast(0L)
                 if (MusicManager.player.duration > 0) {
@@ -1256,17 +1289,56 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
             val isNetworkError = cause is androidx.media3.datasource.HttpDataSource.HttpDataSourceException
             val isSourceError = cause is androidx.media3.exoplayer.source.UnrecognizedInputFormatException
 
-            if (isAuthError || isNetworkError || isSourceError) {
+            val isDecodeOrDrmError = error.errorCode in listOf(
+                androidx.media3.common.PlaybackException.ERROR_CODE_DECODING_FAILED,
+                androidx.media3.common.PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
+                androidx.media3.common.PlaybackException.ERROR_CODE_DRM_PROVISIONING_FAILED,
+                androidx.media3.common.PlaybackException.ERROR_CODE_DRM_CONTENT_ERROR,
+                androidx.media3.common.PlaybackException.ERROR_CODE_DRM_LICENSE_ACQUISITION_FAILED,
+                androidx.media3.common.PlaybackException.ERROR_CODE_DRM_DISALLOWED_OPERATION,
+                androidx.media3.common.PlaybackException.ERROR_CODE_DRM_SYSTEM_ERROR,
+                androidx.media3.common.PlaybackException.ERROR_CODE_DRM_DEVICE_REVOKED,
+                androidx.media3.common.PlaybackException.ERROR_CODE_DRM_LICENSE_EXPIRED
+            ) || cause is androidx.media3.exoplayer.mediacodec.MediaCodecDecoderException ||
+               cause is androidx.media3.exoplayer.drm.DrmSession.DrmSessionException
+
+            if (isAuthError || isNetworkError || isSourceError || isDecodeOrDrmError) {
                 if (currentQueueIndex >= 0 && currentQueueIndex < _queue.size) {
+                    val failedTrackId = MusicManager.player.currentMediaItem?.mediaId?.let { parseIdFromMediaId(it) }
+                        ?: _queue.getOrNull(currentQueueIndex)?.id
+                    if (failedTrackId != null && (isAuthError || isDecodeOrDrmError)) {
+                        // A decoder failure is not an account entitlement verdict.
+                        com.alananasss.kittytune.data.MusicManager.clearDrmToken(failedTrackId)
+                    }
+                    if (failedTrackId == null || !playbackRecoveryBudget.tryRecover(failedTrackId)) {
+                        Log.w("PlayerViewModel", "Playback recovery exhausted for track $failedTrackId")
+                        playJob?.cancel()
+                        MusicManager.cancelCrossfade()
+                        MusicManager.releasePrebuffered()
+                        MusicManager.isLoadingTrack = false
+                        isLoading = false
+                        isPlaying = false
+                        playWhenReady = false
+                        MusicManager.playWhenReadyRequested = false
+                        player.playWhenReady = false
+                        emitUiEvent(getString(R.string.connect_feedback_prepare_failed))
+                        return
+                    }
+                    val retryPosition = if (failedTrackId != null && failedTrackId == _queue[currentQueueIndex].id) {
+                        MusicManager.player.currentPosition.coerceAtLeast(0L)
+                    } else 0L
+                    val retryIndex = currentQueueIndex
                     viewModelScope.launch {
+                        if (currentQueueIndex != retryIndex || _queue.getOrNull(retryIndex)?.id != failedTrackId) return@launch
+                        MusicManager.isLoadingTrack = true
                         player.playWhenReady = false
                         isLoading = true
 
                         if (isActive) {
                             playRobustly(
-                                index = currentQueueIndex,
+                                index = retryIndex,
                                 autoPlay = true,
-                                startPosition = currentPosition,
+                                startPosition = retryPosition,
                                 allowSkipOnFailure = false
                             )
                         } else {
@@ -1340,7 +1412,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
                         } catch (_: Exception) {
                         }
                     }
-                    preloadNextTrack(currentQueueIndex + 1)
+                    preloadNextTrack()
                 }
             }
 
@@ -1352,18 +1424,37 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
 
             val expectedTrackId = _queue.getOrNull(currentQueueIndex)?.id
             if (expectedTrackId != null && expectedTrackId != trackId) {
+                if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
+                    // The player moved on to an item that is not the queue's next track any more, so the
+                    // sound, the title and the cover would each follow a different song (issue #72). The
+                    // queue is what the listener arranged: play the track it says.
+                    Log.w("PlayerViewModel", "Player advanced to $trackId but the queue expects $expectedTrackId; resyncing")
+                    flushListenSession("TRACK_CHANGE")
+                    playTrackAtIndex(currentQueueIndex, addToHistory = false, autoPlay = MusicManager.playWhenReadyRequested)
+                }
                 return
             }
 
-            if (currentTrack?.id != trackId) {
+            val trackChanged = currentTrack?.id != trackId
+            if (trackChanged) {
                 // Whatever was playing has ended, however it ended. The new track's session is opened by
                 // the progress loop, which knows the position it actually started from.
                 flushListenSession("TRACK_CHANGE")
-                loadTrimFor(MusicManager.currentTrack?.id)
+                loadTrimFor(trackId)
                 hasPushedRecentlyPlayed = false
+                pendingSeekPosition = null
+                // The position shown and saved until the next progress tick would otherwise still be the
+                // previous song's, and a save or a retry in that window started the new song there (issue #72).
+                currentPosition = MusicManager.player.currentPosition.coerceAtLeast(0L)
+                duration = MusicManager.player.duration.takeIf { it > 0L }
+                    ?: _queue.getOrNull(currentQueueIndex)?.actualDurationMs ?: 0L
             }
 
-            if (MusicManager.currentTrack?.id == trackId) {
+            val queuedTrack = _queue.getOrNull(currentQueueIndex)?.takeIf { it.id == trackId }
+            if (queuedTrack != null && currentTrack?.id != trackId) {
+                currentTrack = queuedTrack
+                MusicManager.currentTrack = queuedTrack
+            } else if (MusicManager.currentTrack?.id == trackId) {
                 currentTrack = MusicManager.currentTrack
             } else if (currentTrack?.id != trackId) {
                 val meta = mediaItem.mediaMetadata
@@ -1859,7 +1950,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
                     finalTrack = newTrack.copy(id = realId)
                 }
             }
-            val foundInQueue = _queue.find { it.id == finalTrack.id }
+            val foundInQueue = _queue.getOrNull(currentQueueIndex)?.takeIf { it.id == finalTrack.id }
             if (foundInQueue != null) {
                 finalTrack = foundInQueue
             }
@@ -1874,7 +1965,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
                 loadLyrics(finalTrack)
                 AchievementManager.checkTrackNameSecret(finalTrack.title ?: "")
 
-                if (finalTrack.source == "soundcloud" && finalTrack.id > 0 && (finalTrack.permalinkUrl.isNullOrEmpty() || finalTrack.user?.avatarUrl.isNullOrEmpty() || finalTrack.playbackCount == 0)) {
+                if (finalTrack.isSoundCloudCatalogTrack && (finalTrack.permalinkUrl.isNullOrEmpty() || finalTrack.user?.avatarUrl.isNullOrEmpty() || finalTrack.playbackCount == 0)) {
                     try {
                         val fullTracks = api.getTracksByIds(finalTrack.id.toString())
                         val fullTrack = fullTracks.firstOrNull()
@@ -1971,6 +2062,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
     }
 
     fun toggleInlineLyrics() {
+        // The "lyrics" button follows its own rules — the title-cycle origin is reset.
+        lyricsViaTitleCycle = false
         val multiStateEnabled = playerPrefs.getLyricsMultiStateToggle()
         val underCoverEnabled = playerPrefs.getLyricsUnderCoverEnabled()
         val hasSyncedLyrics = lyricsLines.isNotEmpty()
@@ -1986,6 +2079,45 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
                 LyricsDisplayState.OFF
             } else {
                 LyricsDisplayState.COVER_REPLACED
+            }
+        }
+    }
+
+    /**
+     * Lyrics mode cycle on TRACK TITLE TAP:
+     *
+     *   title + artist
+     *     → tap 1: a lyrics line instead of the title (the "Lyrics under the
+     *              cover" setting: "instead of the title" / "above the title")
+     *     → tap 2: the lyrics pane (cover on the left — lyrics on the right in landscape)
+     *     → tap 3: back to the title
+     *
+     * Differs from [toggleInlineLyrics] in that the cycle is ALWAYS three-step —
+     * independent of the "multi-state" toggle setting — and in that it sets
+     * [lyricsViaTitleCycle]: this is how the tablet player knows to show the
+     * lyrics pane in the classic "cover on the left — lyrics on the right"
+     * layout rather than the mini-style pane.
+     */
+    fun cycleLyricsFromTitle() {
+        val hasSyncedLyrics = lyricsLines.isNotEmpty()
+        val underCoverEnabled = playerPrefs.getLyricsUnderCoverEnabled()
+
+        lyricsDisplayState = when (lyricsDisplayState) {
+            LyricsDisplayState.OFF ->
+                if (hasSyncedLyrics && underCoverEnabled) {
+                    lyricsViaTitleCycle = false
+                    LyricsDisplayState.UNDER_COVER
+                } else {
+                    lyricsViaTitleCycle = true
+                    LyricsDisplayState.COVER_REPLACED
+                }
+            LyricsDisplayState.UNDER_COVER -> {
+                lyricsViaTitleCycle = true
+                LyricsDisplayState.COVER_REPLACED
+            }
+            LyricsDisplayState.COVER_REPLACED -> {
+                lyricsViaTitleCycle = false
+                LyricsDisplayState.OFF
             }
         }
     }
@@ -2028,7 +2160,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
 
             if (cleanTrack != null) {
                 isLiked = LikeRepository.isTrackLiked(cleanTrack.id)
-                currentQueueIndex = _queue.indexOfFirst { it.id == cleanTrack.id }.coerceAtLeast(0)
+                currentQueueIndex = resolveQueueIndex(cleanQueue, cleanTrack.id,
+                    filteredQueueIndex(lastQueue, playerPrefs.getLastQueueIndex()) { !BlockManager.isBlocked(it) })
             }
 
             try {
@@ -3479,7 +3612,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
                 showMenuSheet = false
                 showDetailsSheet = true
 
-                if (target.source == "soundcloud" && target.id > 0 && (target.user?.id == 0L || target.playbackCount == 0)) {
+                if (target.isSoundCloudCatalogTrack && (target.user?.id == 0L || target.playbackCount == 0)) {
                     try {
                         val fullTracks = api.getTracksByIds(target.id.toString())
                         val fullTrack = fullTracks.firstOrNull()
@@ -4541,12 +4674,11 @@ query CommentsWithReactions(
         archiveQueueIfNeeded(cleanTracks)
         _originalQueue.clear(); _originalQueue.addAll(cleanTracks)
         _queue.clear()
-        playedTrackIds = emptySet()
         this.currentContext = context
         MusicManager.updateContext(context)
 
-        val targetTrack = tracks.getOrNull(startIndex)
-        val effectiveStartIndex = cleanTracks.indexOfFirst { it.id == targetTrack?.id }.takeIf { it != -1 } ?: (if (startIndex in cleanTracks.indices) startIndex else 0)
+        val effectiveStartIndex = filteredQueueIndex(tracks, startIndex) { !BlockManager.isBlocked(it) }
+            .takeIf { it >= 0 } ?: 0
 
         val isHistoryContext =
             context?.navigationId == "history" || context?.navigationId?.startsWith("history") == true
@@ -4609,6 +4741,19 @@ query CommentsWithReactions(
         com.alananasss.kittytune.audio.haptics.HapticUtil.performUIHaptic(context)
         pendingSeekPosition = position; playPlaylist(listOf(track), 0); showCommentsSheet = false; isPlayerExpanded =
             true
+    }
+
+    /**
+     * Jumps to a track that is already in the current queue without rebuilding it — this is how
+     * the snake game replays a cover it just swallowed. Returns false when the track is not in
+     * the queue (blocked, or another context took over), so the caller can start a fresh one.
+     */
+    fun playTrackInQueue(trackId: Long): Boolean {
+        val index = _queue.indexOfFirst { it.id == trackId }
+        if (index < 0) return false
+        com.alananasss.kittytune.audio.haptics.HapticUtil.performUIHaptic(context)
+        playTrackAtIndex(index, addToHistory = false, autoPlay = true)
+        return true
     }
 
     /**
@@ -4678,7 +4823,6 @@ query CommentsWithReactions(
                 _originalQueue.addAll(cleanTracks)
                 _queue.clear()
                 _queue.addAll(cleanTracks)
-                playedTrackIds = emptySet()
                 currentContext = context
                 MusicManager.updateContext(context)
 
@@ -4708,6 +4852,7 @@ query CommentsWithReactions(
 
     fun skipToQueueItem(index: Int, autoPlay: Boolean = true) {
         if (routeRemote("queue", index.toLong())) return
+        pendingSeekPosition = null
         val keepsUpcoming = isQueuePreserveUpcomingEnabled || shuffleEnabled
         if (keepsUpcoming && index > currentQueueIndex && currentQueueIndex >= 0 && index < _queue.size) {
             val targetIndex = currentQueueIndex + 1
@@ -4750,7 +4895,7 @@ query CommentsWithReactions(
         }
         currentQueueIndex = index
         val trackToPlay = _queue[index]
-        playedTrackIds = playedTrackIds + trackToPlay.id
+        playbackRecoveryBudget.reset()
 
         playWhenReady = autoPlay
         progressJob?.cancel()
@@ -4760,6 +4905,9 @@ query CommentsWithReactions(
         trackInitJob = null
         queueChunkingJob?.cancel()
         queueChunkingJob = null
+        // A preload still resolving belongs to the track being left; it would land after this one.
+        preloadJob?.cancel()
+        preloadJob = null
         isLoading = true
         duration = trackToPlay.actualDurationMs
         currentPosition = 0L
@@ -4820,7 +4968,15 @@ query CommentsWithReactions(
                     } catch (_: Exception) { false }
                 }
 
-            if (!isLocalOrDownloaded && finalTrack.source == "soundcloud" && trackToPlay.id > 0 && (trackToPlay.user?.id == 0L || trackToPlay.media == null || trackToPlay.playbackCount == 0)) {
+            val needsHydration = trackToPlay.user == null ||
+                trackToPlay.user?.id == 0L ||
+                trackToPlay.media == null ||
+                trackToPlay.playbackCount == 0 ||
+                trackToPlay.title.isNullOrBlank() ||
+                ((trackToPlay.isGoPlus || trackToPlay.isSnipped) && trackToPlay.fullDuration == null) ||
+                (trackToPlay.durationMs != null && trackToPlay.durationMs in 1..45000L && trackToPlay.fullDuration == null)
+
+            if (!isLocalOrDownloaded && finalTrack.isSoundCloudCatalogTrack && trackToPlay.isSoundCloudCatalogTrack && needsHydration) {
                 try {
                     val fullTrackList = api.getTracksByIds(trackToPlay.id.toString())
                     if (fullTrackList.isNotEmpty()) {
@@ -4852,6 +5008,18 @@ query CommentsWithReactions(
 
             currentTrack = finalTrack
             MusicManager.currentTrack = finalTrack
+            if (finalTrack.actualDurationMs > 0L && (duration <= 45000L || duration != finalTrack.actualDurationMs)) {
+                duration = finalTrack.actualDurationMs
+            }
+            withContext(Dispatchers.IO) {
+                try {
+                    val db = com.alananasss.kittytune.data.local.AppDatabase.getDatabase(context).downloadDao()
+                    val existing = db.getTrack(finalTrack.id)
+                    if (existing != null) {
+                        com.alananasss.kittytune.data.DownloadManager.updateStubTrackIfNeeded(db, existing, finalTrack)
+                    }
+                } catch (_: Exception) {}
+            }
             if (finalTrack.fullResArtwork != trackToPlay.fullResArtwork) {
                 updatePlayerColors(finalTrack)
             }
@@ -4891,7 +5059,7 @@ query CommentsWithReactions(
             // The host's song changed: the shared playlist wants to know at once, not at the next tick.
             com.alananasss.kittytune.data.together.Together.onHostPlaybackChanged()
 
-            if (addToHistory) HistoryRepository.addToHistory(finalTrack)
+            if (addToHistory && !playerPrefs.getPauseListenHistory()) HistoryRepository.addToHistory(finalTrack)
         }
     }
 
@@ -4950,6 +5118,51 @@ query CommentsWithReactions(
         }
     }
 
+    /**
+     * The transition saved in the playlist connector for exactly this pair, as an overlap
+     * length in ms. Null when nothing was saved for the pair, the pair is on Auto, or the
+     * pair's tempo is unknown. Pure lookup — staging the style into MusicManager happens
+     * at the trigger point via [stagePairTransitionStyle], so an idle tick never leaves a
+     * stale style hint behind for an unrelated transition.
+     */
+    private fun pairTransitionOverrideMs(current: Track?, next: Track?): Long? {
+        if (current == null || next == null || next.id == current.id) return null
+        val navId = currentContext?.navigationId ?: return null
+        val plan = runCatching {
+            // Multi-key: the plan may have been saved under a different route key
+            // (playlist screen vs queue navigation) — loadAny tries them all.
+            com.alananasss.kittytune.audio.automix.TransitionStore.loadAny(context, navId, current.id, next.id)
+        }.getOrNull() ?: return null
+        if (plan.isAuto) return null
+        val bpm = com.alananasss.kittytune.audio.automix.AutomixManager.automixDebugInfo.value?.outBpm ?: 0f
+        if (bpm <= 0f) return null
+        return (plan.bars.beats * (60_000f / bpm)).toLong().coerceIn(2_000L, 30_000L)
+    }
+
+    /**
+     * Stages the saved pair transition's style (and length, when the tempo is known) so the
+     * next crossfade performs what the user drew in the Edit-transition screen — used on the
+     * trigger points that have no automix plan to carry it (manual skip, plain crossfade).
+     */
+    private fun stagePairTransitionStyle(current: Track?, next: Track?) {
+        if (current == null || next == null || next.id == current.id) return
+        val navId = currentContext?.navigationId ?: return
+        val plan = runCatching {
+            com.alananasss.kittytune.audio.automix.TransitionStore.loadAny(context, navId, current.id, next.id)
+        }.getOrNull() ?: return
+        if (plan.isAuto) return
+        MusicManager.pendingTransitionStyle = plan.toEngineStyle()
+        MusicManager.pendingTransitionPair = current.id to next.id
+        // The whole plan, so the fade loop performs the pair's exact saved curves
+        // (volume, EQ handover, filter sweep, effects tail, loop) — not just the style.
+        MusicManager.pendingPairPlan = plan
+        val bpm = com.alananasss.kittytune.audio.automix.AutomixManager.automixDebugInfo.value?.outBpm ?: 0f
+        if (bpm > 0f) {
+            MusicManager.pendingTransitionDurationMs =
+                (plan.bars.beats * (60_000f / bpm)).toLong().coerceIn(2_000L, 30_000L)
+        }
+    }
+
     fun requestSkipNext() {
         if (routeRemote("next")) return
         com.alananasss.kittytune.audio.haptics.HapticUtil.performUIHaptic(context)
@@ -4974,6 +5187,9 @@ query CommentsWithReactions(
                 android.util.Log.d("PlayerViewModel", "Skip -> hard cut")
                 // Stop the engine finishing a fade into a track the listener just skipped past.
                 djFlowController.cancelTransition()
+                // A transition saved for exactly this pair must survive the skip: the cancel
+                // clears the automix plan, so stage the saved shape for the incoming crossfade.
+                stagePairTransitionStyle(currentTrack, _queue.getOrNull(currentQueueIndex + 1))
                 playNext(manual = true, isCrossfade = playerPrefs.getCrossfadeEnabled())
             }
             SkipAction.IGNORE -> {}
@@ -4987,6 +5203,13 @@ query CommentsWithReactions(
     ) {
         if (manual && routeRemote("next")) return
         if (isAutoplayRadioLoading) return
+        if (manual && MusicManager.isCrossfadingOut) {
+            // Every manual advance tears down a blend that is still in flight — the same
+            // decision SkipDecision makes for the next button. Starting a second fade loop on
+            // top of a live one used to zipper the decks' volumes every step and reset the
+            // duck shelves mid-blend (the "hissing, interrupted" transition).
+            djFlowController.cancelTransition()
+        }
         if (manual && !applyingTogether && com.alananasss.kittytune.data.together.Together.active.value != null) {
             com.alananasss.kittytune.data.together.Together.control(
                 com.alananasss.kittytune.data.together.TogetherMessage.CONTROL_NEXT, currentPosition
@@ -5010,6 +5233,10 @@ query CommentsWithReactions(
             )
             return
         }
+
+        // A start position saved for the track being left (a restore, a shared playlist) must not
+        // carry over to the next one, which would then start part-way through (issue #72).
+        pendingSeekPosition = null
 
         val nextIndex = currentQueueIndex + 1
 
@@ -5156,7 +5383,13 @@ query CommentsWithReactions(
             if (!partialTracks.isNullOrEmpty()) {
                 val newTrackIds = partialTracks.map { it.id }.filter { trackId -> _queue.none { it.id == trackId } }
                 if (newTrackIds.isNotEmpty()) {
-                    val unorderedFullTracks = api.getTracksByIds(newTrackIds.joinToString(","))
+                    val unorderedFullTracks = newTrackIds.chunked(50).flatMap { chunk ->
+                        try {
+                            api.getTracksByIds(chunk.joinToString(","))
+                        } catch (_: Exception) {
+                            emptyList()
+                        }
+                    }
                     val trackMap = unorderedFullTracks.associateBy { it.id }
                     val orderedFullTracks = newTrackIds.mapNotNull { id -> trackMap[id] }.filter { !BlockManager.isBlocked(it) }
                     val existingSignatures = _queue.map { "${normalizeStationTitle(it.title)}|${it.displayArtist.lowercase().trim()}" }.toMutableSet()
@@ -5373,6 +5606,7 @@ query CommentsWithReactions(
             flushListenSession("SKIP_PREVIOUS")
         }
 
+        pendingSeekPosition = null
         val prevIndex = currentQueueIndex - 1
         if (prevIndex >= 0) {
             playTrackAtIndex(prevIndex, addToHistory = true, isCrossfade = isCrossfade, autoPlay = true)
@@ -5408,16 +5642,43 @@ query CommentsWithReactions(
         }
     }
 
+    /**
+     * The Mix (automix) toggle moved in settings.
+     *
+     * Turning Mix on restores playlist order (the same revert path the Shuffle button uses):
+     * pair transitions only fire on the exact track sequence they were saved for, and a
+     * shuffled upcoming queue hides that sequence, so a saved pair would nearly never meet
+     * again. Both directions also drop the staged pair-transition hints and the cached
+     * automix plan — they describe the previous mode's pair, and the 2 s ticker rebuilds
+     * the plan for the pair that is actually playing once Mix is back on.
+     */
+    fun onAutomixEnabledChanged(enabled: Boolean) {
+        MusicManager.pendingTransitionStyle = null
+        MusicManager.pendingTransitionDurationMs = null
+        MusicManager.pendingTransitionPair = null
+        MusicManager.pendingPairPlan = null
+        if (enabled && shuffleEnabled) {
+            shuffleEnabled = false
+            revertShuffle()
+            updateQueueState()
+            refreshPreloadedNext()
+            saveStateAsync(saveQueue = true)
+        } else {
+            refreshPreloadedNext()
+        }
+        com.alananasss.kittytune.audio.automix.AutomixManager.clearPlan()
+    }
+
     fun toggleShuffle() {
         if (routeRemote("shuffle", if (uiShuffleEnabled) 0 else 1)) return
         com.alananasss.kittytune.audio.haptics.HapticUtil.performMediumHaptic(context)
         shuffleEnabled =
-            !shuffleEnabled; if (shuffleEnabled) applyShuffle() else revertShuffle(); updateQueueState(); saveStateAsync(
-            saveQueue = true
-        )
+            !shuffleEnabled; if (shuffleEnabled) applyShuffle() else revertShuffle(); updateQueueState()
+        refreshPreloadedNext()
+        saveStateAsync(saveQueue = true)
     }
 
-    private fun applyShuffle(startIndex: Int = currentQueueIndex, sourceList: List<Track> = _originalQueue) {
+    private fun applyShuffle(startIndex: Int = currentQueueIndex, sourceList: List<Track> = _queue.toList()) {
         if (sourceList.isEmpty() || startIndex !in sourceList.indices) return
 
         val played = sourceList.subList(0, startIndex + 1)
@@ -5432,9 +5693,10 @@ query CommentsWithReactions(
     }
 
     private fun revertShuffle() {
-        val currentTrackId =
-            currentTrack?.id ?: return; _queue.clear(); _queue.addAll(_originalQueue); currentQueueIndex =
-            _queue.indexOfFirst { it.id == currentTrackId }.coerceAtLeast(0)
+        val originalIndex = matchingQueueIndex(_queue, currentQueueIndex, _originalQueue)
+        _queue.clear()
+        _queue.addAll(_originalQueue)
+        currentQueueIndex = originalIndex
     }
 
     private fun applyRepeatMode() {
@@ -5462,6 +5724,7 @@ query CommentsWithReactions(
             RepeatMode.ONE -> RepeatMode.NONE
         }
         applyRepeatMode()
+        refreshPreloadedNext()
         saveStateAsync(saveQueue = false)
     }
 
@@ -5475,7 +5738,7 @@ query CommentsWithReactions(
 
     fun moveQueueItem(from: Int, to: Int) {
         if (routeRemote("move", from.toLong(), to.toLong())) return
-        if (from == to) return
+        if (from == to || from !in _queue.indices || to !in _queue.indices) return
 
         if (from < queueState.size && to < queueState.size) {
             val mut = queueState.toMutableList()
@@ -5487,33 +5750,65 @@ query CommentsWithReactions(
         if (from < _queue.size && to < _queue.size) {
             val item = _queue.removeAt(from)
             _queue.add(to, item)
+            // Follow the playing entry by position: looking it up by id picked the wrong one when the same
+            // track was in the queue twice, and playback then went on from there (issue #72).
+            val playing = currentQueueIndex
+            currentQueueIndex = when {
+                from == playing -> to
+                from < playing && to >= playing -> playing - 1
+                from > playing && to <= playing -> playing + 1
+                else -> playing
+            }
         }
 
-        if (!shuffleEnabled && from < _originalQueue.size && to < _originalQueue.size + 1) {
+        if (!shuffleEnabled && from < _originalQueue.size && to < _originalQueue.size) {
             val originalItem = _originalQueue.removeAt(from)
             _originalQueue.add(to, originalItem)
         }
 
-        if (currentTrack != null) {
-            currentQueueIndex = _queue.indexOfFirst { it.id == currentTrack?.id }.coerceAtLeast(0)
-        }
-
-        if (MusicManager.player.mediaItemCount > 1) {
-            try {
-                MusicManager.player.removeMediaItem(1)
-            } catch (_: Exception) {
-            }
-        }
-        preloadNextTrack(currentQueueIndex + 1)
+        refreshPreloadedNext()
 
         saveStateAsync(saveQueue = true)
+    }
+
+
+    /**
+     * Updates active playing queue if the reordered playlist matches current playback context.
+     */
+    fun updatePlayingQueueOrderIfMatching(matchingContextId: Long?, newOrderedTracks: List<Track>) {
+        val currentNav = currentContext?.navigationId ?: return
+        val isCurrentContext = when {
+            matchingContextId != null &&
+                (currentNav == matchingContextId.toString() ||
+                    currentNav.substringAfterLast(':') == matchingContextId.toString()) -> true
+            currentNav == "downloads" && matchingContextId == -2L -> true
+            currentNav == "likes" && matchingContextId == -1L -> true
+            else -> false
+        }
+        if (!isCurrentContext) return
+
+        val playingId = currentTrack?.id
+        _originalQueue.clear()
+        _originalQueue.addAll(newOrderedTracks)
+        if (!shuffleEnabled) {
+            _queue.clear()
+            _queue.addAll(newOrderedTracks)
+            if (playingId != null) {
+                val newIdx = _queue.indexOfFirst { it.id == playingId }
+                if (newIdx != -1) currentQueueIndex = newIdx
+            }
+            updateQueueState()
+            refreshPreloadedNext()
+            saveStateAsync(saveQueue = true)
+        }
     }
 
     fun removeTrackFromQueue(index: Int) {
         if (routeRemote("remove", index.toLong())) return
         if (index !in _queue.indices) return
 
-        val trackToRemove = _queue[index]
+        val originalIndex = matchingQueueIndex(_queue, index, _originalQueue)
+        val wasCurrent = index == currentQueueIndex
 
         _queue.removeAt(index)
 
@@ -5523,18 +5818,22 @@ query CommentsWithReactions(
             queueState = mut
         }
 
-        _originalQueue.removeAll { it.id == trackToRemove.id }
+        if (originalIndex >= 0) _originalQueue.removeAt(originalIndex)
 
-        if (currentTrack != null) {
-            currentQueueIndex = _queue.indexOfFirst { it.id == currentTrack?.id }.coerceAtLeast(0)
+        // By position, not by id: the same track can be queued more than once (issue #72).
+        if (index < currentQueueIndex) {
+            currentQueueIndex--
         }
-        if (MusicManager.player.mediaItemCount > 1) {
-            try {
-                MusicManager.player.removeMediaItem(1)
-            } catch (_: Exception) {
+        currentQueueIndex = if (_queue.isEmpty()) -1 else currentQueueIndex.coerceIn(0, _queue.lastIndex)
+        if (wasCurrent) {
+            if (_queue.isEmpty()) {
+                MusicManager.player.stop()
+                resetPlaybackState()
+            } else {
+                playTrackAtIndex(currentQueueIndex, addToHistory = false, autoPlay = playWhenReady)
             }
         }
-        preloadNextTrack(currentQueueIndex + 1)
+        refreshPreloadedNext()
 
         saveStateAsync(saveQueue = true)
     }
@@ -5547,16 +5846,13 @@ query CommentsWithReactions(
         val uniqueTracks = cleanTracks.map { it.copy() }
 
         _queue.addAll(insertIndex, uniqueTracks)
-        _originalQueue.addAll(insertIndex, uniqueTracks)
+        // Shuffled, the original order has the playing track somewhere else entirely.
+        val playingInOriginal = matchingQueueIndex(_queue, currentQueueIndex, _originalQueue)
+        val originalInsertIndex = if (playingInOriginal >= 0) playingInOriginal + 1 else _originalQueue.size
+        _originalQueue.addAll(originalInsertIndex, uniqueTracks)
         updateQueueState()
 
-        if (MusicManager.player.mediaItemCount > 1) {
-            try {
-                MusicManager.player.removeMediaItem(1)
-            } catch (_: Exception) {
-            }
-        }
-        preloadNextTrack(currentQueueIndex + 1)
+        refreshPreloadedNext()
 
         saveStateAsync(saveQueue = true)
         emitUiEvent(getString(R.string.menu_play_next))
@@ -5576,7 +5872,17 @@ query CommentsWithReactions(
             context,
             com.alananasss.kittytune.data.local.PlayerPreferences.KEY_HAPTICS_PLAY_PAUSE
         )
-        if (player.isPlaying || playWhenReady || MusicManager.playWhenReadyRequested) {
+        // Decide from what the player is doing, not from the wish flags alone: a stream that failed
+        // to resolve leaves playWhenReady set on a stopped player, the button shows "play", and the
+        // press used to "pause" nothing (#82).
+        val shouldPause = PlayButtonRecovery.shouldPause(
+            playerIsPlaying = player.isPlaying,
+            playerPlayWhenReady = player.playWhenReady,
+            playbackState = player.playbackState,
+            isLoading = isLoading || MusicManager.isLoadingTrack,
+            wantsToPlay = playWhenReady || MusicManager.playWhenReadyRequested,
+        )
+        if (shouldPause) {
             playWhenReady = false
             MusicManager.playWhenReadyRequested = false
             try {
@@ -5585,12 +5891,27 @@ query CommentsWithReactions(
             } catch (_: Exception) {}
             saveStateAsync(savePositionOnly = true)
         } else {
+            if (player.playerError != null && currentQueueIndex in _queue.indices) {
+                playbackRecoveryBudget.reset()
+                playWhenReady = true
+                MusicManager.playWhenReadyRequested = true
+                playRobustly(currentQueueIndex, autoPlay = true, startPosition = currentPosition, allowSkipOnFailure = false)
+                return
+            }
             playWhenReady = true
             MusicManager.playWhenReadyRequested = true
             try {
                 player.playWhenReady = true
             } catch (_: Exception) {}
             restoreDismissedPlayerStateIfNeeded()
+            if (mustReloadCurrentTrackOnPlay()) {
+                // play() on a stopped player, or on the item of the track before, does nothing the
+                // listener can hear: the press looked ignored until they skipped away and back (#82).
+                Log.i("PlayerViewModel", "Play pressed on a stalled player, reloading track ${currentTrack?.id}")
+                playbackRecoveryBudget.reset()
+                playRobustly(currentQueueIndex, autoPlay = true, startPosition = currentPosition, allowSkipOnFailure = false)
+                return
+            }
             if (player.currentMediaItem == null && currentTrack != null) {
                 pendingSeekPosition = currentPosition
                 playPlaylist(
@@ -5603,6 +5924,24 @@ query CommentsWithReactions(
                 player.play()
             }
         }
+    }
+
+    /**
+     * Whether pressing play must load the current track again instead of resuming the player.
+     *
+     * A failed stream resolution stops the player but leaves the previous track's item in it, so
+     * `play()` resumes nothing. The same is true of an item that belongs to another track.
+     */
+    private fun mustReloadCurrentTrackOnPlay(): Boolean {
+        val track = currentTrack ?: return false
+        if (_queue.getOrNull(currentQueueIndex)?.id != track.id) return false
+        if (MusicManager.isLoadingTrack || playJob?.isActive == true || trackInitJob?.isActive == true) return false
+        val item = player.currentMediaItem ?: return false
+        return PlayButtonRecovery.mustReload(
+            playbackState = player.playbackState,
+            heldMediaId = item.mediaId,
+            currentTrackId = track.id,
+        )
     }
 
     fun pause() {
@@ -5749,13 +6088,7 @@ query CommentsWithReactions(
         _originalQueue.add(item)
         togetherNextOffset++
         updateQueueState()
-        if (MusicManager.player.mediaItemCount > 1) {
-            try {
-                MusicManager.player.removeMediaItem(1)
-            } catch (_: Exception) {
-            }
-        }
-        preloadNextTrack(currentQueueIndex + 1)
+        refreshPreloadedNext()
         saveStateAsync(saveQueue = true)
         com.alananasss.kittytune.data.together.Together.onHostPlaybackChanged()
     }
@@ -5777,22 +6110,14 @@ query CommentsWithReactions(
 
     /** Drops everything after the song playing, in both the live queue and the unshuffled original. */
     fun clearUpcoming() {
+        val originalIndex = matchingQueueIndex(_queue, currentQueueIndex, _originalQueue)
         while (_queue.size > currentQueueIndex + 1) _queue.removeAt(_queue.size - 1)
-        val playing = currentTrack?.id
-        if (playing != null) {
-            val idx = _originalQueue.indexOfFirst { it.id == playing }
-            if (idx >= 0 && idx + 1 < _originalQueue.size) {
-                _originalQueue.subList(idx + 1, _originalQueue.size).clear()
-            }
+        if (originalIndex >= 0 && originalIndex + 1 < _originalQueue.size) {
+            _originalQueue.subList(originalIndex + 1, _originalQueue.size).clear()
         }
         togetherNextOffset = 0
         updateQueueState()
-        if (MusicManager.player.mediaItemCount > 1) {
-            try {
-                MusicManager.player.removeMediaItem(1)
-            } catch (_: Exception) {
-            }
-        }
+        refreshPreloadedNext()
         saveStateAsync(saveQueue = true)
     }
 
@@ -5803,6 +6128,7 @@ query CommentsWithReactions(
         _queue.addAll(clean)
         _originalQueue.addAll(clean)
         updateQueueState()
+        refreshPreloadedNext()
         saveStateAsync(saveQueue = true)
     }
 
@@ -6969,14 +7295,12 @@ query CommentsWithReactions(
 
         val uniqueTracks = cleanTracks.map { it.copy() }
 
-        val mediaItems = uniqueTracks.map { track ->
-            buildMediaItem(track, null, null)
-        }
-        player.addMediaItems(mediaItems)
-
+        // The player only ever holds the track playing and the one after it; queued tracks used to be
+        // appended to it too, and the player then went on to them instead of the queue's next (issue #72).
         _queue.addAll(uniqueTracks)
         _originalQueue.addAll(uniqueTracks)
         updateQueueState()
+        refreshPreloadedNext()
         saveStateAsync(saveQueue = true)
         emitUiEvent(getString(R.string.menu_add_queue))
     }
@@ -7101,7 +7425,7 @@ query CommentsWithReactions(
                 val track = remote.queue[remote.currentIndex]
                 require(track.source != "local") { "Local files are unavailable on another device" }
                 val portable = remote.queue.filter { it.source != "local" }
-                val index = portable.indexOfFirst { it.id == track.id }
+                val index = filteredQueueIndex(remote.queue, remote.currentIndex) { it.source != "local" }
                 require(index >= 0)
                 shuffleEnabled = false
                 pendingSeekPosition = remote.positionMs
@@ -7132,7 +7456,7 @@ query CommentsWithReactions(
         if (syncPlaybackReady) {
             val q = (queueState as? List<*>)?.filterIsInstance<Track>() ?: emptyList()
             val currentId = currentTrack?.id
-            val index = if (currentId != null) q.indexOfFirst { it.id == currentId } else -1
+            val index = resolveQueueIndex(q, currentId, currentQueueIndex)
             if (index >= 0) {
                 val position = currentPosition
                 val playing = isPlaying
@@ -7172,10 +7496,11 @@ query CommentsWithReactions(
             val freshC = currentContext
             val freshS = shuffleEnabled
             val freshR = repeatMode
+            val freshIndex = currentQueueIndex
             val qSnapshot = (_queue.toList() as? List<*>)?.filterIsInstance<Track>() ?: emptyList()
             withContext(Dispatchers.IO) {
                 runCatching {
-                    playerPrefs.savePlaybackState(freshT, freshP, qSnapshot, freshC, freshS, freshR)
+                    playerPrefs.savePlaybackState(freshT, freshP, qSnapshot, freshC, freshS, freshR, freshIndex)
                 }
             }
         }
@@ -7256,7 +7581,10 @@ query CommentsWithReactions(
 
                         val isDjFlowActive = djFlowController.flowState.value.isActive
                         if ((automixEnabled || isDjFlowActive) && currTrack != null) {
-                            if (now - lastAutomixCheckTime > 2000L) {
+                            // A blend in flight has the audio threads fully loaded — recomputing the
+                            // plan (and the IMMEDIATE beat analysis it kicks off) waits until it ends;
+                            // the 2 s ticker picks everything up right after the mix is over.
+                            if (now - lastAutomixCheckTime > 2000L && !MusicManager.isTransitionRunning()) {
                                 lastAutomixCheckTime = now
                                 com.alananasss.kittytune.audio.automix.AutomixManager.maybeAnalyzeBeat(currTrack, com.alananasss.kittytune.audio.automix.BeatAnalysisPriority.IMMEDIATE)
                                 if (nextTrack != null) {
@@ -7284,7 +7612,7 @@ query CommentsWithReactions(
                                     if (isGaplessAlbum) {
                                         com.alananasss.kittytune.audio.automix.AutomixManager.clearPlan()
                                     } else if (dur > 0L) {
-                                        com.alananasss.kittytune.audio.automix.AutomixManager.computeAutomixPlan(currTrack, nextTrack, currentPosition, dur, playerPrefs)
+                                        com.alananasss.kittytune.audio.automix.AutomixManager.computeAutomixPlan(currTrack, nextTrack, currentPosition, dur, playerPrefs, currentContext?.navigationId)
                                     }
                                 }
                             }
@@ -7315,11 +7643,18 @@ query CommentsWithReactions(
                                     playNext(manual = false, isCrossfade = true)
                                 }
                             } else if (!isGaplessAlbum && crossfadeEnabled && dur > 0L) {
-                                val remainingToCrossfade = (dur - crossfadeMs) - currentPosition
+                                // No automix plan (analysis pending/failed or automix off): a
+                                // transition saved for this exact pair still drives the blend —
+                                // its bars replace the global crossfade length when the tempo is
+                                // known, and its style is staged at the trigger point.
+                                val pairMs = pairTransitionOverrideMs(currTrack, nextTrack)
+                                val triggerCrossfadeMs = pairMs ?: crossfadeMs
+                                val remainingToCrossfade = (dur - triggerCrossfadeMs) - currentPosition
                                 if (nextTrack != null && remainingToCrossfade in 1000L..12000L && !MusicManager.isCrossfadingOut && !MusicManager.isPrebuffered(nextTrack.id)) {
                                     triggerPrebuffer(nextTrack, null)
                                 }
-                                if (currentPosition >= (dur - crossfadeMs) && !MusicManager.isCrossfadingOut) {
+                                if (currentPosition >= (dur - triggerCrossfadeMs) && !MusicManager.isCrossfadingOut) {
+                                    stagePairTransitionStyle(currTrack, nextTrack)
                                     com.alananasss.kittytune.audio.automix.AutomixManager.setMixBeatsLeft(null)
                                     MusicManager.beginCrossfadeRequest()
                                     playNext(manual = false, isCrossfade = true)
@@ -7328,11 +7663,14 @@ query CommentsWithReactions(
                                 com.alananasss.kittytune.audio.automix.AutomixManager.setMixBeatsLeft(null)
                             }
                         } else if (!isGaplessAlbum && crossfadeEnabled && dur > 0L) {
-                            val remainingToCrossfade = (dur - crossfadeMs) - currentPosition
+                            val pairMs = pairTransitionOverrideMs(currTrack, nextTrack)
+                            val triggerCrossfadeMs = pairMs ?: crossfadeMs
+                            val remainingToCrossfade = (dur - triggerCrossfadeMs) - currentPosition
                             if (nextTrack != null && remainingToCrossfade in 1000L..12000L && !MusicManager.isCrossfadingOut && !MusicManager.isPrebuffered(nextTrack.id)) {
                                 triggerPrebuffer(nextTrack, null)
                             }
-                            if (currentPosition >= (dur - crossfadeMs) && !MusicManager.isCrossfadingOut) {
+                            if (currentPosition >= (dur - triggerCrossfadeMs) && !MusicManager.isCrossfadingOut) {
+                                stagePairTransitionStyle(currTrack, nextTrack)
                                 com.alananasss.kittytune.audio.automix.AutomixManager.setMixBeatsLeft(null)
                                 MusicManager.beginCrossfadeRequest()
                                 playNext(manual = false, isCrossfade = true)
@@ -7562,7 +7900,8 @@ query CommentsWithReactions(
                         currentTrack = cleanTrack
                         MusicManager.currentTrack = cleanTrack; isLiked =
                             LikeRepository.isTrackLiked(cleanTrack.id); loadLyrics(cleanTrack)
-                        currentQueueIndex = _queue.indexOfFirst { it.id == cleanTrack.id }
+                        currentQueueIndex = resolveQueueIndex(cleanQueue, cleanTrack.id,
+                            filteredQueueIndex(lastQueue, playerPrefs.getLastQueueIndex()) { !BlockManager.isBlocked(it) })
                         if (currentQueueIndex == -1) {
                             _queue.add(0, cleanTrack); _originalQueue.add(
                                 0,
@@ -7619,7 +7958,7 @@ query CommentsWithReactions(
                 val track = safeQueue.getOrNull(remote.currentIndex)
                 if (track != null && track.source != "local" && !BlockManager.isBlocked(track)) {
                     val portable = safeQueue.filter { it.source != "local" && !BlockManager.isBlocked(it) }
-                    val index = portable.indexOfFirst { it.id == track.id }
+                    val index = filteredQueueIndex(remote.queue, remote.currentIndex) { it.source != "local" && !BlockManager.isBlocked(it) }
                     if (index >= 0) {
                         val shouldPlay = false // Live playback moves only through an explicit device selection.
                         val position = if (shouldPlay) remote.projectedPosition(System.currentTimeMillis())
@@ -7661,6 +8000,7 @@ query CommentsWithReactions(
                 val savedContext = playerPrefs.getLastContext()
 
                 withContext(Dispatchers.Main) {
+                    if (_queue.isNotEmpty()) return@withContext
                     if (cleanQueue.isNotEmpty()) {
                         _queue.clear()
                         _queue.addAll(cleanQueue)
@@ -7672,7 +8012,8 @@ query CommentsWithReactions(
                             if (BlockManager.isBlocked(currentTrack!!)) {
                                 playNext(manual = false)
                             } else {
-                                currentQueueIndex = _queue.indexOfFirst { it.id == currentTrack!!.id }.coerceAtLeast(0)
+                                currentQueueIndex = resolveQueueIndex(cleanQueue, currentTrack!!.id,
+                                    filteredQueueIndex(savedQueue, playerPrefs.getLastQueueIndex()) { !BlockManager.isBlocked(it) })
                             }
                         }
                     }
@@ -7762,48 +8103,85 @@ query CommentsWithReactions(
         prebufferJob?.cancel()
         prebufferJob = viewModelScope.launch(Dispatchers.IO) {
             try {
+                var hydratedNext = nextTrack
+                val nextNeedsHydration = hydratedNext.user == null ||
+                    hydratedNext.user?.id == 0L ||
+                    hydratedNext.media == null ||
+                    hydratedNext.playbackCount == 0 ||
+                    hydratedNext.title.isNullOrBlank() ||
+                    ((hydratedNext.isGoPlus || hydratedNext.isSnipped) && hydratedNext.fullDuration == null) ||
+                    (hydratedNext.durationMs != null && hydratedNext.durationMs in 1..45000L && hydratedNext.fullDuration == null)
+
+                if (hydratedNext.isSoundCloudCatalogTrack && nextNeedsHydration) {
+                    try {
+                        val fullTrackList = api.getTracksByIds(hydratedNext.id.toString())
+                        if (fullTrackList.isNotEmpty()) {
+                            hydratedNext = fullTrackList[0]
+                            val idx = _queue.indexOfFirst { it.id == hydratedNext.id }
+                            if (idx != -1) {
+                                withContext(Dispatchers.Main) {
+                                    if (idx in _queue.indices && _queue[idx].id == hydratedNext.id) {
+                                        _queue[idx] = hydratedNext
+                                    }
+                                }
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+
                 var resolvedUrl: String? = null
                 var offlineKeySetId: ByteArray? = null
 
                 val db = com.alananasss.kittytune.data.local.AppDatabase.getDatabase(context).downloadDao()
-                var localTrack = db.getTrack(nextTrack.id)
+                var localTrack = db.getTrack(hydratedNext.id)
                 if (localTrack == null || localTrack.localAudioPath.isEmpty()) {
-                    val fallbackTitle = nextTrack.title ?: ""
-                    val fallbackArtist = nextTrack.user?.username ?: ""
+                    val fallbackTitle = hydratedNext.title ?: ""
+                    val fallbackArtist = hydratedNext.user?.username ?: ""
                     if (fallbackTitle.isNotBlank()) {
                         localTrack = db.findDownloadedTrack(fallbackTitle, fallbackArtist)
                     }
                 }
-                if (localTrack != null && localTrack.localAudioPath.isNotEmpty()) {
-                    if (localTrack.localAudioPath.startsWith("exo_cache://")) {
-                        val parts = localTrack.localAudioPath.removePrefix("exo_cache://").split("::", limit = 3)
-                        resolvedUrl = parts.getOrNull(1)
-                        val tokenStr = parts.getOrNull(2)
-                        if (!tokenStr.isNullOrEmpty()) {
-                            offlineKeySetId = android.util.Base64.decode(tokenStr, android.util.Base64.NO_WRAP)
-                            MusicManager.putDrmToken(nextTrack.id, tokenStr)
+                if (localTrack != null) {
+                    try {
+                        com.alananasss.kittytune.data.DownloadManager.updateStubTrackIfNeeded(db, localTrack, hydratedNext)
+                    } catch (_: Exception) {}
+                    if (localTrack.localAudioPath.isNotEmpty()) {
+                        if (localTrack.localAudioPath.startsWith("exo_cache://")) {
+                            val parts = localTrack.localAudioPath.removePrefix("exo_cache://").split("::", limit = 3)
+                            resolvedUrl = parts.getOrNull(1)
+                            val tokenStr = parts.getOrNull(2)
+                            if (!tokenStr.isNullOrEmpty()) {
+                                offlineKeySetId = android.util.Base64.decode(tokenStr, android.util.Base64.NO_WRAP)
+                                MusicManager.putDrmToken(hydratedNext.id, tokenStr)
+                            }
+                        } else {
+                            val fileExists = if (localTrack.localAudioPath.startsWith("content://")) true else File(localTrack.localAudioPath).exists()
+                            if (fileExists) resolvedUrl = localTrack.localAudioPath
                         }
-                    } else {
-                        val fileExists = if (localTrack.localAudioPath.startsWith("content://")) true else File(localTrack.localAudioPath).exists()
-                        if (fileExists) resolvedUrl = localTrack.localAudioPath
                     }
                 }
 
                 var resolvedMimeType: String? = null
+                var isDrmStream = false
                 if (resolvedUrl == null) {
-                    val resolved = StreamResolver.resolveStreamWithDrm(context, nextTrack)
+                    val resolved = StreamResolver.resolveStreamWithDrm(context, hydratedNext)
                     resolvedUrl = resolved?.url
                     resolvedMimeType = resolved?.mimeType
                     if (resolved?.isDrmProtected == true && resolved.licenseAuthToken != null) {
-                        MusicManager.putDrmToken(nextTrack.id, resolved.licenseAuthToken)
+                        isDrmStream = true
+                        MusicManager.putDrmToken(hydratedNext.id, resolved.licenseAuthToken)
+                    } else {
+                        MusicManager.clearDrmToken(hydratedNext.id)
                     }
+                } else if (offlineKeySetId != null) {
+                    isDrmStream = true
                 }
 
                 if (resolvedUrl != null) {
-                    val bitmap = loadBitmap(nextTrack.fullResArtwork)
-                    val mediaItem = buildMediaItem(nextTrack, bitmap, resolvedUrl, offlineKeySetId, resolvedMimeType)
+                    val bitmap = loadBitmap(hydratedNext.fullResArtwork)
+                    val mediaItem = buildMediaItem(hydratedNext, bitmap, resolvedUrl, offlineKeySetId, resolvedMimeType, isDrmProtected = isDrmStream)
                     withContext(Dispatchers.Main) {
-                        MusicManager.prebufferTransition(mediaItem, nextTrack, plan)
+                        MusicManager.prebufferTransition(mediaItem, hydratedNext, plan)
                     }
                 }
             } catch (e: Exception) {
@@ -7888,7 +8266,7 @@ query CommentsWithReactions(
                     currentPosition = startPosition
                     duration = if (MusicManager.player.duration > 0) MusicManager.player.duration else trackToPlay.actualDurationMs
                     MusicManager.applyEffects(effectsState)
-                    preloadNextTrack(index + 1)
+                    preloadNextTrack()
                 } catch (e: Exception) {
                     e.printStackTrace()
                     MusicManager.cancelCrossfade()
@@ -7964,6 +8342,8 @@ query CommentsWithReactions(
                 if (resolved?.isDrmProtected == true && resolved.licenseAuthToken != null) {
                     MusicManager.putDrmToken(trackToPlay.id, resolved.licenseAuthToken)
                     Log.d("PlayerViewModel", "DRM token pre-cached for track ${trackToPlay.id}")
+                } else {
+                    MusicManager.clearDrmToken(trackToPlay.id)
                 }
             }
 
@@ -7982,6 +8362,8 @@ query CommentsWithReactions(
                     resolvedMimeType = retryResolved?.mimeType
                     if (retryResolved?.isDrmProtected == true && retryResolved.licenseAuthToken != null) {
                         MusicManager.putDrmToken(trackToPlay.id, retryResolved.licenseAuthToken)
+                    } else {
+                        MusicManager.clearDrmToken(trackToPlay.id)
                     }
                 } catch (e: Exception) {
                     Log.w("PlayerViewModel", "Retry resolution attempt $retryAttempt failed: ${e.message}")
@@ -8031,7 +8413,8 @@ query CommentsWithReactions(
                 return@launch
             }
 
-            val newMediaItem = buildMediaItem(trackToPlay, bitmapDeferred.await(), resolvedUrl, offlineKeySetId, resolvedMimeType)
+            val isDrm = (resolvedStream?.isDrmProtected == true) || (offlineKeySetId != null)
+            val newMediaItem = buildMediaItem(trackToPlay, bitmapDeferred.await(), resolvedUrl, offlineKeySetId, resolvedMimeType, isDrmProtected = isDrm)
 
             withContext(Dispatchers.Main) {
                 if (currentTrack?.id != trackToPlay.id || !isActive) {
@@ -8122,7 +8505,7 @@ query CommentsWithReactions(
                     }
 
                     MusicManager.applyEffects(effectsState)
-                    preloadNextTrack(index + 1)
+                    preloadNextTrack()
                 } catch (e: Exception) {
                     e.printStackTrace()
                     MusicManager.cancelCrossfade()
@@ -8139,20 +8522,107 @@ query CommentsWithReactions(
         }
     }
 
-    private fun preloadNextTrack(nextIndex: Int) {
-        if (repeatMode == RepeatMode.ONE || playerPrefs.getCrossfadeEnabled()) {
-            return
+    private var preloadJob: Job? = null
+
+    /** Index of the queue track that plays after the current one, or null when nothing follows it. */
+    private fun upcomingQueueIndex(): Int? {
+        if (repeatMode == RepeatMode.ONE || _queue.isEmpty()) return null
+        val next = currentQueueIndex + 1
+        return when {
+            next < _queue.size -> next
+            repeatMode == RepeatMode.ALL -> 0
+            else -> null
         }
+    }
 
-        val targetIndex = if (nextIndex >= _queue.size) {
-            if (repeatMode == RepeatMode.ALL && _queue.isNotEmpty()) 0 else return
-        } else nextIndex
+    /**
+     * Removes whatever the player holds after the item playing, and cancels a preload still resolving, so
+     * nothing but the queue's real next track can follow on (issue #72).
+     */
+    private fun dropPreloadedNext() {
+        preloadJob?.cancel()
+        preloadJob = null
+        val player = MusicManager.player
+        try {
+            while (player.mediaItemCount > player.currentMediaItemIndex + 1) {
+                player.removeMediaItem(player.mediaItemCount - 1)
+            }
+        } catch (_: Exception) {
+        }
+    }
 
-        val nextTrack = _queue[targetIndex]
+    /** Call after the upcoming part of the queue changes: the player's next item is rebuilt from the queue. */
+    private fun refreshPreloadedNext() {
+        dropPreloadedNext()
+        preloadNextTrack()
+    }
+
+    /**
+     * Gives the player the queue's next track as its following item, for a gapless start.
+     *
+     * Resolving the stream takes a while, and queue edits made meanwhile ("play next" twice, then a drag)
+     * used to start one preload each. Whichever finished first was added, often a track that was no longer
+     * next, so the player went on to the wrong song: skipped, played twice, or heard under another title
+     * (issue #72). Only the latest preload may finish now, and only if its track is still the one due next.
+     */
+    private fun preloadNextTrack() {
+        preloadJob?.cancel()
+        preloadJob = null
+        // Measure loudness ahead: the track playing first, if it was never met (a drop later in it is
+        // then known before it comes), then the coming tracks, so each starts at its gain. Whether or
+        // not the next is preloaded below: crossfades need it as much as gapless switches do.
+        if (effectsState.isNormalizationEnabled) {
+            val upcoming = upcomingQueueIndex()?.let { first ->
+                (0 until 3).mapNotNull { offset ->
+                    val index = first + offset
+                    when {
+                        index < _queue.size -> _queue[index]
+                        repeatMode == RepeatMode.ALL && _queue.isNotEmpty() -> _queue[index % _queue.size]
+                        else -> null
+                    }
+                }
+            }.orEmpty()
+            // Audio Routing Matrix: skip LUFS pre-analysis when the normalizer
+            // stage is not routed (e.g. Bit-Perfect audiophile mode) — the result
+            // would never be applied, it would only burn battery.
+            if (com.alananasss.kittytune.audio.AudioRoutingMatrix.isRouted(
+                    com.alananasss.kittytune.audio.AudioStage.NORMALIZER)
+            ) {
+                com.alananasss.kittytune.audio.normalization.LoudnessPreAnalyzer.prepare(
+                    context, listOfNotNull(_queue.getOrNull(currentQueueIndex)) + upcoming,
+                )
+            }
+        }
+        if (playerPrefs.getCrossfadeEnabled()) return
+
+        val targetIndex = upcomingQueueIndex() ?: return
+        var nextTrack = _queue[targetIndex]
         if (BlockManager.isBlocked(nextTrack)) return
+        val playingTrackId = currentTrack?.id ?: return
 
-        viewModelScope.launch(Dispatchers.IO) {
+        preloadJob = viewModelScope.launch(Dispatchers.IO) {
             try {
+                val nextNeedsHydration = nextTrack.user == null ||
+                    nextTrack.user?.id == 0L ||
+                    nextTrack.media == null ||
+                    nextTrack.playbackCount == 0 ||
+                    nextTrack.title.isNullOrBlank() ||
+                    ((nextTrack.isGoPlus || nextTrack.isSnipped) && nextTrack.fullDuration == null) ||
+                    (nextTrack.durationMs != null && nextTrack.durationMs in 1..45000L && nextTrack.fullDuration == null)
+
+                if (nextTrack.isSoundCloudCatalogTrack && nextNeedsHydration) {
+                    try {
+                        val fullTrackList = api.getTracksByIds(nextTrack.id.toString())
+                        if (fullTrackList.isNotEmpty()) {
+                            nextTrack = fullTrackList[0]
+                            withContext(Dispatchers.Main) {
+                                if (targetIndex in _queue.indices && _queue[targetIndex].id == nextTrack.id) {
+                                    _queue[targetIndex] = nextTrack
+                                }
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
                 var resolvedUrl: String? = null
                 var offlineKeySetId: ByteArray? = null
 
@@ -8171,23 +8641,38 @@ query CommentsWithReactions(
                 }
 
                 var resolvedMimeType: String? = null
+                var isDrmStream = false
                 if (resolvedUrl == null) {
                     val resolved = StreamResolver.resolveStreamWithDrm(context, nextTrack)
                     resolvedUrl = resolved?.url
                     resolvedMimeType = resolved?.mimeType
                     if (resolved?.isDrmProtected == true && resolved.licenseAuthToken != null) {
+                        isDrmStream = true
                         MusicManager.putDrmToken(nextTrack.id, resolved.licenseAuthToken)
+                    } else {
+                        MusicManager.clearDrmToken(nextTrack.id)
                     }
+                } else if (offlineKeySetId != null) {
+                    isDrmStream = true
                 }
 
                 if (resolvedUrl != null) {
-                    val nextMediaItem = buildMediaItem(nextTrack, null, resolvedUrl, offlineKeySetId, resolvedMimeType)
+                    val nextMediaItem = buildMediaItem(nextTrack, null, resolvedUrl, offlineKeySetId, resolvedMimeType, isDrmProtected = isDrmStream)
                     withContext(Dispatchers.Main) {
-                        if (MusicManager.player.mediaItemCount == 1) {
-                            MusicManager.player.addMediaItem(nextMediaItem)
+                        if (!isActive || MusicManager.isLoadingTrack) return@withContext
+                        val stillNext = upcomingQueueIndex()?.let { _queue.getOrNull(it)?.id } == nextTrack.id
+                        val player = MusicManager.player
+                        val playerTrackId = player.currentMediaItem?.mediaId?.let { parseIdFromMediaId(it) }
+                        if (!stillNext || currentTrack?.id != playingTrackId || playerTrackId != playingTrackId) {
+                            return@withContext
+                        }
+                        if (player.mediaItemCount == player.currentMediaItemIndex + 1) {
+                            player.addMediaItem(nextMediaItem)
                         }
                     }
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -8207,6 +8692,7 @@ query CommentsWithReactions(
         urlOverride: String? = null,
         offlineKeySetId: ByteArray? = null,
         mimeTypeOverride: String? = null,
+        isDrmProtected: Boolean = false,
     ): MediaItem {
         val uri = when {
             urlOverride == null -> "soundtune://track/${track.id}".toUri()
@@ -8258,7 +8744,7 @@ query CommentsWithReactions(
             builder.setMimeType(resolvedMimeType)
         }
 
-        val drmToken = MusicManager.getDrmToken(track.id)
+        val drmToken = if (isDrmProtected) MusicManager.getDrmToken(track.id) else null
         if (offlineKeySetId != null || drmToken != null) {
             builder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
 

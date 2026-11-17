@@ -234,6 +234,10 @@
         private val restrictedTrackIds: MutableSet<Long> =
             java.util.Collections.newSetFromMap(ConcurrentHashMap<Long, Boolean>())
 
+        fun markRestricted(trackId: Long) {
+            restrictedTrackIds.add(trackId)
+        }
+
         /** Whether [track] is known to be one SoundCloud will not stream to this account. */
         fun isKnownRestricted(track: Track): Boolean =
             isRestricted(track) || restrictedTrackIds.contains(track.id)
@@ -261,6 +265,12 @@
          */
         suspend fun resolveStreamForBeatAnalysis(context: Context, track: Track): ResolvedStream? {
             return withContext(Dispatchers.IO) {
+                // A YouTube track's own video is the audio that plays: analysing anything else
+                // (a search result, or the SoundCloud upload sharing its hashed id) gives the
+                // transition the wrong beat grid.
+                if (isYoutubeTrack(track)) {
+                    return@withContext resolveFromYoutubeDirect(context, track)?.let { ResolvedStream(it, source = track.source ?: "youtube") }
+                }
                 // 1. Try SoundCloud stream directly (with Widevine DRM if protected)
                 val scStream = try {
                     resolveFromSoundCloudWithDrm(context, track, forDownload = false)
@@ -304,6 +314,9 @@
          */
         suspend fun resolveStreamForAiAnalysis(context: Context, track: Track): ResolvedStream? {
             return withContext(Dispatchers.IO) {
+                if (isYoutubeTrack(track)) {
+                    return@withContext resolveFromYoutubeDirect(context, track)?.let { ResolvedStream(it, source = track.source ?: "youtube") }
+                }
                 val scStream = try {
                     resolveFromSoundCloudWithDrm(
                         context = context,
@@ -365,7 +378,7 @@
                     } catch (e: Exception) {
                         Log.e(TAG, "Error checking local file", e)
                     }
-                    if (track.source == "youtube" || track.source == "youtube_music") {
+                    if (isYoutubeTrack(track)) {
                         Log.d(TAG, "Resolving YouTube track: ${track.title}")
                         val url = resolveFromYoutubeDirect(context, track)
                         return@run url?.let { ResolvedStream(it, source = track.source ?: "youtube") }
@@ -488,41 +501,55 @@
                         return@run null
                     }
 
-                    val prefs = PlayerPreferences(context)
-                    val allowYoutube = prefs.getYouTubeFallbackEnabled()
-
-                    // A Go+ subscriber is entitled to the SoundCloud stream, and the app can play it:
-                    // buildTranscodingCandidates asks for the CENC transcodings and the player holds the
-                    // Widevine licence. Reaching for a substitute first on the strength of
-                    // monetizationModel alone handed a paying subscriber a YouTube copy of a track they
-                    // pay to stream properly. Prefer the fallback only when SoundCloud has actually
-                    // refused this account, or when the account has no Go+ to refuse with.
-                    val goPlus = prefs.getSoundCloudGoPlus()
-                    if (isBlockedForAccount(track) || (isRestricted(track) && !goPlus)) {
-                        val providerStream = resolveViaProviders(context, track, forDownload)
-                        if (providerStream != null) {
-                            return@run providerStream
-                        }
-                        if (allowYoutube) {
-                            val streamUrl = resolveViaNewPipe(context, track)
-                            if (streamUrl != null) {
-                                return@run ResolvedStream(streamUrl, source = "youtube")
+                    var trackToUse = track
+                    if (track.isSoundCloudCatalogTrack) {
+                        if (track.media == null || track.media.transcodings.isNullOrEmpty() || track.title.isNullOrBlank() || track.user == null ||
+                            ((track.isGoPlus || track.isSnipped || (track.durationMs != null && track.durationMs in 1..45000L)) && track.fullDuration == null)) {
+                            try {
+                                val api = RetrofitClient.create(context)
+                                val fetched = api.getTracksByIds(track.id.toString())
+                                if (fetched.isNotEmpty()) {
+                                    trackToUse = fetched[0]
+                                }
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Failed hydrating track ${track.id}: ${e.message}")
                             }
                         }
                     }
 
-                    val scStream = resolveFromSoundCloudWithDrm(context, track, forDownload)
+                    val prefs = PlayerPreferences(context)
+                    val allowYoutube = prefs.getYouTubeFallbackEnabled()
+
+                    // Only the account policy can refuse playback. Monetization metadata,
+                    // a local subscription flag, or an earlier failed analysis cannot.
+                    if (isBlockedForAccount(trackToUse)) {
+                        markRestricted(trackToUse.id)
+                        markRestricted(track.id)
+                        val providerStream = resolveViaProviders(context, trackToUse, forDownload)
+                        if (providerStream != null) {
+                            return@run providerStream
+                        }
+                        if (allowYoutube) {
+                            val streamUrl = resolveViaNewPipe(context, trackToUse)
+                            if (streamUrl != null) {
+                                return@run ResolvedStream(streamUrl, source = "youtube")
+                            }
+                        }
+                        return@run null
+                    }
+
+                    val scStream = resolveFromSoundCloudWithDrm(context, trackToUse, forDownload)
                     if (scStream != null) {
                         scStream
                     } else {
-                        val providerFallback = resolveViaProviders(context, track, forDownload)
+                        val providerFallback = resolveViaProviders(context, trackToUse, forDownload)
                         if (providerFallback != null) {
                             providerFallback
                         } else if (allowYoutube) {
                             // Last resort: YouTube fallback when both SoundCloud and all
                             // providers have failed (issue #33).
-                            Log.w(TAG, "All sources failed for '${track.title}', trying final YouTube fallback")
-                            val ytUrl = resolveViaNewPipe(context, track)
+                            Log.w(TAG, "All sources failed for '${trackToUse.title}', trying final YouTube fallback")
+                            val ytUrl = resolveViaNewPipe(context, trackToUse)
                             ytUrl?.let { ResolvedStream(it, source = "youtube") }
                         } else {
                             null
@@ -905,62 +932,140 @@
 
         private const val RACE_POLL_MS = 40L
 
+        fun matchSongCandidate(
+            songs: List<SongItem>,
+            wantedSec: Long,
+            isRestricted: Boolean = false,
+            isSnippetDuration: Boolean = (isRestricted && wantedSec in 1..45),
+            track: Track? = null
+        ): SongItem? {
+            if (songs.isEmpty()) return null
+            if (track != null) {
+                val selected = YoutubeFallbackMatcher.match(
+                    fallbackRecording(track),
+                    songs.map { YoutubeFallbackMatcher.Candidate(it.id, it.title, it.artists.map { artist -> artist.name },
+                        it.duration?.toLong() ?: 0L, it.album?.name.orEmpty()) }
+                ) ?: return null
+                return songs.firstOrNull { it.id == selected.id }
+            }
+            if (wantedSec <= 0 || isSnippetDuration) {
+                return songs.firstOrNull { (it.duration ?: 0) > 45 } ?: songs.first()
+            }
+            return songs.filter { (it.duration ?: 0) > 0 && kotlin.math.abs((it.duration ?: 0) - wantedSec) <= DURATION_TOLERANCE_SEC }
+                .minByOrNull { kotlin.math.abs((it.duration ?: 0) - wantedSec) }
+                ?: songs.filter { (it.duration ?: 0) > 0 && kotlin.math.abs((it.duration ?: 0) - wantedSec) <= 25L }
+                    .minByOrNull { kotlin.math.abs((it.duration ?: 0) - wantedSec) }
+                ?: if (isRestricted) {
+                    songs.filter { (it.duration ?: 0) > 45 && kotlin.math.abs((it.duration ?: 0) - wantedSec) <= 60L }
+                        .minByOrNull { kotlin.math.abs((it.duration ?: 0) - wantedSec) }
+                } else null
+        }
+
+        fun matchVideoCandidate(
+            videoResults: List<StreamInfoItem>,
+            wantedSec: Long,
+            isRestricted: Boolean = false,
+            isSnippetDuration: Boolean = (isRestricted && wantedSec in 1..45),
+            track: Track? = null
+        ): StreamInfoItem? {
+            if (videoResults.isEmpty()) return null
+            if (track != null) {
+                val selected = YoutubeFallbackMatcher.match(fallbackRecording(track), videoResults.map {
+                    YoutubeFallbackMatcher.Candidate(it.url, it.name, listOf(it.uploaderName.orEmpty()), it.duration)
+                }) ?: return null
+                return videoResults.firstOrNull { it.url == selected.id }
+            }
+            if (wantedSec <= 0 || isSnippetDuration) {
+                return videoResults.firstOrNull { it.duration > 45 } ?: videoResults.first()
+            }
+            return videoResults
+                .filter { it.duration > 0 && kotlin.math.abs(it.duration - wantedSec) <= DURATION_TOLERANCE_SEC }
+                .minByOrNull { kotlin.math.abs(it.duration - wantedSec) }
+                ?: videoResults
+                    .filter { it.duration > 0 && kotlin.math.abs(it.duration - wantedSec) <= 25L }
+                    .minByOrNull { kotlin.math.abs(it.duration - wantedSec) }
+                ?: if (isRestricted) {
+                    videoResults
+                        .filter { it.duration > 45 && kotlin.math.abs(it.duration - wantedSec) <= 60L }
+                        .minByOrNull { kotlin.math.abs(it.duration - wantedSec) }
+                } else null
+        }
+
+        fun cleanSearchTitle(title: String?): String {
+            val rawTitle = title?.trim() ?: return ""
+            val stripped = rawTitle.replace(Regex("(?i)(\\[.*?\\]|\\(.*?\\))"), "")
+                .replace(Regex("^[\\s\\-_/|:]+"), "")
+                .replace(Regex("[\\s\\-_/|:]+$"), "")
+                .trim()
+            if (stripped.isNotBlank()) return stripped
+
+            return rawTitle.replace(Regex("[\\[\\]()]"), "")
+                .replace(Regex("^[\\s\\-_/|:]+"), "")
+                .replace(Regex("[\\s\\-_/|:]+$"), "")
+                .trim()
+        }
+
+        private fun fallbackRecording(track: Track): YoutubeFallbackMatcher.Recording {
+            val snippet = (isRestricted(track) || track.isSnipped || isKnownRestricted(track) ||
+                (track.durationMs != null && track.durationMs in 1..45000L)) && track.fullDuration == null
+            return YoutubeFallbackMatcher.Recording(
+                track.title.orEmpty(), track.displayArtist.ifBlank { track.user?.username.orEmpty() },
+                track.actualDurationMs / 1000, isRestricted(track) || track.isSnipped || isKnownRestricted(track) || snippet, snippet
+            )
+        }
+
+        /** Both query variants participate: an empty or unrelated first page must not mask an exact song. */
+        internal suspend fun findYoutubeFallbackSong(
+            track: Track,
+            search: suspend (String) -> List<SongItem> = { query ->
+                YouTube.search(query, YouTube.SearchFilter.FILTER_SONG).getOrThrow().items.filterIsInstance<SongItem>()
+            },
+        ): SongItem? {
+            val recording = fallbackRecording(track)
+            val songs = YoutubeFallbackMatcher.queries(recording).flatMap { query ->
+                try { search(query) }
+                catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                catch (_: Exception) { emptyList() }
+            }.distinctBy { it.id }
+            return matchSongCandidate(songs, recording.durationSec, recording.restricted, recording.snippetDuration, track)
+        }
+
         private suspend fun resolveViaNewPipe(context: Context, track: Track): String? {
             ensureNewPipeClientVersion()
             return try {
-                val cleanTitle = track.title?.replace(Regex("(?i)(\\[.*?\\]|\\(.*?\\))"), "")?.trim() ?: ""
-                val artistName = track.displayArtist.ifBlank { track.user?.username ?: "" }
-                val query = "$cleanTitle $artistName audio".trim()
-                val wantedSec = track.actualDurationMs / 1000
-
-                Log.d(TAG, "[YouTube/NewPipe] Searching for: $query (wanted duration: ${wantedSec}s)")
-
-                // Try InnerTube first as it uses the official JSON API (bypassing NewPipe scraping regex breakages)
-                val innertubeUrl = runCatching {
-                    val searchResult = YouTube.search(query, YouTube.SearchFilter.FILTER_SONG).getOrNull()
-                        ?: YouTube.search("$cleanTitle $artistName", YouTube.SearchFilter.FILTER_SONG).getOrNull()
-                    val songs = searchResult?.items?.filterIsInstance<SongItem>().orEmpty()
-                    if (songs.isNotEmpty()) {
-                        val matched = if (wantedSec <= 0) {
-                            songs.first()
-                        } else {
-                            songs.filter { (it.duration ?: 0) > 0 && kotlin.math.abs((it.duration ?: 0) - wantedSec) <= DURATION_TOLERANCE_SEC }
-                                .minByOrNull { kotlin.math.abs((it.duration ?: 0) - wantedSec) }
-                                ?: songs.filter { (it.duration ?: 0) > 0 && kotlin.math.abs((it.duration ?: 0) - wantedSec) <= 25L }
-                                    .minByOrNull { kotlin.math.abs((it.duration ?: 0) - wantedSec) }
-                        }
-                        matched?.let { "https://www.youtube.com/watch?v=${it.id}" }
-                    } else null
-                }.getOrNull()
+                val recording = fallbackRecording(track)
+                val queries = YoutubeFallbackMatcher.queries(recording)
+                if (queries.isEmpty()) return null
+                val wantedSec = recording.durationSec
+                val isSnippetDuration = recording.snippetDuration
+                val isRestrictedTrack = recording.restricted
+                val innertubeUrl = findYoutubeFallbackSong(track)?.let { "https://www.youtube.com/watch?v=${it.id}" }
 
                 val firstResultUrl = innertubeUrl ?: runCatching {
                     val youtubeService = ServiceList.YouTube
-                    val searchInfo = SearchInfo.getInfo(youtubeService, youtubeService.searchQHFactory.fromQuery(query, listOf("videos"), ""))
-                    val videoResults = searchInfo.relatedItems.filterIsInstance<StreamInfoItem>()
+                    val videoResults = queries.flatMap { query ->
+                        try {
+                            SearchInfo.getInfo(youtubeService, youtubeService.searchQHFactory.fromQuery(query, listOf("videos"), ""))
+                                .relatedItems.filterIsInstance<StreamInfoItem>()
+                        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) { emptyList() }
+                    }.distinctBy { it.url }
                     if (videoResults.isEmpty()) {
                         Log.w(TAG, "[NewPipe] No results found.")
                         return@runCatching null
                     }
 
-                    if (wantedSec <= 0) {
-                        videoResults.first().url
-                    } else {
-                        val matched = videoResults
-                            .filter { it.duration > 0 && kotlin.math.abs(it.duration - wantedSec) <= DURATION_TOLERANCE_SEC }
-                            .minByOrNull { kotlin.math.abs(it.duration - wantedSec) }
-                            ?: videoResults
-                                .filter { it.duration > 0 && kotlin.math.abs(it.duration - wantedSec) <= 25L }
-                                .minByOrNull { kotlin.math.abs(it.duration - wantedSec) }
-                        if (matched == null) {
-                            Log.w(
-                                TAG,
-                                "[NewPipe] no result within ${DURATION_TOLERANCE_SEC}s of ${wantedSec}s for " +
-                                        "'${track.title}' — refusing to substitute a different song"
-                            )
-                            return@runCatching null
-                        }
-                        matched.url
+                    val matched = matchVideoCandidate(videoResults, wantedSec, isRestricted = isRestrictedTrack, isSnippetDuration = isSnippetDuration, track = track)
+                    if (matched == null) {
+                        Log.w(
+                            TAG,
+                            "[NewPipe] no result within ${DURATION_TOLERANCE_SEC}s of ${wantedSec}s for " +
+                                    "'${track.title}' — refusing to substitute a different song"
+                        )
+                        return@runCatching null
                     }
+                    matched.url
                 }.getOrNull()
 
                 if (firstResultUrl == null) {
@@ -1055,6 +1160,17 @@
             }
         }
 
+        /**
+         * A track whose audio is a YouTube video: tagged as such, or - for rows saved without a
+         * source - linking to one. Such a track must never be looked up on SoundCloud by id.
+         */
+        internal fun isYoutubeTrack(track: Track): Boolean {
+            if (track.source == "youtube" || track.source == "youtube_music") return true
+            if (!track.source.isNullOrBlank() && track.source != "soundcloud") return false
+            val host = track.permalinkUrl?.lowercase()?.substringAfter("://", "")?.substringBefore('/').orEmpty()
+            return host == "youtu.be" || host == "youtube.com" || host.endsWith(".youtube.com")
+        }
+
         private suspend fun resolveFromYoutubeDirect(context: Context, track: Track): String? {
             val url = track.permalinkUrl ?: return null
             return extractStreamFromYoutubeUrl(context, url)
@@ -1070,11 +1186,17 @@
             forDownload: Boolean,
             forceHighQualityNonDrm: Boolean = false
         ): ResolvedStream? {
+            // Only a SoundCloud id can be resolved on SoundCloud. Anything else - a YouTube or
+            // provider track's hashed id - names an unrelated upload whose audio (often DRM
+            // protected) would be played or analysed in place of the real song (issue #82).
+            if (!track.isSoundCloudCatalogTrack) return null
+
             val prefs = PlayerPreferences(context)
             val api = RetrofitClient.create(context)
             var trackToUse = track
 
-            if (track.media == null || track.media.transcodings.isNullOrEmpty()) {
+            if (track.media == null || track.media.transcodings.isNullOrEmpty() || track.title.isNullOrBlank() || track.user == null ||
+                ((track.isGoPlus || track.isSnipped || (track.durationMs != null && track.durationMs in 1..45000L)) && track.fullDuration == null)) {
                 try {
                     val fetched = api.getTracksByIds(track.id.toString())
                     if (fetched.isNotEmpty()) trackToUse = fetched[0] else return null
@@ -1088,7 +1210,7 @@
             // on. Now that it has been fetched in full, re-read the per-account verdict: when
             // SoundCloud refuses this account outright, no transcoding here will play, and
             // working through them all only delays the fallback the caller is about to reach.
-            if (isBlockedForAccount(track) || isBlockedForAccount(trackToUse)) {
+            if (isBlockedForAccount(trackToUse)) {
                 Log.d(
                     TAG,
                     "Track ${track.id} - restricted on payload " +
@@ -1112,15 +1234,15 @@
             }
             Log.d(TAG, "Track ${track.id} — policy=${trackToUse.policy}, monetization=${trackToUse.monetizationModel}")
 
+            // Ad-supported tracks also use Widevine. Subscription state is not DRM
+            // capability: the API policy and license server enforce account entitlement.
             val allowDrm = !forceHighQualityNonDrm && (!forDownload || prefs.getDownloadDrmStreamsEnabled())
             val candidates = buildTranscodingCandidates(transcodings, qualityPref, forDownload, allowDrm)
 
             if (candidates.isEmpty()) {
-                Log.w(TAG, "Track ${track.id} — no matching transcoding found!")
-                if (forDownload && prefs.getYouTubeFallbackEnabled()) {
-                    val url = resolveViaNewPipe(context, track)
-                    return url?.let { ResolvedStream(it, source = "youtube") }
-                }
+                Log.w(TAG, "Track ${trackToUse.id} — no matching transcoding found!")
+                // A caller requiring clear audio (e.g. analysis) may have no candidate
+                // for a playable encrypted track. Do not poison subsequent playback.
                 return null
             }
 
@@ -1204,7 +1326,7 @@
                         } else {
                             val body = response.body.string()
                             response.close()
-                            Log.d(TAG, "Track ${track.id} — stream API response: ${body.take(500)}")
+                            Log.d(TAG, "Track ${track.id} — stream API response received")
                             val trimmed = body.trim()
                             if (trimmed.startsWith("{")) {
                                 try {
@@ -1231,8 +1353,13 @@
                         continue
                     }
 
+                    if (protocol == "ctr-encrypted-hls" && licenseAuthToken.isNullOrBlank()) {
+                        Log.w(TAG, "Track ${track.id} — encrypted stream has no license authorization token")
+                        continue
+                    }
+
                     if (!licenseAuthToken.isNullOrEmpty()) {
-                        Log.d(TAG, "Track ${track.id} — CENC DRM detected! licenseAuthToken=${licenseAuthToken.take(50)}...")
+                        Log.d(TAG, "Track ${track.id} — CENC DRM license token received")
                     }
 
                     val isHlsLike = protocol == "hls" || protocol.contains("encrypted-hls") || streamInfoUrl.contains(".m3u8")
@@ -1279,7 +1406,7 @@
             }
             return null
         }
-        private fun buildTranscodingCandidates(
+        internal fun buildTranscodingCandidates(
             transcodings: List<com.alananasss.kittytune.domain.Transcoding>,
             qualityPref: String,
             forDownload: Boolean,
@@ -1332,12 +1459,8 @@
                         if (it !in candidates) candidates.add(it)
                     }
                 }
-                for (preset in cencPresets) {
-                    playableTranscodings.filter { it.preset == preset && it.format?.protocol == "cbc-encrypted-hls" }.forEach {
-                        if (it !in candidates) candidates.add(it)
-                    }
-                }
-                playableTranscodings.filter { it.format?.protocol?.contains("encrypted") == true }.forEach {
+                // Retain new presets, but never select FairPlay's CBC rendition.
+                playableTranscodings.filter { it.format?.protocol == "ctr-encrypted-hls" }.forEach {
                     if (it !in candidates) candidates.add(it)
                 }
             }
