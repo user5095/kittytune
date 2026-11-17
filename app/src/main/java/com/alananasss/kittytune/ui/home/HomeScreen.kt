@@ -567,6 +567,13 @@ fun HomeScreen(
                                     else -> "results_${homeViewModel.activeFilter}"
                                 }
 
+                                SearchHistorySuggestions(
+                                    query = homeViewModel.searchQuery,
+                                    searches = homeViewModel.recentSearches,
+                                    onRun = homeViewModel::runRecentSearch,
+                                    onForget = homeViewModel::forgetSearch,
+                                )
+
                                 AnimatedContent(
                                     targetState = searchDisplayState,
                                     transitionSpec = {
