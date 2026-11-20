@@ -3822,4 +3822,22 @@
     <string name="pref_tablet_nav_classic_dock">Orijinal tablet alt çubuğu</string>
     <string name="pref_tablet_side_player">Sağ oynatıcı paneli</string>
     <string name="pref_tablet_side_player_sub">Mini oynatıcıya dokunmak, tam ekran oynatıcı yerine yan paneli açar</string>
+
+    <string name="lang_italian">Italiano</string>
+    <string name="sc_likes_playlist_title">SoundCloud Likes</string>
+    <string name="ytm_title">YouTube Music</string>
+    <string name="ytm_subtitle_connected">Connected as %1$s</string>
+    <string name="ytm_subtitle_guest">Not connected</string>
+    <string name="ytm_login">Log in</string>
+    <string name="ytm_logout">Log out</string>
+    <string name="ytm_import">Sync now</string>
+    <string name="ytm_import_desc">Liked songs, followed artists and the playlists imported from YouTube Music stay in sync both ways: what you add or remove here or on YouTube Music is copied to the other side. History is pulled in from YouTube Music. Syncs automatically when you open the app. SoundCloud tracks keep syncing with SoundCloud.</string>
+    <string name="ytm_step_likes">Syncing liked songs…</string>
+    <string name="ytm_step_playlists">Importing playlists…</string>
+    <string name="ytm_step_artists">Importing artists…</string>
+    <string name="ytm_step_history">Importing history…</string>
+    <string name="ytm_import_done">Synced %1$d liked songs, %2$d playlists, %3$d artists, %4$d history entries</string>
+    <string name="ytm_import_failed">Sync failed: %1$s</string>
+    <string name="pref_pixel_theme_title">Pixel Theme (YTMusicPixelated)</string>
+    <string name="pref_pixel_theme_sub">Square corners, pixel font, retro iPod colors everywhere</string>
 </resources>

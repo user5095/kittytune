@@ -122,7 +122,9 @@ object ExoBeatDecoder {
 
         // Fixed thread name: a timestamped name created a new named thread (and cluttered
         // thread dumps) for every decode pass.
-        val thread = HandlerThread("ExoBeatDecoder").apply { start() }
+        // Background priority: this decodes a second stream (often Widevine HLS) while the track
+        // the user hears is playing, and must not take CPU from its audio and UI threads.
+        val thread = HandlerThread("ExoBeatDecoder", android.os.Process.THREAD_PRIORITY_BACKGROUND).apply { start() }
         val handler = Handler(thread.looper)
 
         var player: ExoPlayer? = null

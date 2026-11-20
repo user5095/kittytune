@@ -136,7 +136,7 @@ object FullTrackWaveformDecoder {
             onComplete = { latch.countDown() },
         )
 
-        val thread = HandlerThread("FullWaveformDecoder").apply { start() }
+        val thread = HandlerThread("FullWaveformDecoder", android.os.Process.THREAD_PRIORITY_BACKGROUND).apply { start() }
         val handler = Handler(thread.looper)
 
         var player: ExoPlayer? = null

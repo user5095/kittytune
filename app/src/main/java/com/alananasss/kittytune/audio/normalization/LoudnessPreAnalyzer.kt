@@ -12,6 +12,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.coroutines.coroutineContext
 
@@ -37,6 +38,7 @@ object LoudnessPreAnalyzer {
     private const val LOOKAHEAD = 4
     private const val WINDOW_MS = 10_000L
     private const val MAX_ATTEMPTS = 2
+    private const val START_DELAY_MS = 10_000L
     private val WINDOW_POSITIONS = floatArrayOf(0.2f, 0.5f, 0.75f)
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -74,6 +76,9 @@ object LoudnessPreAnalyzer {
 
     private suspend fun drain(context: Context) {
         val self = coroutineContext[Job]
+        // Let the track that just started get its first seconds of buffer before a second stream
+        // is resolved and decoded next to it.
+        delay(START_DELAY_MS)
         while (self?.isActive == true) {
             val track = synchronized(this) {
                 nextToMeasure()?.also { inFlightKey = it.id.toString() }
